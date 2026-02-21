@@ -1,0 +1,74 @@
+{% extends 'generic/object.html' %}
+{% load helpers %}
+{% load plugins %}
+{% load i18n %}
+
+{% block content %}
+  <div class="row mb-3">
+    <div class="col-md-6">
+      <div class="card">
+        <h5 class="card-header">{% trans "Floor Plan" %}</h5>
+        <table class="table table-hover attr-table">
+          <tr>
+            <th scope="row">{% trans "Site" %}</th>
+            <td>
+              <a href="{{ object.site.get_absolute_url }}">{{ object.site }}</a>
+            </td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Location" %}</th>
+            <td>
+              {% if object.location %}
+                <a href="{{ object.location.get_absolute_url }}">{{ object.location }}</a>
+              {% else %}
+                <span class="text-muted">&mdash;</span>
+              {% endif %}
+            </td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Grid Size" %}</th>
+            <td>{{ object.grid_width }} &times; {{ object.grid_height }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Tile Size" %}</th>
+            <td>{{ object.tile_size }}px</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Description" %}</th>
+            <td>{{ object.description|placeholder }}</td>
+          </tr>
+        </table>
+      </div>
+    </div>
+    <div class="col-md-6">
+      <div class="card">
+        <h5 class="card-header">{% trans "Statistics" %}</h5>
+        <table class="table table-hover attr-table">
+          <tr>
+            <th scope="row">{% trans "Total Tiles" %}</th>
+            <td>{{ object.tiles.count }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Linked Objects" %}</th>
+            <td>{{ linked_tile_count|default:"0" }}</td>
+          </tr>
+        </table>
+      </div>
+      <div class="card mt-3">
+        <h5 class="card-header">{% trans "Actions" %}</h5>
+        <div class="card-body">
+          <a href="{% url 'plugins:netbox_sitemap:floorplan_visualization' pk=object.pk %}"
+             class="btn btn-primary">
+            <i class="mdi mdi-floor-plan"></i> {% trans "View Floor Plan" %}
+          </a>
+          <a href="{% url 'plugins:netbox_sitemap:floorplan_visualization' pk=object.pk %}?edit=true"
+             class="btn btn-warning">
+            <i class="mdi mdi-pencil"></i> {% trans "Edit Layout" %}
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {% plugin_full_width_page object %}
+{% endblock %}

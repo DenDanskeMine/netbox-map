@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=64.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "netbox-sitemap"
+version = "0.1.0"
+description = "Interactive floor plan visualization for NetBox sites"
+readme = "README.md"
+license = {text = "Apache-2.0"}
+requires-python = ">=3.12"
+authors = [
+    { name = "Christian Rose" },
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Framework :: Django",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+]
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/DenDanskeMine/netbox-sitemap"
+Repository = "https://github.com/DenDanskeMine/netbox-sitemap"
+Issues = "https://github.com/DenDanskeMine/netbox-sitemap/issues"
+
+[tool.setuptools.packages.find]
+include = ["netbox_sitemap*"]
+
+[tool.setuptools.package-data]
+netbox_sitemap = [
+    "templates/**/*",
+    "static/**/*",
+    "migrations/*",
+]

@@ -1,0 +1,28 @@
+{% load i18n %}
+<div class="card">
+  <h5 class="card-header">{% trans "Floor Plans" %}</h5>
+  <div class="card-body">
+    {% if floorplans %}
+    <table class="table table-hover mb-0">
+      <thead>
+        <tr>
+          <th>{% trans "Name" %}</th>
+          <th>{% trans "Location" %}</th>
+          <th>{% trans "Grid Size" %}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for fp in floorplans %}
+        <tr>
+          <td><a href="{{ fp.get_absolute_url }}">{{ fp.name }}</a></td>
+          <td>{{ fp.location|default:"-" }}</td>
+          <td>{{ fp.grid_width }}&times;{{ fp.grid_height }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <span class="text-muted">{% trans "None" %}</span>
+    {% endif %}
+  </div>
+</div>

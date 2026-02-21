@@ -1,0 +1,482 @@
+{% extends 'generic/object.html' %}
+{% load static %}
+{% load helpers %}
+{% load i18n %}
+
+{% block title %}{% trans "Floor Plan" %}: {{ object }}{% endblock %}
+
+{% block extra_controls %}
+  {% if not edit_mode %}
+  <a href="{% url 'plugins:netbox_sitemap:floorplan_visualization' pk=object.pk %}?edit=true"
+     class="btn btn-sm btn-warning">
+    <i class="mdi mdi-pencil"></i> {% trans "Edit Mode" %}
+  </a>
+  {% else %}
+  <a href="{% url 'plugins:netbox_sitemap:floorplan_visualization' pk=object.pk %}"
+     class="btn btn-sm btn-secondary">
+    <i class="mdi mdi-eye"></i> {% trans "View Mode" %}
+  </a>
+  {% endif %}
+{% endblock %}
+
+{% block content %}
+  <link rel="stylesheet" href="{% static 'netbox_sitemap/css/floorplan.css' %}">
+
+  {# Header: Floor Plan selector + Gradient legend #}
+  <div class="floorplan-header mb-3">
+    <label for="floorplan-selector">{% trans "Floor map" %}</label>
+    <select id="floorplan-selector" class="no-ts">
+      {% for fp in site_floorplans %}
+        <option value="{{ fp.id }}"
+          {% if fp.id == object.pk %}selected{% endif %}>
+          {{ fp.name }}{% if fp.location__name %} ({{ fp.location__name }}){% endif %}
+        </option>
+      {% endfor %}
+    </select>
+
+    <div class="ms-auto d-flex align-items-center gap-3">
+      <label>{% trans "Percent Full" %}</label>
+      <div>
+        <div class="d-flex align-items-center gap-1">
+          <span class="small text-muted">0</span>
+          <div class="legend-gradient"></div>
+          <span class="small text-muted">90</span>
+        </div>
+      </div>
+      <div class="d-flex align-items-center gap-1 ms-2">
+        <div class="legend-empty-swatch"></div>
+        <span class="small text-muted">{% trans "Empty" %}</span>
+      </div>
+    </div>
+  </div>
+
+  {% if edit_mode %}
+  <div class="edit-toolbar mb-3 d-flex gap-2 align-items-center flex-wrap">
+    <strong>{% trans "Edit Mode" %}:</strong>
+    <select id="tile-type-select" class="form-select form-select-sm no-ts" style="width: auto;">
+      <option value="rack">{% trans "Rack" %}</option>
+      <option value="aisle">{% trans "Aisle" %}</option>
+      <option value="wall">{% trans "Wall" %}</option>
+      <option value="column">{% trans "Column" %}</option>
+      <option value="door">{% trans "Door" %}</option>
+      <option value="cooling">{% trans "Cooling" %}</option>
+      <option value="power">{% trans "Power" %}</option>
+      <option value="empty">{% trans "Empty" %}</option>
+      <option value="reserved">{% trans "Reserved" %}</option>
+      <option value="ap">{% trans "Access Point" %}</option>
+      <option value="camera">{% trans "Camera" %}</option>
+      <option value="printer">{% trans "Printer" %}</option>
+    </select>
+    <input type="text" id="tile-label-input" class="form-control form-control-sm"
+           placeholder="{% trans 'Label' %}" style="width: 150px;">
+    <input type="number" id="tile-width-input" class="form-control form-control-sm"
+           value="1" min="1" max="10" style="width: 60px;" title="{% trans 'Width' %}">
+    <span class="text-muted">&times;</span>
+    <input type="number" id="tile-height-input" class="form-control form-control-sm"
+           value="1" min="1" max="10" style="width: 60px;" title="{% trans 'Height' %}">
+    <span id="camera-fov-controls" class="d-none align-items-center gap-1">
+      <span class="text-muted">|</span>
+      <label class="small text-muted mb-0">{% trans "Dir" %}:</label>
+      <input type="number" id="tile-fov-direction-input" class="form-control form-control-sm"
+             value="0" min="0" max="360" step="15" style="width: 70px;" title="{% trans 'FOV Direction (degrees)' %}">
+      <label class="small text-muted mb-0">{% trans "Angle" %}:</label>
+      <input type="number" id="tile-fov-angle-input" class="form-control form-control-sm"
+             value="90" min="10" max="360" step="5" style="width: 70px;" title="{% trans 'FOV Angle Width' %}">
+      <label class="small text-muted mb-0">{% trans "Range" %}:</label>
+      <input type="number" id="tile-fov-distance-input" class="form-control form-control-sm"
+             value="5" min="1" max="50" style="width: 60px;" title="{% trans 'FOV Distance (cells)' %}">
+    </span>
+    <button id="delete-tile-btn" class="btn btn-sm btn-danger ms-2" disabled>
+      <i class="mdi mdi-delete"></i> {% trans "Delete" %}
+    </button>
+    <span class="text-muted small ms-auto">{% trans "Dbl-click: place | Click: select | Drag tile: move" %}</span>
+  </div>
+  {% endif %}
+
+  {# Main layout: canvas + sidebar #}
+  <div class="floorplan-layout">
+    {# Canvas area #}
+    <div class="floorplan-canvas-card floorplan-canvas-area">
+      <div class="card-body p-2">
+        <div id="floorplan-container"
+             data-grid-width="{{ grid_width }}"
+             data-grid-height="{{ grid_height }}"
+             data-tile-size="{{ tile_size }}"
+             data-tiles='{{ tile_data_json }}'
+             data-edit-mode="{% if edit_mode %}true{% else %}false{% endif %}"
+             data-api-url="{% url 'plugins-api:netbox_sitemap-api:floorplantile-list' %}"
+             data-floorplan-id="{{ object.pk }}"
+             data-site-id="{{ site_id }}"
+             data-csrf-token="{{ csrf_token }}"
+             {% if object.background_image %}
+             data-background-image="{{ object.background_image.url }}"
+             {% endif %}>
+          <canvas id="floorplan-canvas"></canvas>
+          <div class="zoom-controls">
+            <button id="zoom-in-btn" class="btn btn-sm btn-dark" title="{% trans 'Zoom In' %}">
+              <i class="mdi mdi-plus"></i>
+            </button>
+            <button id="zoom-out-btn" class="btn btn-sm btn-dark" title="{% trans 'Zoom Out' %}">
+              <i class="mdi mdi-minus"></i>
+            </button>
+            <button id="zoom-reset-btn" class="btn btn-sm btn-dark" title="{% trans 'Fit to View' %}">
+              <i class="mdi mdi-fit-to-screen-outline"></i>
+            </button>
+            <button id="export-pdf-btn" class="btn btn-sm btn-dark" title="{% trans 'Export PDF' %}">
+              <i class="mdi mdi-file-pdf-box"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+      {# Selection status bar at bottom of canvas #}
+      <div class="selection-status-bar" id="selection-status">
+        <span class="text-muted">{% trans "Click a tile to select" %}</span>
+      </div>
+    </div>
+
+    {# Sidebar: searchable tile list #}
+    <div class="floorplan-sidebar">
+      <div class="sidebar-header">
+        <input type="text" id="tile-search-input" class="form-control form-control-sm"
+               placeholder="{% trans 'Search tiles...' %}">
+      </div>
+      <div class="sidebar-toggles" id="type-toggles">
+        <button class="type-toggle active" data-type="rack"><span class="toggle-dot" style="background:#4a7eff"></span>{% trans "Rack" %}</button>
+        <button class="type-toggle active" data-type="ap"><span class="toggle-dot" style="background:#7b42c8"></span>{% trans "AP" %}</button>
+        <button class="type-toggle active" data-type="cooling"><span class="toggle-dot" style="background:#1890b0"></span>{% trans "Cooling" %}</button>
+        <button class="type-toggle active" data-type="power"><span class="toggle-dot" style="background:#c89a20"></span>{% trans "Power" %}</button>
+        <button class="type-toggle active" data-type="aisle"><span class="toggle-dot" style="background:#3a3a50"></span>{% trans "Aisle" %}</button>
+        <button class="type-toggle active" data-type="wall"><span class="toggle-dot" style="background:#5c5c6e"></span>{% trans "Wall" %}</button>
+        <button class="type-toggle active" data-type="door"><span class="toggle-dot" style="background:#1a8a7a"></span>{% trans "Door" %}</button>
+        <button class="type-toggle active" data-type="column"><span class="toggle-dot" style="background:#6e6e80"></span>{% trans "Column" %}</button>
+        <button class="type-toggle active" data-type="empty"><span class="toggle-dot" style="background:#2a2a3e"></span>{% trans "Empty" %}</button>
+        <button class="type-toggle active" data-type="reserved"><span class="toggle-dot" style="background:#b06820"></span>{% trans "Reserved" %}</button>
+        <button class="type-toggle active" data-type="camera"><span class="toggle-dot" style="background:#c42020"></span>{% trans "Camera" %}</button>
+        <button class="type-toggle active" data-type="printer"><span class="toggle-dot" style="background:#e67e22"></span>{% trans "Printer" %}</button>
+        <button class="type-toggle active" id="fov-toggle"><span class="toggle-dot" style="background:#ff4444; opacity:0.5"></span>{% trans "FOV" %}</button>
+      </div>
+      <div class="sidebar-filter-row">
+        <span id="tile-count" class="small text-muted"></span>
+      </div>
+      <div id="tile-list" class="sidebar-tile-list"></div>
+    </div>
+  </div>
+
+  {# Detailed tile panel (shown on selection) #}
+  <div id="tile-detail-panel" class="card mt-3 d-none">
+    <h5 class="card-header">{% trans "Tile Details" %}</h5>
+    <div class="card-body">
+      <table class="table table-hover attr-table mb-0">
+        <tr>
+          <th>{% trans "Label" %}</th>
+          <td>
+            <span id="tile-detail-name">-</span>
+            <button id="edit-label-btn" class="btn btn-sm btn-link p-0 ms-2" title="{% trans 'Edit label' %}">
+              <i class="mdi mdi-pencil"></i>
+            </button>
+            <div id="edit-label-form" class="d-none d-flex gap-1 align-items-center mt-1">
+              <input type="text" id="edit-label-input" class="form-control form-control-sm" style="width: 200px;">
+              <button id="save-label-btn" class="btn btn-sm btn-primary">
+                <i class="mdi mdi-check"></i>
+              </button>
+              <button id="cancel-label-btn" class="btn btn-sm btn-outline-secondary">
+                <i class="mdi mdi-close"></i>
+              </button>
+            </div>
+          </td>
+        </tr>
+        <tr>
+          <th>{% trans "Position" %}</th>
+          <td id="tile-detail-position">-</td>
+        </tr>
+        <tr>
+          <th>{% trans "Size" %}</th>
+          <td id="tile-detail-size">-</td>
+        </tr>
+        <tr>
+          <th>{% trans "Type" %}</th>
+          <td id="tile-detail-type">-</td>
+        </tr>
+        <tr>
+          <th>{% trans "Object Type" %}</th>
+          <td id="tile-detail-object-type">-</td>
+        </tr>
+        <tr>
+          <th>{% trans "Utilization" %}</th>
+          <td id="tile-detail-utilization">-</td>
+        </tr>
+        <tr>
+          <th>{% trans "Linked Object" %}</th>
+          <td id="tile-detail-object-link">-</td>
+        </tr>
+      </table>
+      <div id="camera-fov-edit-panel" class="d-none mt-2 px-2 pb-2">
+        <h6 class="mb-2">{% trans "Camera FOV" %}</h6>
+        <div class="d-flex gap-2 align-items-center flex-wrap">
+          <label class="small text-muted mb-0">{% trans "Dir" %}:</label>
+          <input type="number" id="edit-fov-direction" class="form-control form-control-sm" style="width:70px;" min="0" max="360" step="15">
+          <label class="small text-muted mb-0">{% trans "Angle" %}:</label>
+          <input type="number" id="edit-fov-angle" class="form-control form-control-sm" style="width:70px;" min="10" max="360" step="5">
+          <label class="small text-muted mb-0">{% trans "Range" %}:</label>
+          <input type="number" id="edit-fov-distance" class="form-control form-control-sm" style="width:60px;" min="1" max="50">
+          <button id="save-fov-btn" class="btn btn-sm btn-primary">
+            <i class="mdi mdi-check"></i> {% trans "Save" %}
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {# Rack Elevation panel (shown when a rack tile is selected) #}
+  <div id="rack-elevation-panel" class="card mt-3 d-none">
+    <div class="card-header d-flex align-items-center justify-content-between">
+      <h5 class="mb-0" id="rack-elevation-title">{% trans "Rack Elevation" %}</h5>
+      <div class="btn-group btn-group-sm" role="group">
+        <button type="button" class="btn btn-outline-secondary active" id="rack-face-front" data-face="front">
+          {% trans "Front" %}
+        </button>
+        <button type="button" class="btn btn-outline-secondary" id="rack-face-rear" data-face="rear">
+          {% trans "Rear" %}
+        </button>
+      </div>
+    </div>
+    <div class="card-body rack-elevation-body">
+      <div id="rack-elevation-loading" class="text-center py-4 d-none">
+        <div class="spinner-border spinner-border-sm text-secondary" role="status"></div>
+        <span class="ms-2 text-muted">{% trans "Loading rack elevation..." %}</span>
+      </div>
+      <div id="rack-elevation-svg" class="rack-elevation-svg-container"></div>
+    </div>
+  </div>
+
+  {% if edit_mode %}
+  {# Link Object panel (edit mode only, shown when tile selected) #}
+  <div id="link-object-panel" class="card mt-3 d-none">
+    <h5 class="card-header">{% trans "Link Object to Tile" %}</h5>
+    <div class="card-body">
+      <div class="row g-3 align-items-end">
+        <div class="col-md-3">
+          <label for="link-object-type" class="form-label">{% trans "Object Type" %}</label>
+          <select id="link-object-type" class="form-select form-select-sm no-ts">
+            <option value="">-- {% trans "Select Type" %} --</option>
+            <option value="dcim.rack">{% trans "Rack" %}</option>
+            <option value="dcim.device">{% trans "Device" %}</option>
+            <option value="dcim.powerpanel">{% trans "Power Panel" %}</option>
+            <option value="dcim.powerfeed">{% trans "Power Feed" %}</option>
+          </select>
+        </div>
+        <div class="col-md-5">
+          <label for="link-object-select" class="form-label">{% trans "Object" %}</label>
+          <select id="link-object-select" class="form-select form-select-sm no-ts" disabled>
+            <option value="">-- {% trans "Select object type first" %} --</option>
+          </select>
+        </div>
+        <div class="col-md-4">
+          <button id="link-object-btn" class="btn btn-sm btn-primary" disabled>
+            <i class="mdi mdi-link"></i> {% trans "Link" %}
+          </button>
+          <button id="unlink-object-btn" class="btn btn-sm btn-outline-danger ms-1" disabled>
+            <i class="mdi mdi-link-off"></i> {% trans "Unlink" %}
+          </button>
+          <span id="link-status" class="small text-muted ms-2"></span>
+        </div>
+      </div>
+      <div id="link-current" class="mt-2 small text-muted"></div>
+    </div>
+  </div>
+  {% endif %}
+
+  <script src="{% static 'netbox_sitemap/js/jspdf.umd.min.js' %}"></script>
+  <script src="{% static 'netbox_sitemap/js/floorplan_viewer.js' %}"></script>
+  {% if edit_mode %}
+    <script src="{% static 'netbox_sitemap/js/floorplan_editor.js' %}"></script>
+    <script>
+    // Object linking logic (inline to avoid static file caching issues)
+    (function() {
+      var container = document.getElementById('floorplan-container');
+      if (!container) return;
+
+      var apiUrl = container.dataset.apiUrl;
+      var siteId = container.dataset.siteId;
+      var csrfToken = container.dataset.csrfToken;
+
+      var API_ENDPOINTS = {
+        'dcim.rack': '/api/dcim/racks/',
+        'dcim.device': '/api/dcim/devices/',
+        'dcim.powerpanel': '/api/dcim/power-panels/',
+        'dcim.powerfeed': '/api/dcim/power-feeds/'
+      };
+
+      var linkTypeSelect = document.getElementById('link-object-type');
+      var linkObjectSelect = document.getElementById('link-object-select');
+      var linkBtn = document.getElementById('link-object-btn');
+      var unlinkBtn = document.getElementById('unlink-object-btn');
+      var linkStatus = document.getElementById('link-status');
+      var linkCurrent = document.getElementById('link-current');
+      var linkPanel = document.getElementById('link-object-panel');
+
+      if (!linkTypeSelect || !linkObjectSelect) {
+        console.error('FloorPlan: link elements not found');
+        return;
+      }
+
+      // Show/hide link panel on tile selection
+      document.getElementById('floorplan-canvas').addEventListener('click', function() {
+        setTimeout(function() {
+          var viewer = window.floorplanViewer;
+          if (!viewer) return;
+          var tile = viewer.getSelectedTile();
+          if (!tile) {
+            if (linkPanel) linkPanel.classList.add('d-none');
+            return;
+          }
+          if (linkPanel) linkPanel.classList.remove('d-none');
+          if (tile.object_type) {
+            linkCurrent.innerHTML = 'Currently linked: <strong>' + tile.object_type + '</strong>';
+            unlinkBtn.disabled = false;
+          } else {
+            linkCurrent.textContent = 'No object linked to this tile.';
+            unlinkBtn.disabled = true;
+          }
+        }, 60);
+      });
+
+      // Fetch objects when type changes
+      linkTypeSelect.addEventListener('change', function() {
+        var objectType = this.value;
+        linkObjectSelect.innerHTML = '<option value="">-- Loading... --</option>';
+        linkObjectSelect.disabled = true;
+        linkBtn.disabled = true;
+
+        if (!objectType) {
+          linkObjectSelect.innerHTML = '<option value="">-- Select object type first --</option>';
+          return;
+        }
+
+        var endpoint = API_ENDPOINTS[objectType];
+        if (!endpoint) return;
+
+        var url = endpoint + '?limit=500&brief=true';
+        if (objectType !== 'dcim.powerfeed') {
+          url += '&site_id=' + siteId;
+        }
+
+        fetch(url, {
+          headers: { 'Accept': 'application/json' },
+          credentials: 'same-origin'
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          var results = data.results || [];
+          var typeName = objectType.split('.')[1];
+          linkObjectSelect.innerHTML = '<option value="">-- Select ' + typeName + ' (' + results.length + ') --</option>';
+          results.forEach(function(obj) {
+            var opt = document.createElement('option');
+            opt.value = obj.id;
+            opt.textContent = obj.display || obj.name || ('ID: ' + obj.id);
+            linkObjectSelect.appendChild(opt);
+          });
+          linkObjectSelect.disabled = false;
+        })
+        .catch(function(err) {
+          linkObjectSelect.innerHTML = '<option value="">-- Error: ' + err.message + ' --</option>';
+        });
+      });
+
+      // Enable link button when object selected
+      linkObjectSelect.addEventListener('change', function() {
+        linkBtn.disabled = !this.value;
+      });
+
+      // Link button
+      linkBtn.addEventListener('click', function() {
+        var detailPanel = document.getElementById('tile-detail-panel');
+        var tileId = detailPanel ? detailPanel.dataset.selectedTileId : null;
+        if (!tileId) { alert('No tile selected.'); return; }
+
+        var objectType = linkTypeSelect.value;
+        var objectId = parseInt(linkObjectSelect.value, 10);
+        if (!objectType || !objectId) { alert('Select an object type and object.'); return; }
+
+        linkStatus.textContent = 'Linking...';
+        linkBtn.disabled = true;
+
+        fetch(apiUrl + tileId + '/', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+          body: JSON.stringify({ assigned_object_type: objectType, assigned_object_id: objectId })
+        })
+        .then(function(r) {
+          if (r.ok) return r.json();
+          return r.json().then(function(e) { throw new Error(JSON.stringify(e)); });
+        })
+        .then(function(updated) {
+          linkStatus.textContent = 'Linked!';
+          linkStatus.className = 'small text-success ms-2';
+          var viewer = window.floorplanViewer;
+          if (viewer) {
+            var selectedText = linkObjectSelect.options[linkObjectSelect.selectedIndex].textContent;
+            for (var i = 0; i < viewer.tiles.length; i++) {
+              if (viewer.tiles[i].id === parseInt(tileId)) {
+                viewer.tiles[i].object_type = objectType.split('.')[1];
+                viewer.tiles[i].utilization = updated.utilization;
+                if (!viewer.tiles[i].label) viewer.tiles[i].label = selectedText;
+                break;
+              }
+            }
+            viewer.render();
+          }
+          setTimeout(function() { linkStatus.textContent = ''; linkStatus.className = 'small text-muted ms-2'; }, 2000);
+        })
+        .catch(function(err) {
+          linkStatus.textContent = 'Error!';
+          linkStatus.className = 'small text-danger ms-2';
+          alert('Error: ' + err.message);
+          linkBtn.disabled = false;
+        });
+      });
+
+      // Unlink button
+      unlinkBtn.addEventListener('click', function() {
+        var detailPanel = document.getElementById('tile-detail-panel');
+        var tileId = detailPanel ? detailPanel.dataset.selectedTileId : null;
+        if (!tileId) return;
+
+        linkStatus.textContent = 'Unlinking...';
+        unlinkBtn.disabled = true;
+
+        fetch(apiUrl + tileId + '/', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+          body: JSON.stringify({ assigned_object_type: null, assigned_object_id: null })
+        })
+        .then(function(r) {
+          if (r.ok) {
+            linkStatus.textContent = 'Unlinked!';
+            linkStatus.className = 'small text-success ms-2';
+            var viewer = window.floorplanViewer;
+            if (viewer) {
+              for (var i = 0; i < viewer.tiles.length; i++) {
+                if (viewer.tiles[i].id === parseInt(tileId)) {
+                  viewer.tiles[i].object_type = null;
+                  viewer.tiles[i].object_url = null;
+                  viewer.tiles[i].utilization = null;
+                  break;
+                }
+              }
+              viewer.render();
+            }
+            linkCurrent.textContent = 'No object linked to this tile.';
+            unlinkBtn.disabled = true;
+            setTimeout(function() { linkStatus.textContent = ''; linkStatus.className = 'small text-muted ms-2'; }, 2000);
+          } else {
+            alert('Error unlinking.');
+            unlinkBtn.disabled = false;
+          }
+        })
+        .catch(function(err) { alert('Network error: ' + err.message); });
+      });
+    })();
+    </script>
+  {% endif %}
+{% endblock %}

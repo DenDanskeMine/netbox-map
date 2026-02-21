@@ -1,0 +1,401 @@
+/* FloorPlan Pro Styles */
+
+#floorplan-container {
+    position: relative;
+    overflow: hidden;
+}
+
+#floorplan-canvas {
+    display: block;
+    image-rendering: auto;
+    border-radius: 6px;
+    width: 100%;
+    height: 100%;
+}
+
+/* Zoom controls overlay */
+.zoom-controls {
+    position: absolute;
+    bottom: 12px;
+    left: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    z-index: 10;
+}
+
+.zoom-controls .btn {
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(22, 25, 43, 0.9);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: #c0c0d0;
+    font-size: 16px;
+    border-radius: 6px;
+    backdrop-filter: blur(4px);
+}
+
+.zoom-controls .btn:hover {
+    background: rgba(40, 45, 70, 0.95);
+    color: #fff;
+    border-color: rgba(255, 255, 255, 0.25);
+}
+
+/* Flex layout: canvas + sidebar */
+.floorplan-layout {
+    display: flex;
+    gap: 0;
+    height: 70vh;
+    min-height: 400px;
+}
+
+.floorplan-canvas-area {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.floorplan-canvas-area .card-body {
+    flex: 1;
+    min-height: 0;
+}
+
+#floorplan-container {
+    height: 100%;
+}
+
+/* Canvas wrapper card */
+.floorplan-canvas-card {
+    background: #0d0f1a;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+/* Sidebar */
+.floorplan-sidebar {
+    width: 280px;
+    flex-shrink: 0;
+    background: rgba(22, 25, 43, 0.97);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-left: none;
+    border-radius: 0 8px 8px 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.floorplan-canvas-area {
+    border-radius: 8px 0 0 8px;
+}
+
+.sidebar-header {
+    padding: 10px 10px 6px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.sidebar-header input {
+    background: #1e2140;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: #e0e0f0;
+    font-size: 13px;
+}
+
+.sidebar-header input:focus {
+    border-color: #00d4ff;
+    box-shadow: 0 0 0 2px rgba(0, 212, 255, 0.15);
+    background: #1e2140;
+    color: #e0e0f0;
+}
+
+.sidebar-header input::placeholder {
+    color: #666;
+}
+
+/* Type toggle buttons */
+.sidebar-toggles {
+    padding: 8px 10px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.type-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.04);
+    color: #888;
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+}
+
+.type-toggle:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.2);
+}
+
+.type-toggle.active {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.25);
+    color: #e0e0f0;
+}
+
+.type-toggle:not(.active) .toggle-dot {
+    opacity: 0.3;
+}
+
+.toggle-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.sidebar-filter-row {
+    padding: 4px 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.sidebar-filter-row select {
+    background: #1e2140;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: #e0e0f0;
+    font-size: 12px;
+    flex: 1;
+}
+
+.sidebar-tile-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 4px 0;
+}
+
+.sidebar-tile-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 10px;
+    cursor: pointer;
+    font-size: 12px;
+    color: #c0c0d0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+    transition: background 0.1s;
+}
+
+.sidebar-tile-item:hover {
+    background: rgba(0, 212, 255, 0.08);
+}
+
+.sidebar-tile-item.active {
+    background: rgba(0, 212, 255, 0.15);
+    color: #fff;
+}
+
+.sidebar-tile-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 3px;
+    flex-shrink: 0;
+}
+
+.sidebar-tile-label {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 500;
+}
+
+.sidebar-tile-type {
+    font-size: 10px;
+    color: #888;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    flex-shrink: 0;
+}
+
+.sidebar-tile-pos {
+    font-size: 10px;
+    color: #666;
+    flex-shrink: 0;
+}
+
+.floorplan-canvas-card .card-body {
+    background: #0d0f1a;
+}
+
+/* Header bar with selector + legend */
+.floorplan-header {
+    background: rgba(22, 25, 43, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    padding: 10px 16px;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    flex-wrap: wrap;
+}
+
+.floorplan-header label {
+    color: #a0a0b8;
+    font-size: 13px;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.floorplan-header select {
+    background: #1e2140;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: #e0e0f0;
+    border-radius: 4px;
+    padding: 4px 8px;
+    font-size: 13px;
+    min-width: 180px;
+}
+
+/* Gradient legend bar */
+.legend-gradient {
+    height: 12px;
+    width: 160px;
+    border-radius: 6px;
+    background: linear-gradient(to right, hsl(120, 70%, 42%), hsl(80, 75%, 38%), hsl(40, 78%, 36%), hsl(0, 85%, 32%));
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.legend-labels {
+    display: flex;
+    justify-content: space-between;
+    width: 160px;
+    font-size: 10px;
+    color: #888;
+    margin-top: 2px;
+}
+
+.legend-empty-swatch {
+    width: 12px;
+    height: 12px;
+    background: #6b6b80;
+    border-radius: 3px;
+    display: inline-block;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Selection status bar */
+.selection-status-bar {
+    background: rgba(22, 25, 43, 0.95);
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    padding: 8px 16px;
+    font-size: 13px;
+    color: #c0c0d0;
+    min-height: 38px;
+    display: flex;
+    align-items: center;
+}
+
+.selection-status-bar a {
+    text-decoration: none;
+}
+
+.selection-status-bar strong {
+    color: #e8e8f0;
+}
+
+/* Edit toolbar */
+.edit-toolbar {
+    background: rgba(22, 25, 43, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    padding: 8px 14px;
+}
+
+.edit-toolbar .form-control-sm,
+.edit-toolbar .form-select-sm {
+    background: #1e2140;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: #e0e0f0;
+    font-size: 13px;
+}
+
+.edit-toolbar .form-control-sm:focus,
+.edit-toolbar .form-select-sm:focus {
+    border-color: #00d4ff;
+    box-shadow: 0 0 0 2px rgba(0, 212, 255, 0.15);
+}
+
+.edit-toolbar .text-muted {
+    color: #666 !important;
+}
+
+.edit-toolbar strong {
+    color: #e0e0f0;
+}
+
+/* Detail panel (compact) */
+#tile-detail-panel {
+    transition: all 0.2s ease;
+}
+
+#tile-detail-panel .attr-table th {
+    width: 110px;
+    font-size: 13px;
+}
+
+#tile-detail-panel .attr-table td {
+    font-size: 13px;
+}
+
+/* Rack elevation panel */
+#rack-elevation-panel .card-header {
+    padding: 10px 16px;
+}
+
+#rack-elevation-panel .card-header h5 {
+    font-size: 14px;
+    font-weight: 600;
+}
+
+#rack-elevation-panel .btn-group .btn {
+    font-size: 12px;
+    padding: 3px 12px;
+}
+
+.rack-elevation-body {
+    padding: 16px;
+    overflow-y: auto;
+    max-height: 80vh;
+}
+
+.rack-elevation-svg-container {
+    text-align: center;
+}
+
+.rack-elevation-svg-container svg {
+    max-height: 75vh;
+    width: auto;
+    height: auto;
+}
+
+/* Make device links in the SVG clickable and styled */
+.rack-elevation-svg-container a {
+    cursor: pointer;
+}
+
+.rack-elevation-svg-container a:hover rect,
+.rack-elevation-svg-container a:hover text {
+    opacity: 0.85;
+}

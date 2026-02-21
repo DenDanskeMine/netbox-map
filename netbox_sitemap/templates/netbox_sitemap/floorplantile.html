@@ -1,0 +1,65 @@
+{% extends 'generic/object.html' %}
+{% load helpers %}
+{% load i18n %}
+
+{% block content %}
+  <div class="row mb-3">
+    <div class="col-md-6">
+      <div class="card">
+        <h5 class="card-header">{% trans "Tile Details" %}</h5>
+        <table class="table table-hover attr-table">
+          <tr>
+            <th scope="row">{% trans "Floor Plan" %}</th>
+            <td><a href="{{ object.floorplan.get_absolute_url }}">{{ object.floorplan }}</a></td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Position" %}</th>
+            <td>({{ object.x_position }}, {{ object.y_position }})</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Size" %}</th>
+            <td>{{ object.width }} &times; {{ object.height }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Type" %}</th>
+            <td>{{ object.get_tile_type_display }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Status" %}</th>
+            <td>{{ object.get_status_display }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Assigned Object" %}</th>
+            <td>
+              {% if object.assigned_object %}
+                <a href="{{ object.assigned_object_url }}">{{ object.assigned_object }}</a>
+                <span class="text-muted">({{ object.assigned_object_type_name }})</span>
+              {% else %}
+                <span class="text-muted">&mdash;</span>
+              {% endif %}
+            </td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Label" %}</th>
+            <td>{{ object.label|placeholder }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Orientation" %}</th>
+            <td>{{ object.orientation }}&deg;</td>
+          </tr>
+        </table>
+      </div>
+    </div>
+    <div class="col-md-6">
+      <div class="card">
+        <h5 class="card-header">{% trans "Actions" %}</h5>
+        <div class="card-body">
+          <a href="{% url 'plugins:netbox_sitemap:floorplan_visualization' pk=object.floorplan.pk %}"
+             class="btn btn-primary">
+            <i class="mdi mdi-floor-plan"></i> {% trans "View on Floor Plan" %}
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}
