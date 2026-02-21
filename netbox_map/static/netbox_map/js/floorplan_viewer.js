@@ -1215,7 +1215,8 @@
         selector.addEventListener('change', function() {
             var fpId = this.value;
             var editMode = container.dataset.editMode === 'true';
-            var url = '/plugins/floorplan/floorplans/' + fpId + '/visualization/';
+            var currentPath = window.location.pathname;
+            var url = currentPath.replace(/\/\d+\/visualization\/?.*$/, '/' + fpId + '/visualization/');
             if (editMode) {
                 url += '?edit=true';
             }

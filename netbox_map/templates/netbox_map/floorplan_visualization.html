@@ -95,7 +95,7 @@
 
   {# Main layout: canvas + sidebar #}
   <div class="floorplan-layout">
-    {# Canvas area #}
+    {# Left: Canvas area #}
     <div class="floorplan-canvas-card floorplan-canvas-area">
       <div class="card-body p-2">
         <div id="floorplan-container"
@@ -134,164 +134,178 @@
       </div>
     </div>
 
-    {# Sidebar: searchable tile list #}
+    {# Right: Sidebar with tile list + detail panels #}
     <div class="floorplan-sidebar">
-      <div class="sidebar-header">
-        <input type="text" id="tile-search-input" class="form-control form-control-sm"
-               placeholder="{% trans 'Search tiles...' %}">
+      {# Top section: tile list #}
+      <div class="sidebar-tiles-section">
+        <div class="sidebar-header">
+          <input type="text" id="tile-search-input" class="form-control form-control-sm"
+                 placeholder="{% trans 'Search tiles...' %}">
+        </div>
+        <div class="sidebar-toggles" id="type-toggles">
+          <button class="type-toggle active" data-type="rack"><span class="toggle-dot" style="background:#4a7eff"></span>{% trans "Rack" %}</button>
+          <button class="type-toggle active" data-type="ap"><span class="toggle-dot" style="background:#7b42c8"></span>{% trans "AP" %}</button>
+          <button class="type-toggle active" data-type="cooling"><span class="toggle-dot" style="background:#1890b0"></span>{% trans "Cooling" %}</button>
+          <button class="type-toggle active" data-type="power"><span class="toggle-dot" style="background:#c89a20"></span>{% trans "Power" %}</button>
+          <button class="type-toggle active" data-type="aisle"><span class="toggle-dot" style="background:#3a3a50"></span>{% trans "Aisle" %}</button>
+          <button class="type-toggle active" data-type="wall"><span class="toggle-dot" style="background:#5c5c6e"></span>{% trans "Wall" %}</button>
+          <button class="type-toggle active" data-type="door"><span class="toggle-dot" style="background:#1a8a7a"></span>{% trans "Door" %}</button>
+          <button class="type-toggle active" data-type="column"><span class="toggle-dot" style="background:#6e6e80"></span>{% trans "Column" %}</button>
+          <button class="type-toggle active" data-type="empty"><span class="toggle-dot" style="background:#2a2a3e"></span>{% trans "Empty" %}</button>
+          <button class="type-toggle active" data-type="reserved"><span class="toggle-dot" style="background:#b06820"></span>{% trans "Reserved" %}</button>
+          <button class="type-toggle active" data-type="camera"><span class="toggle-dot" style="background:#c42020"></span>{% trans "Camera" %}</button>
+          <button class="type-toggle active" data-type="printer"><span class="toggle-dot" style="background:#e67e22"></span>{% trans "Printer" %}</button>
+          <button class="type-toggle active" id="fov-toggle"><span class="toggle-dot" style="background:#ff4444; opacity:0.5"></span>{% trans "FOV" %}</button>
+        </div>
+        <div class="sidebar-filter-row">
+          <span id="tile-count" class="small text-muted"></span>
+        </div>
+        <div id="tile-list" class="sidebar-tile-list"></div>
       </div>
-      <div class="sidebar-toggles" id="type-toggles">
-        <button class="type-toggle active" data-type="rack"><span class="toggle-dot" style="background:#4a7eff"></span>{% trans "Rack" %}</button>
-        <button class="type-toggle active" data-type="ap"><span class="toggle-dot" style="background:#7b42c8"></span>{% trans "AP" %}</button>
-        <button class="type-toggle active" data-type="cooling"><span class="toggle-dot" style="background:#1890b0"></span>{% trans "Cooling" %}</button>
-        <button class="type-toggle active" data-type="power"><span class="toggle-dot" style="background:#c89a20"></span>{% trans "Power" %}</button>
-        <button class="type-toggle active" data-type="aisle"><span class="toggle-dot" style="background:#3a3a50"></span>{% trans "Aisle" %}</button>
-        <button class="type-toggle active" data-type="wall"><span class="toggle-dot" style="background:#5c5c6e"></span>{% trans "Wall" %}</button>
-        <button class="type-toggle active" data-type="door"><span class="toggle-dot" style="background:#1a8a7a"></span>{% trans "Door" %}</button>
-        <button class="type-toggle active" data-type="column"><span class="toggle-dot" style="background:#6e6e80"></span>{% trans "Column" %}</button>
-        <button class="type-toggle active" data-type="empty"><span class="toggle-dot" style="background:#2a2a3e"></span>{% trans "Empty" %}</button>
-        <button class="type-toggle active" data-type="reserved"><span class="toggle-dot" style="background:#b06820"></span>{% trans "Reserved" %}</button>
-        <button class="type-toggle active" data-type="camera"><span class="toggle-dot" style="background:#c42020"></span>{% trans "Camera" %}</button>
-        <button class="type-toggle active" data-type="printer"><span class="toggle-dot" style="background:#e67e22"></span>{% trans "Printer" %}</button>
-        <button class="type-toggle active" id="fov-toggle"><span class="toggle-dot" style="background:#ff4444; opacity:0.5"></span>{% trans "FOV" %}</button>
-      </div>
-      <div class="sidebar-filter-row">
-        <span id="tile-count" class="small text-muted"></span>
-      </div>
-      <div id="tile-list" class="sidebar-tile-list"></div>
-    </div>
-  </div>
 
-  {# Detailed tile panel (shown on selection) #}
-  <div id="tile-detail-panel" class="card mt-3 d-none">
-    <h5 class="card-header">{% trans "Tile Details" %}</h5>
-    <div class="card-body">
-      <table class="table table-hover attr-table mb-0">
-        <tr>
-          <th>{% trans "Label" %}</th>
-          <td>
-            <span id="tile-detail-name">-</span>
-            <button id="edit-label-btn" class="btn btn-sm btn-link p-0 ms-2" title="{% trans 'Edit label' %}">
-              <i class="mdi mdi-pencil"></i>
-            </button>
-            <div id="edit-label-form" class="d-none d-flex gap-1 align-items-center mt-1">
-              <input type="text" id="edit-label-input" class="form-control form-control-sm" style="width: 200px;">
-              <button id="save-label-btn" class="btn btn-sm btn-primary">
-                <i class="mdi mdi-check"></i>
-              </button>
-              <button id="cancel-label-btn" class="btn btn-sm btn-outline-secondary">
-                <i class="mdi mdi-close"></i>
+      {# Bottom section: context panels (details, rack elevation, link) #}
+      <div class="sidebar-context-section" id="sidebar-context">
+        {# Placeholder shown when nothing selected #}
+        <div id="sidebar-no-selection" class="sidebar-empty-state">
+          <i class="mdi mdi-cursor-default-click-outline"></i>
+          <span>{% trans "Select a tile to view details" %}</span>
+        </div>
+
+        {# Tile Details #}
+        <div id="tile-detail-panel" class="d-none">
+          <div class="sidebar-section-title">
+            {% trans "Tile Details" %}
+          </div>
+          <div class="sidebar-detail-list">
+            <div class="detail-row">
+              <span class="detail-label">{% trans "Label" %}</span>
+              <span class="detail-value">
+                <span id="tile-detail-name">-</span>
+                <button id="edit-label-btn" class="btn btn-sm btn-link p-0 ms-1" title="{% trans 'Edit label' %}">
+                  <i class="mdi mdi-pencil"></i>
+                </button>
+                <div id="edit-label-form" class="d-none mt-1">
+                  <div class="d-flex gap-1 align-items-center">
+                    <input type="text" id="edit-label-input" class="form-control form-control-sm sidebar-input" style="flex:1;">
+                    <button id="save-label-btn" class="btn btn-sm btn-primary px-1">
+                      <i class="mdi mdi-check"></i>
+                    </button>
+                    <button id="cancel-label-btn" class="btn btn-sm btn-outline-secondary px-1">
+                      <i class="mdi mdi-close"></i>
+                    </button>
+                  </div>
+                </div>
+              </span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">{% trans "Position" %}</span>
+              <span class="detail-value" id="tile-detail-position">-</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">{% trans "Size" %}</span>
+              <span class="detail-value" id="tile-detail-size">-</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">{% trans "Type" %}</span>
+              <span class="detail-value" id="tile-detail-type">-</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">{% trans "Object Type" %}</span>
+              <span class="detail-value" id="tile-detail-object-type">-</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">{% trans "Utilization" %}</span>
+              <span class="detail-value" id="tile-detail-utilization">-</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">{% trans "Linked Object" %}</span>
+              <span class="detail-value" id="tile-detail-object-link">-</span>
+            </div>
+          </div>
+
+          {# Camera FOV edit (inline, for camera tiles only) #}
+          <div id="camera-fov-edit-panel" class="d-none sidebar-fov-panel">
+            <div class="sidebar-section-title">{% trans "Camera FOV" %}</div>
+            <div class="sidebar-fov-controls">
+              <div class="d-flex gap-2 align-items-center">
+                <label class="small text-muted mb-0">{% trans "Dir" %}</label>
+                <input type="number" id="edit-fov-direction" class="form-control form-control-sm sidebar-input" style="width:60px;" min="0" max="360" step="15">
+              </div>
+              <div class="d-flex gap-2 align-items-center">
+                <label class="small text-muted mb-0">{% trans "Angle" %}</label>
+                <input type="number" id="edit-fov-angle" class="form-control form-control-sm sidebar-input" style="width:60px;" min="10" max="360" step="5">
+              </div>
+              <div class="d-flex gap-2 align-items-center">
+                <label class="small text-muted mb-0">{% trans "Range" %}</label>
+                <input type="number" id="edit-fov-distance" class="form-control form-control-sm sidebar-input" style="width:60px;" min="1" max="50">
+              </div>
+              <button id="save-fov-btn" class="btn btn-sm btn-primary">
+                <i class="mdi mdi-check"></i> {% trans "Save" %}
               </button>
             </div>
-          </td>
-        </tr>
-        <tr>
-          <th>{% trans "Position" %}</th>
-          <td id="tile-detail-position">-</td>
-        </tr>
-        <tr>
-          <th>{% trans "Size" %}</th>
-          <td id="tile-detail-size">-</td>
-        </tr>
-        <tr>
-          <th>{% trans "Type" %}</th>
-          <td id="tile-detail-type">-</td>
-        </tr>
-        <tr>
-          <th>{% trans "Object Type" %}</th>
-          <td id="tile-detail-object-type">-</td>
-        </tr>
-        <tr>
-          <th>{% trans "Utilization" %}</th>
-          <td id="tile-detail-utilization">-</td>
-        </tr>
-        <tr>
-          <th>{% trans "Linked Object" %}</th>
-          <td id="tile-detail-object-link">-</td>
-        </tr>
-      </table>
-      <div id="camera-fov-edit-panel" class="d-none mt-2 px-2 pb-2">
-        <h6 class="mb-2">{% trans "Camera FOV" %}</h6>
-        <div class="d-flex gap-2 align-items-center flex-wrap">
-          <label class="small text-muted mb-0">{% trans "Dir" %}:</label>
-          <input type="number" id="edit-fov-direction" class="form-control form-control-sm" style="width:70px;" min="0" max="360" step="15">
-          <label class="small text-muted mb-0">{% trans "Angle" %}:</label>
-          <input type="number" id="edit-fov-angle" class="form-control form-control-sm" style="width:70px;" min="10" max="360" step="5">
-          <label class="small text-muted mb-0">{% trans "Range" %}:</label>
-          <input type="number" id="edit-fov-distance" class="form-control form-control-sm" style="width:60px;" min="1" max="50">
-          <button id="save-fov-btn" class="btn btn-sm btn-primary">
-            <i class="mdi mdi-check"></i> {% trans "Save" %}
-          </button>
+          </div>
         </div>
-      </div>
-    </div>
-  </div>
 
-  {# Rack Elevation panel (shown when a rack tile is selected) #}
-  <div id="rack-elevation-panel" class="card mt-3 d-none">
-    <div class="card-header d-flex align-items-center justify-content-between">
-      <h5 class="mb-0" id="rack-elevation-title">{% trans "Rack Elevation" %}</h5>
-      <div class="btn-group btn-group-sm" role="group">
-        <button type="button" class="btn btn-outline-secondary active" id="rack-face-front" data-face="front">
-          {% trans "Front" %}
-        </button>
-        <button type="button" class="btn btn-outline-secondary" id="rack-face-rear" data-face="rear">
-          {% trans "Rear" %}
-        </button>
-      </div>
-    </div>
-    <div class="card-body rack-elevation-body">
-      <div id="rack-elevation-loading" class="text-center py-4 d-none">
-        <div class="spinner-border spinner-border-sm text-secondary" role="status"></div>
-        <span class="ms-2 text-muted">{% trans "Loading rack elevation..." %}</span>
-      </div>
-      <div id="rack-elevation-svg" class="rack-elevation-svg-container"></div>
-    </div>
-  </div>
+        {# Rack Elevation (shown for rack tiles with linked rack) #}
+        <div id="rack-elevation-panel" class="d-none">
+          <div class="sidebar-section-title d-flex align-items-center justify-content-between">
+            <span id="rack-elevation-title">{% trans "Rack Elevation" %}</span>
+            <div class="btn-group btn-group-sm" role="group">
+              <button type="button" class="btn btn-outline-secondary active btn-xs" id="rack-face-front" data-face="front">
+                {% trans "Front" %}
+              </button>
+              <button type="button" class="btn btn-outline-secondary btn-xs" id="rack-face-rear" data-face="rear">
+                {% trans "Rear" %}
+              </button>
+            </div>
+          </div>
+          <div class="rack-elevation-body">
+            <div id="rack-elevation-loading" class="text-center py-3 d-none">
+              <div class="spinner-border spinner-border-sm text-secondary" role="status"></div>
+              <span class="ms-2 text-muted small">{% trans "Loading..." %}</span>
+            </div>
+            <div id="rack-elevation-svg" class="rack-elevation-svg-container"></div>
+          </div>
+        </div>
 
-  {% if edit_mode %}
-  {# Link Object panel (edit mode only, shown when tile selected) #}
-  <div id="link-object-panel" class="card mt-3 d-none">
-    <h5 class="card-header">{% trans "Link Object to Tile" %}</h5>
-    <div class="card-body">
-      <div class="row g-3 align-items-end">
-        <div class="col-md-3">
-          <label for="link-object-type" class="form-label">{% trans "Object Type" %}</label>
-          <select id="link-object-type" class="form-select form-select-sm no-ts">
-            <option value="">-- {% trans "Select Type" %} --</option>
-            <option value="dcim.rack">{% trans "Rack" %}</option>
-            <option value="dcim.device">{% trans "Device" %}</option>
-            <option value="dcim.powerpanel">{% trans "Power Panel" %}</option>
-            <option value="dcim.powerfeed">{% trans "Power Feed" %}</option>
-          </select>
+        {% if edit_mode %}
+        {# Link Object panel (edit mode only) #}
+        <div id="link-object-panel" class="d-none">
+          <div class="sidebar-section-title">{% trans "Link Object" %}</div>
+          <div class="sidebar-link-controls">
+            <select id="link-object-type" class="form-select form-select-sm sidebar-input no-ts">
+              <option value="">-- {% trans "Select Type" %} --</option>
+              <option value="dcim.rack">{% trans "Rack" %}</option>
+              <option value="dcim.device">{% trans "Device" %}</option>
+              <option value="dcim.powerpanel">{% trans "Power Panel" %}</option>
+              <option value="dcim.powerfeed">{% trans "Power Feed" %}</option>
+            </select>
+            <select id="link-object-select" class="form-select form-select-sm sidebar-input no-ts" disabled>
+              <option value="">-- {% trans "Select object type first" %} --</option>
+            </select>
+            <div class="d-flex gap-1 align-items-center">
+              <button id="link-object-btn" class="btn btn-sm btn-primary" disabled>
+                <i class="mdi mdi-link"></i> {% trans "Link" %}
+              </button>
+              <button id="unlink-object-btn" class="btn btn-sm btn-outline-danger" disabled>
+                <i class="mdi mdi-link-off"></i> {% trans "Unlink" %}
+              </button>
+              <span id="link-status" class="small text-muted ms-1"></span>
+            </div>
+            <div id="link-current" class="small text-muted"></div>
+          </div>
         </div>
-        <div class="col-md-5">
-          <label for="link-object-select" class="form-label">{% trans "Object" %}</label>
-          <select id="link-object-select" class="form-select form-select-sm no-ts" disabled>
-            <option value="">-- {% trans "Select object type first" %} --</option>
-          </select>
-        </div>
-        <div class="col-md-4">
-          <button id="link-object-btn" class="btn btn-sm btn-primary" disabled>
-            <i class="mdi mdi-link"></i> {% trans "Link" %}
-          </button>
-          <button id="unlink-object-btn" class="btn btn-sm btn-outline-danger ms-1" disabled>
-            <i class="mdi mdi-link-off"></i> {% trans "Unlink" %}
-          </button>
-          <span id="link-status" class="small text-muted ms-2"></span>
-        </div>
+        {% endif %}
       </div>
-      <div id="link-current" class="mt-2 small text-muted"></div>
     </div>
   </div>
-  {% endif %}
 
   <script src="{% static 'netbox_map/js/jspdf.umd.min.js' %}"></script>
   <script src="{% static 'netbox_map/js/floorplan_viewer.js' %}"></script>
   {% if edit_mode %}
     <script src="{% static 'netbox_map/js/floorplan_editor.js' %}"></script>
     <script>
-    // Object linking logic (inline to avoid static file caching issues)
+    // Object linking logic
     (function() {
       var container = document.getElementById('floorplan-container');
       if (!container) return;
@@ -412,7 +426,7 @@
         })
         .then(function(updated) {
           linkStatus.textContent = 'Linked!';
-          linkStatus.className = 'small text-success ms-2';
+          linkStatus.className = 'small text-success ms-1';
           var viewer = window.floorplanViewer;
           if (viewer) {
             var selectedText = linkObjectSelect.options[linkObjectSelect.selectedIndex].textContent;
@@ -426,11 +440,11 @@
             }
             viewer.render();
           }
-          setTimeout(function() { linkStatus.textContent = ''; linkStatus.className = 'small text-muted ms-2'; }, 2000);
+          setTimeout(function() { linkStatus.textContent = ''; linkStatus.className = 'small text-muted ms-1'; }, 2000);
         })
         .catch(function(err) {
           linkStatus.textContent = 'Error!';
-          linkStatus.className = 'small text-danger ms-2';
+          linkStatus.className = 'small text-danger ms-1';
           alert('Error: ' + err.message);
           linkBtn.disabled = false;
         });
@@ -453,7 +467,7 @@
         .then(function(r) {
           if (r.ok) {
             linkStatus.textContent = 'Unlinked!';
-            linkStatus.className = 'small text-success ms-2';
+            linkStatus.className = 'small text-success ms-1';
             var viewer = window.floorplanViewer;
             if (viewer) {
               for (var i = 0; i < viewer.tiles.length; i++) {
@@ -468,7 +482,7 @@
             }
             linkCurrent.textContent = 'No object linked to this tile.';
             unlinkBtn.disabled = true;
-            setTimeout(function() { linkStatus.textContent = ''; linkStatus.className = 'small text-muted ms-2'; }, 2000);
+            setTimeout(function() { linkStatus.textContent = ''; linkStatus.className = 'small text-muted ms-1'; }, 2000);
           } else {
             alert('Error unlinking.');
             unlinkBtn.disabled = false;
@@ -479,4 +493,19 @@
     })();
     </script>
   {% endif %}
+
+  {# Hide placeholder when tile is selected #}
+  <script>
+  (function() {
+    var placeholder = document.getElementById('sidebar-no-selection');
+    var detailPanel = document.getElementById('tile-detail-panel');
+    if (!placeholder || !detailPanel) return;
+
+    var observer = new MutationObserver(function() {
+      var isHidden = detailPanel.classList.contains('d-none');
+      placeholder.style.display = isHidden ? '' : 'none';
+    });
+    observer.observe(detailPanel, { attributes: true, attributeFilter: ['class'] });
+  })();
+  </script>
 {% endblock %}

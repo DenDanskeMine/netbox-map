@@ -1,8 +1,11 @@
-/* FloorPlan Pro Styles */
+/* NetBox Map — Floor Plan Visualization Styles */
+
+/* ===== Canvas ===== */
 
 #floorplan-container {
     position: relative;
     overflow: hidden;
+    height: 100%;
 }
 
 #floorplan-canvas {
@@ -45,12 +48,13 @@
     border-color: rgba(255, 255, 255, 0.25);
 }
 
-/* Flex layout: canvas + sidebar */
+/* ===== Main Layout: canvas + sidebar ===== */
+
 .floorplan-layout {
     display: flex;
     gap: 0;
-    height: 70vh;
-    min-height: 400px;
+    height: calc(100vh - 280px);
+    min-height: 450px;
 }
 
 .floorplan-canvas-area {
@@ -58,15 +62,13 @@
     min-width: 0;
     display: flex;
     flex-direction: column;
+    border-radius: 8px 0 0 8px;
 }
 
 .floorplan-canvas-area .card-body {
     flex: 1;
     min-height: 0;
-}
-
-#floorplan-container {
-    height: 100%;
+    background: #0d0f1a;
 }
 
 /* Canvas wrapper card */
@@ -77,9 +79,10 @@
     overflow: hidden;
 }
 
-/* Sidebar */
+/* ===== Sidebar ===== */
+
 .floorplan-sidebar {
-    width: 280px;
+    width: 340px;
     flex-shrink: 0;
     background: rgba(22, 25, 43, 0.97);
     border: 1px solid rgba(255, 255, 255, 0.08);
@@ -90,13 +93,20 @@
     overflow: hidden;
 }
 
-.floorplan-canvas-area {
-    border-radius: 8px 0 0 8px;
+/* Top section: tile list */
+.sidebar-tiles-section {
+    flex: 1 1 50%;
+    min-height: 150px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .sidebar-header {
     padding: 10px 10px 6px;
     border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    flex-shrink: 0;
 }
 
 .sidebar-header input {
@@ -124,6 +134,7 @@
     flex-wrap: wrap;
     gap: 4px;
     border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    flex-shrink: 0;
 }
 
 .type-toggle {
@@ -169,16 +180,10 @@
     align-items: center;
     gap: 8px;
     border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    flex-shrink: 0;
 }
 
-.sidebar-filter-row select {
-    background: #1e2140;
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    color: #e0e0f0;
-    font-size: 12px;
-    flex: 1;
-}
-
+/* Tile list (scrollable) */
 .sidebar-tile-list {
     flex: 1;
     overflow-y: auto;
@@ -235,11 +240,150 @@
     flex-shrink: 0;
 }
 
-.floorplan-canvas-card .card-body {
-    background: #0d0f1a;
+/* ===== Bottom section: context / detail panels ===== */
+
+.sidebar-context-section {
+    flex: 1 1 50%;
+    overflow-y: auto;
+    min-height: 100px;
 }
 
-/* Header bar with selector + legend */
+/* Placeholder when no tile selected */
+.sidebar-empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: #555;
+    gap: 8px;
+    padding: 20px;
+}
+
+.sidebar-empty-state .mdi {
+    font-size: 32px;
+    opacity: 0.4;
+}
+
+.sidebar-empty-state span {
+    font-size: 13px;
+}
+
+/* Section titles inside context panel */
+.sidebar-section-title {
+    padding: 8px 12px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: #a0a0b8;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    background: rgba(255, 255, 255, 0.03);
+}
+
+/* Detail key-value rows */
+.sidebar-detail-list {
+    padding: 4px 0;
+}
+
+.detail-row {
+    display: flex;
+    padding: 5px 12px;
+    font-size: 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+    gap: 8px;
+}
+
+.detail-label {
+    width: 80px;
+    flex-shrink: 0;
+    color: #888;
+    font-weight: 500;
+}
+
+.detail-value {
+    flex: 1;
+    color: #d0d0e0;
+    word-break: break-word;
+}
+
+.detail-value a {
+    color: #00d4ff;
+    text-decoration: none;
+}
+
+.detail-value a:hover {
+    text-decoration: underline;
+}
+
+/* Sidebar inputs (shared style) */
+.sidebar-input {
+    background: #1e2140 !important;
+    border: 1px solid rgba(255, 255, 255, 0.12) !important;
+    color: #e0e0f0 !important;
+    font-size: 12px !important;
+}
+
+.sidebar-input:focus {
+    border-color: #00d4ff !important;
+    box-shadow: 0 0 0 2px rgba(0, 212, 255, 0.15) !important;
+}
+
+/* Camera FOV panel (inside tile details) */
+.sidebar-fov-panel {
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.sidebar-fov-controls {
+    padding: 8px 12px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+}
+
+/* Link object controls */
+.sidebar-link-controls {
+    padding: 8px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+/* Rack elevation (inline in sidebar) */
+.rack-elevation-body {
+    padding: 8px;
+    overflow: hidden;
+}
+
+.rack-elevation-svg-container {
+    text-align: center;
+}
+
+.rack-elevation-svg-container svg {
+    max-height: 40vh;
+    max-width: 100%;
+    width: auto;
+    height: auto;
+}
+
+.rack-elevation-svg-container a {
+    cursor: pointer;
+}
+
+.rack-elevation-svg-container a:hover rect,
+.rack-elevation-svg-container a:hover text {
+    opacity: 0.85;
+}
+
+/* Small buttons for rack face toggle */
+.btn-xs {
+    font-size: 11px !important;
+    padding: 2px 8px !important;
+}
+
+/* ===== Header bar ===== */
+
 .floorplan-header {
     background: rgba(22, 25, 43, 0.95);
     border: 1px solid rgba(255, 255, 255, 0.08);
@@ -277,15 +421,6 @@
     border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-.legend-labels {
-    display: flex;
-    justify-content: space-between;
-    width: 160px;
-    font-size: 10px;
-    color: #888;
-    margin-top: 2px;
-}
-
 .legend-empty-swatch {
     width: 12px;
     height: 12px;
@@ -295,16 +430,18 @@
     border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-/* Selection status bar */
+/* ===== Selection status bar ===== */
+
 .selection-status-bar {
     background: rgba(22, 25, 43, 0.95);
     border-top: 1px solid rgba(255, 255, 255, 0.06);
-    padding: 8px 16px;
-    font-size: 13px;
+    padding: 6px 16px;
+    font-size: 12px;
     color: #c0c0d0;
-    min-height: 38px;
+    min-height: 32px;
     display: flex;
     align-items: center;
+    flex-shrink: 0;
 }
 
 .selection-status-bar a {
@@ -315,7 +452,8 @@
     color: #e8e8f0;
 }
 
-/* Edit toolbar */
+/* ===== Edit toolbar ===== */
+
 .edit-toolbar {
     background: rgba(22, 25, 43, 0.95);
     border: 1px solid rgba(255, 255, 255, 0.08);
@@ -345,57 +483,25 @@
     color: #e0e0f0;
 }
 
-/* Detail panel (compact) */
-#tile-detail-panel {
-    transition: all 0.2s ease;
+/* ===== Scrollbar styling for sidebar ===== */
+
+.sidebar-tile-list::-webkit-scrollbar,
+.sidebar-context-section::-webkit-scrollbar {
+    width: 6px;
 }
 
-#tile-detail-panel .attr-table th {
-    width: 110px;
-    font-size: 13px;
+.sidebar-tile-list::-webkit-scrollbar-track,
+.sidebar-context-section::-webkit-scrollbar-track {
+    background: transparent;
 }
 
-#tile-detail-panel .attr-table td {
-    font-size: 13px;
+.sidebar-tile-list::-webkit-scrollbar-thumb,
+.sidebar-context-section::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 3px;
 }
 
-/* Rack elevation panel */
-#rack-elevation-panel .card-header {
-    padding: 10px 16px;
-}
-
-#rack-elevation-panel .card-header h5 {
-    font-size: 14px;
-    font-weight: 600;
-}
-
-#rack-elevation-panel .btn-group .btn {
-    font-size: 12px;
-    padding: 3px 12px;
-}
-
-.rack-elevation-body {
-    padding: 16px;
-    overflow-y: auto;
-    max-height: 80vh;
-}
-
-.rack-elevation-svg-container {
-    text-align: center;
-}
-
-.rack-elevation-svg-container svg {
-    max-height: 75vh;
-    width: auto;
-    height: auto;
-}
-
-/* Make device links in the SVG clickable and styled */
-.rack-elevation-svg-container a {
-    cursor: pointer;
-}
-
-.rack-elevation-svg-container a:hover rect,
-.rack-elevation-svg-container a:hover text {
-    opacity: 0.85;
+.sidebar-tile-list::-webkit-scrollbar-thumb:hover,
+.sidebar-context-section::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.2);
 }
