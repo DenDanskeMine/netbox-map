@@ -57,11 +57,11 @@
       <div class="card mt-3">
         <h5 class="card-header">{% trans "Actions" %}</h5>
         <div class="card-body">
-          <a href="{% url 'plugins:netbox_sitemap:floorplan_visualization' pk=object.pk %}"
+          <a href="{% url 'plugins:netbox_map:floorplan_visualization' pk=object.pk %}"
              class="btn btn-primary">
             <i class="mdi mdi-floor-plan"></i> {% trans "View Floor Plan" %}
           </a>
-          <a href="{% url 'plugins:netbox_sitemap:floorplan_visualization' pk=object.pk %}?edit=true"
+          <a href="{% url 'plugins:netbox_map:floorplan_visualization' pk=object.pk %}?edit=true"
              class="btn btn-warning">
             <i class="mdi mdi-pencil"></i> {% trans "Edit Layout" %}
           </a>

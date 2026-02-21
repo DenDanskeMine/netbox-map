@@ -3,7 +3,7 @@ requires = ["setuptools>=64.0.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "netbox-sitemap"
+name = "netbox-map"
 version = "0.1.0"
 description = "Interactive floor plan visualization for NetBox sites"
 readme = "README.md"
@@ -21,15 +21,15 @@ classifiers = [
 dependencies = []
 
 [project.urls]
-Homepage = "https://github.com/DenDanskeMine/netbox-sitemap"
-Repository = "https://github.com/DenDanskeMine/netbox-sitemap"
-Issues = "https://github.com/DenDanskeMine/netbox-sitemap/issues"
+Homepage = "https://github.com/DenDanskeMine/netbox-map"
+Repository = "https://github.com/DenDanskeMine/netbox-map"
+Issues = "https://github.com/DenDanskeMine/netbox-map/issues"
 
 [tool.setuptools.packages.find]
-include = ["netbox_sitemap*"]
+include = ["netbox_map*"]
 
 [tool.setuptools.package-data]
-netbox_sitemap = [
+netbox_map = [
     "templates/**/*",
     "static/**/*",
     "migrations/*",

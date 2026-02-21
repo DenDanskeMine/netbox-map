@@ -91,7 +91,7 @@ class FloorPlanBulkDeleteView(generic.BulkDeleteView):
 @register_model_view(FloorPlan, 'visualization', path='visualization')
 class FloorPlanVisualizationView(generic.ObjectView):
     queryset = FloorPlan.objects.all()
-    template_name = 'netbox_sitemap/floorplan_visualization.html'
+    template_name = 'netbox_map/floorplan_visualization.html'
     tab = ViewTab(
         label=_('Visualization'),
     )
@@ -161,7 +161,7 @@ class SiteFloorPlansView(generic.ObjectChildrenView):
     tab = ViewTab(
         label=_('Floor Plans'),
         badge=lambda obj: obj.floorplans.count(),
-        permission='netbox_sitemap.view_floorplan'
+        permission='netbox_map.view_floorplan'
     )
 
     def get_children(self, request, parent):

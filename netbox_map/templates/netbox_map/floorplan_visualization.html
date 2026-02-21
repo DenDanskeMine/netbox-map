@@ -7,12 +7,12 @@
 
 {% block extra_controls %}
   {% if not edit_mode %}
-  <a href="{% url 'plugins:netbox_sitemap:floorplan_visualization' pk=object.pk %}?edit=true"
+  <a href="{% url 'plugins:netbox_map:floorplan_visualization' pk=object.pk %}?edit=true"
      class="btn btn-sm btn-warning">
     <i class="mdi mdi-pencil"></i> {% trans "Edit Mode" %}
   </a>
   {% else %}
-  <a href="{% url 'plugins:netbox_sitemap:floorplan_visualization' pk=object.pk %}"
+  <a href="{% url 'plugins:netbox_map:floorplan_visualization' pk=object.pk %}"
      class="btn btn-sm btn-secondary">
     <i class="mdi mdi-eye"></i> {% trans "View Mode" %}
   </a>
@@ -20,7 +20,7 @@
 {% endblock %}
 
 {% block content %}
-  <link rel="stylesheet" href="{% static 'netbox_sitemap/css/floorplan.css' %}">
+  <link rel="stylesheet" href="{% static 'netbox_map/css/floorplan.css' %}">
 
   {# Header: Floor Plan selector + Gradient legend #}
   <div class="floorplan-header mb-3">
@@ -104,7 +104,7 @@
              data-tile-size="{{ tile_size }}"
              data-tiles='{{ tile_data_json }}'
              data-edit-mode="{% if edit_mode %}true{% else %}false{% endif %}"
-             data-api-url="{% url 'plugins-api:netbox_sitemap-api:floorplantile-list' %}"
+             data-api-url="{% url 'plugins-api:netbox_map-api:floorplantile-list' %}"
              data-floorplan-id="{{ object.pk }}"
              data-site-id="{{ site_id }}"
              data-csrf-token="{{ csrf_token }}"
@@ -286,10 +286,10 @@
   </div>
   {% endif %}
 
-  <script src="{% static 'netbox_sitemap/js/jspdf.umd.min.js' %}"></script>
-  <script src="{% static 'netbox_sitemap/js/floorplan_viewer.js' %}"></script>
+  <script src="{% static 'netbox_map/js/jspdf.umd.min.js' %}"></script>
+  <script src="{% static 'netbox_map/js/floorplan_viewer.js' %}"></script>
   {% if edit_mode %}
-    <script src="{% static 'netbox_sitemap/js/floorplan_editor.js' %}"></script>
+    <script src="{% static 'netbox_map/js/floorplan_editor.js' %}"></script>
     <script>
     // Object linking logic (inline to avoid static file caching issues)
     (function() {

@@ -11,7 +11,7 @@ class SiteFloorPlanLink(PluginTemplateExtension):
         if not floorplans.exists():
             return ''
         return self.render(
-            'netbox_sitemap/inc/site_floorplan_panel.html',
+            'netbox_map/inc/site_floorplan_panel.html',
             extra_context={'floorplans': floorplans}
         )
 

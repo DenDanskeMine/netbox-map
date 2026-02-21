@@ -1,2 +1,2 @@
-recursive-include netbox_sitemap/templates *
-recursive-include netbox_sitemap/static *
+recursive-include netbox_map/templates *
+recursive-include netbox_map/static *

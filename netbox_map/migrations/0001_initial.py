@@ -108,7 +108,7 @@ class Migration(migrations.Migration):
                     validators=[django.core.validators.MinValueValidator(1), django.core.validators.MaxValueValidator(50)],
                     verbose_name='FOV distance',
                 )),
-                ('floorplan', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='tiles', to='netbox_sitemap.floorplan')),
+                ('floorplan', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='tiles', to='netbox_map.floorplan')),
                 ('tags', taggit.managers.TaggableManager(through='extras.TaggedItem', to='extras.Tag')),
             ],
             options={
@@ -120,14 +120,14 @@ class Migration(migrations.Migration):
         ),
         migrations.AddConstraint(
             model_name='floorplan',
-            constraint=models.UniqueConstraint(fields=('site', 'name'), name='netbox_sitemap_floorplan_unique_site_name'),
+            constraint=models.UniqueConstraint(fields=('site', 'name'), name='netbox_map_floorplan_unique_site_name'),
         ),
         migrations.AddConstraint(
             model_name='floorplantile',
-            constraint=models.UniqueConstraint(fields=('floorplan', 'x_position', 'y_position'), name='netbox_sitemap_floorplantile_unique_position'),
+            constraint=models.UniqueConstraint(fields=('floorplan', 'x_position', 'y_position'), name='netbox_map_floorplantile_unique_position'),
         ),
         migrations.AddIndex(
             model_name='floorplantile',
-            index=models.Index(fields=['assigned_object_type', 'assigned_object_id'], name='netbox_site_assigne_idx'),
+            index=models.Index(fields=['assigned_object_type', 'assigned_object_id'], name='netbox_map_assigne_idx'),
         ),
     ]

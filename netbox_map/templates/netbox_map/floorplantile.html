@@ -54,7 +54,7 @@
       <div class="card">
         <h5 class="card-header">{% trans "Actions" %}</h5>
         <div class="card-body">
-          <a href="{% url 'plugins:netbox_sitemap:floorplan_visualization' pk=object.floorplan.pk %}"
+          <a href="{% url 'plugins:netbox_map:floorplan_visualization' pk=object.floorplan.pk %}"
              class="btn btn-primary">
             <i class="mdi mdi-floor-plan"></i> {% trans "View on Floor Plan" %}
           </a>

@@ -87,12 +87,12 @@ class FloorPlan(NetBoxModel):
         return f'{self.name} ({self.site})'
 
     def get_absolute_url(self):
-        return reverse('plugins:netbox_sitemap:floorplan', args=[self.pk])
+        return reverse('plugins:netbox_map:floorplan', args=[self.pk])
 
 
 class FloorPlanTile(NetBoxModel):
     floorplan = models.ForeignKey(
-        to='netbox_sitemap.FloorPlan',
+        to='netbox_map.FloorPlan',
         on_delete=models.CASCADE,
         related_name='tiles'
     )
@@ -205,7 +205,7 @@ class FloorPlanTile(NetBoxModel):
         return f'{self.label or self.tile_type} @ ({self.x_position}, {self.y_position})'
 
     def get_absolute_url(self):
-        return reverse('plugins:netbox_sitemap:floorplantile', args=[self.pk])
+        return reverse('plugins:netbox_map:floorplantile', args=[self.pk])
 
     @property
     def display_label(self):

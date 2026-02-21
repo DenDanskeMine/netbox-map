@@ -7,30 +7,30 @@ menu = PluginMenu(
     groups=(
         (_('Floor Plans'), (
             PluginMenuItem(
-                link='plugins:netbox_sitemap:floorplan_list',
+                link='plugins:netbox_map:floorplan_list',
                 link_text=_('Floor Plans'),
-                permissions=['netbox_sitemap.view_floorplan'],
+                permissions=['netbox_map.view_floorplan'],
                 buttons=(
                     PluginMenuButton(
-                        link='plugins:netbox_sitemap:floorplan_add',
+                        link='plugins:netbox_map:floorplan_add',
                         title=_('Add'),
                         icon_class='mdi mdi-plus-thick',
                         color=ButtonColorChoices.GREEN,
-                        permissions=['netbox_sitemap.add_floorplan'],
+                        permissions=['netbox_map.add_floorplan'],
                     ),
                 )
             ),
             PluginMenuItem(
-                link='plugins:netbox_sitemap:floorplantile_list',
+                link='plugins:netbox_map:floorplantile_list',
                 link_text=_('Floor Plan Tiles'),
-                permissions=['netbox_sitemap.view_floorplantile'],
+                permissions=['netbox_map.view_floorplantile'],
                 buttons=(
                     PluginMenuButton(
-                        link='plugins:netbox_sitemap:floorplantile_add',
+                        link='plugins:netbox_map:floorplantile_add',
                         title=_('Add'),
                         icon_class='mdi mdi-plus-thick',
                         color=ButtonColorChoices.GREEN,
-                        permissions=['netbox_sitemap.add_floorplantile'],
+                        permissions=['netbox_map.add_floorplantile'],
                     ),
                 )
             ),

@@ -1,13 +1,13 @@
 from netbox.plugins import PluginConfig
 
 
-class SitemapConfig(PluginConfig):
-    name = 'netbox_sitemap'
-    verbose_name = 'Sitemap'
+class MapConfig(PluginConfig):
+    name = 'netbox_map'
+    verbose_name = 'Map'
     author = 'Christian Rose'
     description = 'Interactive floor plan visualization for NetBox sites'
     version = '0.1.0'
-    base_url = 'sitemap'
+    base_url = 'map'
     min_version = '4.5.0'
     default_settings = {
         'default_grid_width': 20,
@@ -16,4 +16,4 @@ class SitemapConfig(PluginConfig):
     }
 
 
-config = SitemapConfig
+config = MapConfig

@@ -1,9 +1,9 @@
-# NetBox Sitemap
+# NetBox Map
 
 ![Python](https://img.shields.io/badge/python-3.12%2B-blue.svg)
 ![NetBox](https://img.shields.io/badge/netbox-4.5%2B-blue.svg)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-[![PyPI](https://img.shields.io/pypi/v/netbox-sitemap.svg)](https://pypi.org/project/netbox-sitemap/)
+[![PyPI](https://img.shields.io/pypi/v/netbox-map.svg)](https://pypi.org/project/netbox-map/)
 
 An interactive floor plan visualization plugin for NetBox. Create, edit, and manage data center floor plans with a canvas-based editor featuring tile management, object linking, camera FOV visualization, and PDF export.
 
@@ -33,23 +33,23 @@ An interactive floor plan visualization plugin for NetBox. Create, edit, and man
 
 ```bash
 source /opt/netbox/venv/bin/activate
-pip install netbox-sitemap
+pip install netbox-map
 ```
 
 ### From source
 
 ```bash
 source /opt/netbox/venv/bin/activate
-pip install git+https://github.com/DenDanskeMine/netbox-sitemap.git
+pip install git+https://github.com/DenDanskeMine/netbox-map.git
 ```
 
 ### Enable the plugin
 
-Add `netbox_sitemap` to your NetBox `configuration.py`:
+Add `netbox_map` to your NetBox `configuration.py`:
 
 ```python
 PLUGINS = [
-    'netbox_sitemap',
+    'netbox_map',
 ]
 ```
 
@@ -57,7 +57,7 @@ PLUGINS = [
 
 ```python
 PLUGINS_CONFIG = {
-    'netbox_sitemap': {
+    'netbox_map': {
         'default_grid_width': 20,    # Default grid width in tiles
         'default_grid_height': 20,   # Default grid height in tiles
         'default_tile_size': 60,     # Default tile size in pixels
@@ -133,8 +133,8 @@ Click the **PDF** button in the zoom controls to export the current floor plan v
 ## Development
 
 ```bash
-git clone https://github.com/DenDanskeMine/netbox-sitemap.git
-cd netbox-sitemap
+git clone https://github.com/DenDanskeMine/netbox-map.git
+cd netbox-map
 pip install -e .
 ```
 
@@ -144,5 +144,5 @@ This project is licensed under the Apache License 2.0 — see the [LICENSE](LICE
 
 ## Support
 
-- [Open an issue](https://github.com/DenDanskeMine/netbox-sitemap/issues) on GitHub
+- [Open an issue](https://github.com/DenDanskeMine/netbox-map/issues) on GitHub
 - Check existing issues for answers

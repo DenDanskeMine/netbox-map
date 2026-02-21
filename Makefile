@@ -17,7 +17,7 @@ setup:
 
 ## Remove all build artifacts
 clean:
-	rm -rf dist/ build/ *.egg-info netbox_sitemap.egg-info netbox_sitemap/__pycache__
+	rm -rf dist/ build/ *.egg-info netbox_map.egg-info netbox_map/__pycache__
 
 ## Build sdist + wheel
 build: clean
