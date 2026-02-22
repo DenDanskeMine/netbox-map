@@ -444,6 +444,33 @@ class MapSettingsForm(forms.ModelForm):
             'popover_fields',
         )
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Dynamically discover NetBox custom fields for assignable object types
+        # and add them as choices to the popover_fields field.
+        try:
+            from extras.models import CustomField
+            from django.contrib.contenttypes.models import ContentType
+
+            ct_ids = list(ContentType.objects.filter(
+                app_label='dcim',
+                model__in=['device', 'rack', 'powerpanel', 'powerfeed'],
+            ).values_list('id', flat=True))
+            cf_choices = list(
+                CustomField.objects.filter(object_types__in=ct_ids)
+                .exclude(ui_visible='hidden')
+                .distinct()
+                .order_by('name')
+                .values_list('name', 'label')
+            )
+            if cf_choices:
+                self.fields['popover_fields'].choices = list(POPOVER_FIELD_CHOICES) + [
+                    (f'cf_{name}', f'CF: {label or name}')
+                    for name, label in cf_choices
+                ]
+        except Exception:
+            pass
+
 
 class MapMarkerFilterForm(NetBoxModelFilterSetForm):
     model = MapMarker

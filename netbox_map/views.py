@@ -208,6 +208,19 @@ def _serialize_tile(tile):
         except Exception:
             pass
 
+    # Collect custom field values for popover display.
+    # Read directly from custom_field_data (JSONField on the model) to avoid
+    # the per-tile DB query that get_custom_fields() would trigger.
+    custom_fields = {}
+    if tile.assigned_object:
+        try:
+            cf_data = getattr(tile.assigned_object, 'custom_field_data', None) or {}
+            for name, value in cf_data.items():
+                if value is not None and value != '' and value != []:
+                    custom_fields[name] = str(value)
+        except Exception:
+            pass
+
     return {
         'id': tile.pk,
         'x': tile.x_position,
@@ -224,6 +237,7 @@ def _serialize_tile(tile):
         'object_id': tile.assigned_object_id,
         'object_url': tile.assigned_object_url,
         'primary_ip': primary_ip,
+        'custom_fields': custom_fields,
         'utilization': round(tile.utilization, 1) if tile.utilization is not None else None,
         'fov_direction': tile.fov_direction,
         'fov_angle': tile.fov_angle,

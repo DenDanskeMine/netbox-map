@@ -11,14 +11,20 @@
 <form method="post">
   {% csrf_token %}
 
-  {# ── General Toggles ── #}
-  <div class="row mb-4">
-    <div class="col-md-6">
-      <div class="card h-100">
-        <h5 class="card-header">
-          <span class="mdi mdi-cog"></span> General
-        </h5>
-        <div class="card-body">
+  <div class="accordion" id="settingsAccordion">
+
+    {# ── 1. General ── #}
+    <div class="accordion-item">
+      <h2 class="accordion-header" id="headingGeneral">
+        <button class="accordion-button" type="button"
+                data-bs-toggle="collapse" data-bs-target="#collapseGeneral"
+                aria-expanded="true" aria-controls="collapseGeneral">
+          <span class="mdi mdi-cog me-2"></span> General
+        </button>
+      </h2>
+      <div id="collapseGeneral" class="accordion-collapse collapse show"
+           aria-labelledby="headingGeneral">
+        <div class="accordion-body">
           {% for field in form %}
             {% if field.name in 'show_mac,show_custom_fields,sync_device_gps' %}
             <div class="mb-3 form-check">
@@ -37,34 +43,23 @@
       </div>
     </div>
 
-    {# ── Device Detail Fields ── #}
-    <div class="col-md-6">
-      <div class="card h-100">
-        <h5 class="card-header">
-          <span class="mdi mdi-server"></span> Device Detail Fields
-        </h5>
-        <div class="card-body checkbox-list">
-          {% for field in form %}
-            {% if field.name == 'device_fields' %}
-              {{ field }}
-              {% for error in field.errors %}
-              <div class="text-danger">{{ error }}</div>
-              {% endfor %}
-            {% endif %}
-          {% endfor %}
-        </div>
-      </div>
-    </div>
-  </div>
-
-  {# ── Popover Fields (Hover Tooltip) ── #}
-  <div class="row mb-4">
-    <div class="col-md-12">
-      <div class="card h-100">
-        <h5 class="card-header">
-          <span class="mdi mdi-tooltip-text"></span> Popover Fields (Hover Tooltip)
-        </h5>
-        <div class="card-body checkbox-list">
+    {# ── 2. Popover Fields ── #}
+    <div class="accordion-item">
+      <h2 class="accordion-header" id="headingPopover">
+        <button class="accordion-button" type="button"
+                data-bs-toggle="collapse" data-bs-target="#collapsePopover"
+                aria-expanded="true" aria-controls="collapsePopover">
+          <span class="mdi mdi-tooltip-text me-2"></span> Popover Fields (Hover Tooltip)
+          <span class="ms-auto me-3 select-all-none" data-target="id_popover_fields">
+            <a href="#" class="btn-select-all text-primary small" onclick="return false;">All</a>
+            <span class="text-muted small">|</span>
+            <a href="#" class="btn-select-none text-primary small" onclick="return false;">None</a>
+          </span>
+        </button>
+      </h2>
+      <div id="collapsePopover" class="accordion-collapse collapse show"
+           aria-labelledby="headingPopover">
+        <div class="accordion-body checkbox-list">
           <p class="text-muted small mb-2">Choose which fields appear when hovering over a tile on the floor plan.</p>
           {% for field in form %}
             {% if field.name == 'popover_fields' %}
@@ -77,16 +72,53 @@
         </div>
       </div>
     </div>
-  </div>
 
-  {# ── Other Object Fields ── #}
-  <div class="row mb-4">
-    <div class="col-md-4">
-      <div class="card h-100">
-        <h5 class="card-header">
-          <span class="mdi mdi-collage"></span> Rack Fields
-        </h5>
-        <div class="card-body checkbox-list">
+    {# ── 3. Device Detail Fields ── #}
+    <div class="accordion-item">
+      <h2 class="accordion-header" id="headingDevice">
+        <button class="accordion-button collapsed" type="button"
+                data-bs-toggle="collapse" data-bs-target="#collapseDevice"
+                aria-expanded="false" aria-controls="collapseDevice">
+          <span class="mdi mdi-server me-2"></span> Device Detail Fields
+          <span class="ms-auto me-3 select-all-none" data-target="id_device_fields">
+            <a href="#" class="btn-select-all text-primary small" onclick="return false;">All</a>
+            <span class="text-muted small">|</span>
+            <a href="#" class="btn-select-none text-primary small" onclick="return false;">None</a>
+          </span>
+        </button>
+      </h2>
+      <div id="collapseDevice" class="accordion-collapse collapse"
+           aria-labelledby="headingDevice">
+        <div class="accordion-body checkbox-list">
+          {% for field in form %}
+            {% if field.name == 'device_fields' %}
+              {{ field }}
+              {% for error in field.errors %}
+              <div class="text-danger">{{ error }}</div>
+              {% endfor %}
+            {% endif %}
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    {# ── 4. Rack Detail Fields ── #}
+    <div class="accordion-item">
+      <h2 class="accordion-header" id="headingRack">
+        <button class="accordion-button collapsed" type="button"
+                data-bs-toggle="collapse" data-bs-target="#collapseRack"
+                aria-expanded="false" aria-controls="collapseRack">
+          <span class="mdi mdi-collage me-2"></span> Rack Detail Fields
+          <span class="ms-auto me-3 select-all-none" data-target="id_rack_fields">
+            <a href="#" class="btn-select-all text-primary small" onclick="return false;">All</a>
+            <span class="text-muted small">|</span>
+            <a href="#" class="btn-select-none text-primary small" onclick="return false;">None</a>
+          </span>
+        </button>
+      </h2>
+      <div id="collapseRack" class="accordion-collapse collapse"
+           aria-labelledby="headingRack">
+        <div class="accordion-body checkbox-list">
           {% for field in form %}
             {% if field.name == 'rack_fields' %}
               {{ field }}
@@ -99,12 +131,23 @@
       </div>
     </div>
 
-    <div class="col-md-4">
-      <div class="card h-100">
-        <h5 class="card-header">
-          <span class="mdi mdi-flash"></span> Power Panel Fields
-        </h5>
-        <div class="card-body checkbox-list">
+    {# ── 5. Power Panel Detail Fields ── #}
+    <div class="accordion-item">
+      <h2 class="accordion-header" id="headingPowerPanel">
+        <button class="accordion-button collapsed" type="button"
+                data-bs-toggle="collapse" data-bs-target="#collapsePowerPanel"
+                aria-expanded="false" aria-controls="collapsePowerPanel">
+          <span class="mdi mdi-flash me-2"></span> Power Panel Detail Fields
+          <span class="ms-auto me-3 select-all-none" data-target="id_powerpanel_fields">
+            <a href="#" class="btn-select-all text-primary small" onclick="return false;">All</a>
+            <span class="text-muted small">|</span>
+            <a href="#" class="btn-select-none text-primary small" onclick="return false;">None</a>
+          </span>
+        </button>
+      </h2>
+      <div id="collapsePowerPanel" class="accordion-collapse collapse"
+           aria-labelledby="headingPowerPanel">
+        <div class="accordion-body checkbox-list">
           {% for field in form %}
             {% if field.name == 'powerpanel_fields' %}
               {{ field }}
@@ -117,12 +160,23 @@
       </div>
     </div>
 
-    <div class="col-md-4">
-      <div class="card h-100">
-        <h5 class="card-header">
-          <span class="mdi mdi-power-plug"></span> Power Feed Fields
-        </h5>
-        <div class="card-body checkbox-list">
+    {# ── 6. Power Feed Detail Fields ── #}
+    <div class="accordion-item">
+      <h2 class="accordion-header" id="headingPowerFeed">
+        <button class="accordion-button collapsed" type="button"
+                data-bs-toggle="collapse" data-bs-target="#collapsePowerFeed"
+                aria-expanded="false" aria-controls="collapsePowerFeed">
+          <span class="mdi mdi-power-plug me-2"></span> Power Feed Detail Fields
+          <span class="ms-auto me-3 select-all-none" data-target="id_powerfeed_fields">
+            <a href="#" class="btn-select-all text-primary small" onclick="return false;">All</a>
+            <span class="text-muted small">|</span>
+            <a href="#" class="btn-select-none text-primary small" onclick="return false;">None</a>
+          </span>
+        </button>
+      </h2>
+      <div id="collapsePowerFeed" class="accordion-collapse collapse"
+           aria-labelledby="headingPowerFeed">
+        <div class="accordion-body checkbox-list">
           {% for field in form %}
             {% if field.name == 'powerfeed_fields' %}
               {{ field }}
@@ -134,9 +188,10 @@
         </div>
       </div>
     </div>
-  </div>
 
-  <div class="text-end mb-4">
+  </div>{# /accordion #}
+
+  <div class="text-end my-4">
     <button type="submit" class="btn btn-primary">
       <span class="mdi mdi-content-save"></span> Save Settings
     </button>
@@ -152,6 +207,25 @@
     if (wrapper) wrapper.classList.add('form-check');
     var label = input.closest('label');
     if (label) label.classList.add('form-check-label');
+  });
+
+  // Select All / None links
+  document.querySelectorAll('.select-all-none').forEach(function(span) {
+    var targetId = span.dataset.target;
+    var container = document.getElementById(targetId);
+    if (!container) return;
+
+    span.querySelector('.btn-select-all').addEventListener('click', function(e) {
+      e.stopPropagation();
+      e.preventDefault();
+      container.querySelectorAll('input[type="checkbox"]').forEach(function(cb) { cb.checked = true; });
+    });
+
+    span.querySelector('.btn-select-none').addEventListener('click', function(e) {
+      e.stopPropagation();
+      e.preventDefault();
+      container.querySelectorAll('input[type="checkbox"]').forEach(function(cb) { cb.checked = false; });
+    });
   });
 </script>
 {% endblock %}

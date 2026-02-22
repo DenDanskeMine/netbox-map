@@ -943,7 +943,17 @@
 
         var lines = [];
         for (var fi = 0; fi < popoverFields.length; fi++) {
-            switch (popoverFields[fi]) {
+            var fieldKey = popoverFields[fi];
+            // Handle custom field keys (cf_xxx)
+            if (fieldKey.startsWith('cf_')) {
+                var cfName = fieldKey.substring(3);
+                if (tile.custom_fields && tile.custom_fields[cfName]) {
+                    var cfLabel = cfName.replace(/_/g, ' ').replace(/\b\w/g, function(c) { return c.toUpperCase(); });
+                    lines.push('<span class="popover-dim">' + cfLabel + ':</span> ' + tile.custom_fields[cfName]);
+                }
+                continue;
+            }
+            switch (fieldKey) {
                 case 'label':
                     lines.push('<strong>' + (tile.label || tile.type) + '</strong>');
                     break;
