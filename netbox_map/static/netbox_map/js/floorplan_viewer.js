@@ -1781,17 +1781,33 @@
         }, 100);
     });
 
+    // Focus on a specific tile if ?tile=ID is in the URL
+    function focusTileFromURL() {
+        var params = new URLSearchParams(window.location.search);
+        var tileId = parseInt(params.get('tile'));
+        if (!isNaN(tileId)) {
+            for (var i = 0; i < tiles.length; i++) {
+                if (tiles[i].id === tileId) {
+                    zoomToTile(tiles[i]);
+                    return;
+                }
+            }
+        }
+    }
+
     // Load background image if specified
     if (backgroundImageUrl) {
         bgImg = new Image();
         bgImg.onload = function() {
             render();
             buildSidebar();
+            focusTileFromURL();
         };
         bgImg.src = backgroundImageUrl;
     } else {
         render();
         buildSidebar();
+        focusTileFromURL();
     }
 
     // Export for editor module

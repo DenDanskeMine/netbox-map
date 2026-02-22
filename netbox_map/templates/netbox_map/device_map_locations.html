@@ -24,7 +24,7 @@
               <td>{{ tile.floorplan.name }}</td>
               <td>{{ tile.floorplan.site }}</td>
               <td>
-                <a href="/plugins/map/floorplans/{{ tile.floorplan.pk }}/visualization/"
+                <a href="/plugins/map/floorplans/{{ tile.floorplan.pk }}/visualization/?tile={{ tile.pk }}"
                    class="btn btn-sm btn-outline-primary">
                   <i class="mdi mdi-floor-plan"></i> {% trans "View" %}
                 </a>
