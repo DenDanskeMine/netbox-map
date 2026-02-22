@@ -28,16 +28,22 @@ class FloorPlanTable(NetBoxTable):
         accessor='tile_count',
         orderable=False
     )
+    floorplan_link = tables.TemplateColumn(
+        template_code='<a href="{% url \'plugins:netbox_map:floorplan_visualization\' pk=record.pk %}" '
+                       'class="btn btn-sm btn-primary"><i class="mdi mdi-floor-plan"></i> Floorplan</a>',
+        verbose_name='',
+        orderable=False,
+    )
     tags = columns.TagColumn()
 
     class Meta(NetBoxTable.Meta):
         model = FloorPlan
         fields = (
             'pk', 'id', 'name', 'site', 'location', 'grid_size',
-            'tile_count', 'description', 'tags', 'actions',
+            'tile_count', 'description', 'floorplan_link', 'tags', 'actions',
         )
         default_columns = (
-            'pk', 'name', 'site', 'location', 'grid_size', 'tile_count',
+            'pk', 'name', 'site', 'location', 'grid_size', 'tile_count', 'floorplan_link',
         )
 
     def render_grid_size(self, record):
