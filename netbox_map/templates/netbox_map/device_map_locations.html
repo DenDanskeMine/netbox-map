@@ -40,7 +40,7 @@
                 <span class="text-muted small">{{ marker.latitude }}, {{ marker.longitude }}</span>
               </td>
               <td>
-                <a href="{% url 'plugins:netbox_map:sitemap' %}"
+                <a href="{% url 'plugins:netbox_map:sitemap' %}?q={{ marker.latitude }},{{ marker.longitude }}"
                    class="btn btn-sm btn-outline-primary">
                   <i class="mdi mdi-map-marker"></i> {% trans "View" %}
                 </a>

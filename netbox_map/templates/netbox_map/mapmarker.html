@@ -72,7 +72,7 @@
       <div class="card mt-3">
         <h5 class="card-header">{% trans "Actions" %}</h5>
         <div class="card-body">
-          <a href="{% url 'plugins:netbox_map:sitemap' %}" class="btn btn-primary">
+          <a href="{% url 'plugins:netbox_map:sitemap' %}?q={{ object.latitude }},{{ object.longitude }}" class="btn btn-primary">
             <i class="mdi mdi-map-marker-multiple-outline"></i> {% trans "View on Site Map" %}
           </a>
         </div>
