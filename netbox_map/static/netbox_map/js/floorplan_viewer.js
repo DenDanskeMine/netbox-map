@@ -233,7 +233,7 @@
         ctx.shadowColor = 'transparent';
         ctx.shadowBlur = 0;
 
-        // Label text — scale with tile size, no hard cap
+        // Label text — fixed font size relative to tile, no auto-scaling
         var textColor = getTextColor(fillColor);
         ctx.fillStyle = textColor;
         var fontSize = tileSize / 3.5;
@@ -246,21 +246,30 @@
         var centerY = y + h / 2;
 
         if (label.length > 0) {
-            var maxChars = Math.floor((w - gap * 4) / (fontSize * 0.55));
-            var displayLabel = label.length > maxChars ? label.substring(0, maxChars - 1) + '..' : label;
+            // Clip text to tile bounds so it never bleeds outside
+            ctx.save();
+            ctx.beginPath();
+            ctx.rect(x + gap, y + gap, w - gap * 2, h - gap * 2);
+            ctx.clip();
 
             if (tile.type === 'rack' && tile.utilization !== null && tile.utilization !== undefined && h > tileSize * 0.8) {
-                ctx.fillText(displayLabel, centerX, centerY - fontSize * 0.5);
+                ctx.fillText(label, centerX, centerY - fontSize * 0.5);
             } else {
-                ctx.fillText(displayLabel, centerX, centerY);
+                ctx.fillText(label, centerX, centerY);
             }
+            ctx.restore();
         }
 
         if (tile.type === 'rack' && tile.utilization !== null && tile.utilization !== undefined && h > tileSize * 0.8) {
             var smallFont = tileSize / 4.5;
             ctx.font = smallFont + 'px -apple-system, "Segoe UI", sans-serif';
             ctx.globalAlpha = 0.7;
+            ctx.save();
+            ctx.beginPath();
+            ctx.rect(x + gap, y + gap, w - gap * 2, h - gap * 2);
+            ctx.clip();
             ctx.fillText(Math.round(tile.utilization) + '%', centerX, centerY + fontSize * 0.6);
+            ctx.restore();
             ctx.globalAlpha = 1.0;
         }
 
@@ -437,6 +446,9 @@
                 html += ' &nbsp; <span class="text-muted">' + tile.object_type + ':</span> ';
                 html += '<strong>' + (tile.object_name || '') + '</strong>';
             }
+            if (tile.primary_ip) {
+                html += ' &nbsp; <span class="text-muted">IP:</span> ' + tile.primary_ip;
+            }
             if (tile.object_url) {
                 html += ' &nbsp; <a href="' + tile.object_url + '" class="text-info">View &rarr;</a>';
             }
@@ -465,6 +477,11 @@
             var objectTypeEl = document.getElementById('tile-detail-object-type');
             if (objectTypeEl) objectTypeEl.textContent = tile.object_type || '-';
 
+            var ipEl = document.getElementById('tile-detail-ip');
+            var ipRow = document.getElementById('tile-detail-ip-row');
+            if (ipEl) ipEl.textContent = tile.primary_ip || '-';
+            if (ipRow) ipRow.style.display = tile.primary_ip ? '' : 'none';
+
             var objectLinkEl = document.getElementById('tile-detail-object-link');
             if (objectLinkEl) {
                 if (tile.object_url) {
@@ -490,6 +507,16 @@
             } else {
                 fovPanel.classList.add('d-none');
             }
+        }
+
+        // Show resize panel in edit mode
+        var resizePanel = document.getElementById('resize-tile-panel');
+        if (resizePanel) {
+            resizePanel.classList.remove('d-none');
+            var resizeW = document.getElementById('resize-width-input');
+            var resizeH = document.getElementById('resize-height-input');
+            if (resizeW) resizeW.value = tile.w;
+            if (resizeH) resizeH.value = tile.h;
         }
 
         var deleteBtn = document.getElementById('delete-tile-btn');
@@ -844,26 +871,85 @@
     });
 
     /**
-     * Hover for cursor change and tooltip.
+     * Hover popover — styled HTML overlay positioned near cursor.
      */
+    var popoverEl = document.getElementById('tile-popover');
+    var popoverVisible = false;
+
+    function showPopover(tile, mouseX, mouseY) {
+        if (!popoverEl) return;
+
+        var lines = [];
+        lines.push('<strong>' + (tile.label || tile.type) + '</strong>');
+        if (tile.object_type && tile.object_name) {
+            lines.push('<span class="popover-dim">' + tile.object_type + ':</span> ' + tile.object_name);
+        }
+        if (tile.primary_ip) {
+            lines.push('<span class="popover-dim">IP:</span> ' + tile.primary_ip);
+        }
+        if (tile.utilization !== null && tile.utilization !== undefined) {
+            lines.push('<span class="popover-dim">Util:</span> ' + Math.round(tile.utilization) + '%');
+        }
+        lines.push('<span class="popover-dim">Pos:</span> ' + tile.x + ', ' + tile.y +
+            ' &nbsp; <span class="popover-dim">Size:</span> ' + tile.w + '&times;' + tile.h);
+
+        popoverEl.innerHTML = lines.join('<br>');
+        popoverEl.style.display = 'block';
+
+        // Position with edge-flip to stay within container
+        var cRect = container.getBoundingClientRect();
+        var offsetX = 14;
+        var offsetY = 14;
+        var left = mouseX + offsetX;
+        var top = mouseY + offsetY;
+
+        // Measure after making visible
+        var pw = popoverEl.offsetWidth;
+        var ph = popoverEl.offsetHeight;
+
+        if (left + pw > cRect.width) {
+            left = mouseX - pw - 6;
+        }
+        if (top + ph > cRect.height) {
+            top = mouseY - ph - 6;
+        }
+        if (left < 0) left = 4;
+        if (top < 0) top = 4;
+
+        popoverEl.style.left = left + 'px';
+        popoverEl.style.top = top + 'px';
+        popoverVisible = true;
+    }
+
+    function hidePopover() {
+        if (popoverEl) {
+            popoverEl.style.display = 'none';
+        }
+        popoverVisible = false;
+    }
+
     canvas.addEventListener('mousemove', function(e) {
-        if (isPanning) return;
+        if (isPanning || isDraggingTile) {
+            hidePopover();
+            return;
+        }
 
         var pos = getMousePos(e);
         var world = screenToWorld(pos.x, pos.y);
 
         var tile = findTileAt(world.x, world.y);
         canvas.style.cursor = tile ? 'pointer' : 'default';
+        canvas.title = '';
+
         if (tile) {
-            // Show label on hover, fall back to tile type
-            var tooltipText = tile.label || tile.type;
-            if (tile.utilization !== null && tile.utilization !== undefined) {
-                tooltipText += ' (' + Math.round(tile.utilization) + '%)';
-            }
-            canvas.title = tooltipText;
+            showPopover(tile, pos.x, pos.y);
         } else {
-            canvas.title = '';
+            hidePopover();
         }
+    });
+
+    canvas.addEventListener('mouseleave', function() {
+        hidePopover();
     });
 
     // ===== Zoom Controls =====
@@ -1355,7 +1441,10 @@
             var isActive = selectedTile && selectedTile.id === t.id;
             html += '<div class="sidebar-tile-item' + (isActive ? ' active' : '') + '" data-tile-id="' + t.id + '">';
             html += '<div class="sidebar-tile-dot" style="background:' + color + '"></div>';
-            html += '<span class="sidebar-tile-label">' + (t.label || '<em>' + t.type + '</em>') + '</span>';
+            html += '<span class="sidebar-tile-label" title="' + (t.label || t.type) + '">' + (t.label || '<em>' + t.type + '</em>') + '</span>';
+            if (t.primary_ip) {
+                html += '<span class="sidebar-tile-ip">' + t.primary_ip + '</span>';
+            }
             html += '<span class="sidebar-tile-type">' + t.type + '</span>';
             html += '<span class="sidebar-tile-pos">' + t.x + ',' + t.y + '</span>';
             html += '</div>';
@@ -1421,6 +1510,10 @@
         tileSize: tileSize,
         canvas: canvas,
         screenToWorld: screenToWorld,
+        gridWidth: gridWidth,
+        gridHeight: gridHeight,
+        buildSidebar: buildSidebar,
+        updateDetailPanel: updateDetailPanel,
         getSelectedTile: function() { return selectedTile; }
     };
 })();

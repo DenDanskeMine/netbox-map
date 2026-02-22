@@ -228,9 +228,172 @@ class FloorPlanTile(NetBoxModel):
             return self.assigned_object.get_utilization()
         return None
 
+    # Optional geographic coordinates for placement on the global site map.
+    # These coexist with x_position/y_position which remain for the floor plan canvas.
+    latitude = models.DecimalField(
+        max_digits=8,
+        decimal_places=6,
+        blank=True,
+        null=True,
+        verbose_name=_('latitude'),
+        help_text=_('Latitude for global map placement (-90 to 90)')
+    )
+    longitude = models.DecimalField(
+        max_digits=9,
+        decimal_places=6,
+        blank=True,
+        null=True,
+        verbose_name=_('longitude'),
+        help_text=_('Longitude for global map placement (-180 to 180)')
+    )
+
     @property
     def assigned_object_type_name(self):
         """Human-readable name of the assigned object type."""
         if self.assigned_object_type:
             return self.assigned_object_type.model_class()._meta.verbose_name.title()
         return None
+
+
+class LocationCoordinates(NetBoxModel):
+    """Stores geographic coordinates for a dcim.Location (which lacks lat/lng in core)."""
+    location = models.OneToOneField(
+        to='dcim.Location',
+        on_delete=models.CASCADE,
+        related_name='coordinates'
+    )
+    latitude = models.DecimalField(
+        max_digits=8,
+        decimal_places=6,
+        verbose_name=_('latitude'),
+        help_text=_('Latitude (-90 to 90)')
+    )
+    longitude = models.DecimalField(
+        max_digits=9,
+        decimal_places=6,
+        verbose_name=_('longitude'),
+        help_text=_('Longitude (-180 to 180)')
+    )
+
+    class Meta:
+        ordering = ('location',)
+        verbose_name = _('location coordinates')
+        verbose_name_plural = _('location coordinates')
+
+    def __str__(self):
+        return f'{self.location} ({self.latitude}, {self.longitude})'
+
+    def get_absolute_url(self):
+        return reverse('plugins:netbox_map:locationcoordinates', args=[self.pk])
+
+
+class MapMarker(NetBoxModel):
+    """Standalone marker on the global site map (not linked to a floor plan)."""
+    latitude = models.DecimalField(
+        max_digits=8,
+        decimal_places=6,
+        verbose_name=_('latitude'),
+        help_text=_('Latitude (-90 to 90)')
+    )
+    longitude = models.DecimalField(
+        max_digits=9,
+        decimal_places=6,
+        verbose_name=_('longitude'),
+        help_text=_('Longitude (-180 to 180)')
+    )
+    label = models.CharField(
+        verbose_name=_('label'),
+        max_length=100,
+        blank=True,
+        help_text=_('Display label for this marker')
+    )
+    marker_type = models.CharField(
+        verbose_name=_('marker type'),
+        max_length=50,
+        choices=FloorPlanTileTypeChoices,
+        default=FloorPlanTileTypeChoices.TYPE_CAMERA
+    )
+    status = models.CharField(
+        verbose_name=_('status'),
+        max_length=50,
+        choices=FloorPlanTileStatusChoices,
+        default=FloorPlanTileStatusChoices.STATUS_ACTIVE
+    )
+    site = models.ForeignKey(
+        to='dcim.Site',
+        on_delete=models.SET_NULL,
+        related_name='map_markers',
+        blank=True,
+        null=True,
+    )
+
+    # Camera FOV fields
+    fov_direction = models.PositiveSmallIntegerField(
+        verbose_name=_('FOV direction'),
+        default=0,
+        validators=[MinValueValidator(0), MaxValueValidator(360)],
+        help_text=_('Camera viewing direction in degrees (0=north, 90=east)')
+    )
+    fov_angle = models.PositiveSmallIntegerField(
+        verbose_name=_('FOV angle'),
+        default=90,
+        validators=[MinValueValidator(10), MaxValueValidator(360)],
+        help_text=_('Camera field of view width in degrees')
+    )
+    fov_distance = models.PositiveSmallIntegerField(
+        verbose_name=_('FOV distance'),
+        default=5,
+        validators=[MinValueValidator(1), MaxValueValidator(50)],
+        help_text=_('Camera view distance (1 unit ≈ 50m)')
+    )
+
+    # Generic object assignment
+    assigned_object_type = models.ForeignKey(
+        to=ContentType,
+        on_delete=models.SET_NULL,
+        related_name='+',
+        blank=True,
+        null=True,
+        help_text=_('Type of assigned object')
+    )
+    assigned_object_id = models.PositiveBigIntegerField(
+        blank=True,
+        null=True,
+        help_text=_('ID of assigned object')
+    )
+    assigned_object = GenericForeignKey(
+        ct_field='assigned_object_type',
+        fk_field='assigned_object_id'
+    )
+
+    description = models.CharField(
+        verbose_name=_('description'),
+        max_length=200,
+        blank=True
+    )
+
+    clone_fields = (
+        'marker_type', 'status', 'site', 'fov_direction', 'fov_angle', 'fov_distance',
+    )
+
+    class Meta:
+        ordering = ('label',)
+        verbose_name = _('map marker')
+        verbose_name_plural = _('map markers')
+        indexes = [
+            models.Index(fields=['assigned_object_type', 'assigned_object_id']),
+        ]
+
+    def __str__(self):
+        return self.label or f'{self.get_marker_type_display()} ({self.latitude}, {self.longitude})'
+
+    def get_absolute_url(self):
+        return reverse('plugins:netbox_map:mapmarker', args=[self.pk])
+
+    @property
+    def display_label(self):
+        if self.label:
+            return self.label
+        if self.assigned_object:
+            return str(self.assigned_object)
+        return self.get_marker_type_display()

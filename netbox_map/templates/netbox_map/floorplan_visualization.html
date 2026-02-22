@@ -112,6 +112,7 @@
              data-background-image="{{ object.background_image.url }}"
              {% endif %}>
           <canvas id="floorplan-canvas"></canvas>
+          <div id="tile-popover" class="tile-popover"></div>
           <div class="zoom-controls">
             <button id="zoom-in-btn" class="btn btn-sm btn-dark" title="{% trans 'Zoom In' %}">
               <i class="mdi mdi-plus"></i>
@@ -205,6 +206,23 @@
               <span class="detail-label">{% trans "Size" %}</span>
               <span class="detail-value" id="tile-detail-size">-</span>
             </div>
+            {% if edit_mode %}
+            <div id="resize-tile-panel" class="d-none">
+              <div class="detail-row resize-controls">
+                <span class="detail-label">{% trans "Resize" %}</span>
+                <span class="detail-value">
+                  <div class="d-flex gap-1 align-items-center">
+                    <input type="number" id="resize-width-input" class="form-control form-control-sm sidebar-input" style="width:50px;" min="1" max="10" title="{% trans 'Width' %}">
+                    <span class="text-muted">&times;</span>
+                    <input type="number" id="resize-height-input" class="form-control form-control-sm sidebar-input" style="width:50px;" min="1" max="10" title="{% trans 'Height' %}">
+                    <button id="resize-tile-btn" class="btn btn-sm btn-primary px-2">
+                      <i class="mdi mdi-resize"></i> {% trans "Resize" %}
+                    </button>
+                  </div>
+                </span>
+              </div>
+            </div>
+            {% endif %}
             <div class="detail-row">
               <span class="detail-label">{% trans "Type" %}</span>
               <span class="detail-value" id="tile-detail-type">-</span>
@@ -212,6 +230,10 @@
             <div class="detail-row">
               <span class="detail-label">{% trans "Object Type" %}</span>
               <span class="detail-value" id="tile-detail-object-type">-</span>
+            </div>
+            <div class="detail-row" id="tile-detail-ip-row">
+              <span class="detail-label">{% trans "IP Address" %}</span>
+              <span class="detail-value" id="tile-detail-ip">-</span>
             </div>
             <div class="detail-row">
               <span class="detail-label">{% trans "Utilization" %}</span>
@@ -430,15 +452,33 @@
           var viewer = window.floorplanViewer;
           if (viewer) {
             var selectedText = linkObjectSelect.options[linkObjectSelect.selectedIndex].textContent;
+            var assignedObj = updated.assigned_object || {};
             for (var i = 0; i < viewer.tiles.length; i++) {
               if (viewer.tiles[i].id === parseInt(tileId)) {
                 viewer.tiles[i].object_type = objectType.split('.')[1];
+                viewer.tiles[i].object_type_model = objectType.split('.')[1];
+                viewer.tiles[i].object_name = assignedObj.display || selectedText;
+                viewer.tiles[i].object_id = parseInt(linkObjectSelect.value, 10);
+                viewer.tiles[i].object_url = assignedObj.url || assignedObj.display_url || null;
                 viewer.tiles[i].utilization = updated.utilization;
+                // Extract primary IP for device objects
+                if (objectType === 'dcim.device' && assignedObj.primary_ip4) {
+                  viewer.tiles[i].primary_ip = assignedObj.primary_ip4.address
+                    ? assignedObj.primary_ip4.address.split('/')[0]
+                    : null;
+                } else if (objectType === 'dcim.device' && assignedObj.primary_ip6) {
+                  viewer.tiles[i].primary_ip = assignedObj.primary_ip6.address
+                    ? assignedObj.primary_ip6.address.split('/')[0]
+                    : null;
+                } else {
+                  viewer.tiles[i].primary_ip = null;
+                }
                 if (!viewer.tiles[i].label) viewer.tiles[i].label = selectedText;
                 break;
               }
             }
             viewer.render();
+            viewer.buildSidebar();
           }
           setTimeout(function() { linkStatus.textContent = ''; linkStatus.className = 'small text-muted ms-1'; }, 2000);
         })
@@ -473,12 +513,17 @@
               for (var i = 0; i < viewer.tiles.length; i++) {
                 if (viewer.tiles[i].id === parseInt(tileId)) {
                   viewer.tiles[i].object_type = null;
+                  viewer.tiles[i].object_type_model = null;
+                  viewer.tiles[i].object_name = null;
+                  viewer.tiles[i].object_id = null;
                   viewer.tiles[i].object_url = null;
                   viewer.tiles[i].utilization = null;
+                  viewer.tiles[i].primary_ip = null;
                   break;
                 }
               }
               viewer.render();
+              viewer.buildSidebar();
             }
             linkCurrent.textContent = 'No object linked to this tile.';
             unlinkBtn.disabled = true;

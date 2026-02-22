@@ -1,5 +1,7 @@
+from django.contrib.contenttypes.models import ContentType
+
 from netbox.plugins import PluginTemplateExtension
-from .models import FloorPlan
+from .models import FloorPlan, FloorPlanTile
 
 
 class SiteFloorPlanLink(PluginTemplateExtension):
@@ -16,4 +18,24 @@ class SiteFloorPlanLink(PluginTemplateExtension):
         )
 
 
-template_extensions = [SiteFloorPlanLink]
+class DeviceFloorPlanLink(PluginTemplateExtension):
+    models = ['dcim.device']
+
+    def right_page(self):
+        device = self.context['object']
+        device_ct = ContentType.objects.get_for_model(device)
+        tile = (
+            FloorPlanTile.objects
+            .filter(assigned_object_type=device_ct, assigned_object_id=device.pk)
+            .select_related('floorplan__site')
+            .first()
+        )
+        if not tile:
+            return ''
+        return self.render(
+            'netbox_map/inc/device_floorplan_panel.html',
+            extra_context={'tile': tile, 'floorplan': tile.floorplan}
+        )
+
+
+template_extensions = [SiteFloorPlanLink, DeviceFloorPlanLink]

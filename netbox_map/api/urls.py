@@ -4,5 +4,7 @@ from . import views
 router = NetBoxRouter()
 router.register('floorplans', views.FloorPlanViewSet)
 router.register('floorplan-tiles', views.FloorPlanTileViewSet)
+router.register('location-coordinates', views.LocationCoordinatesViewSet)
+router.register('map-markers', views.MapMarkerViewSet)
 
 urlpatterns = router.urls

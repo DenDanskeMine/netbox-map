@@ -1,0 +1,120 @@
+{% extends 'base/layout.html' %}
+{% load static %}
+{% load i18n %}
+
+{% block title %}{% trans "Site Map" %}{% endblock %}
+
+{% block header %}
+  <h1><span class="mdi mdi-map-marker-multiple-outline"></span> {% trans "Site Map" %}</h1>
+{% endblock %}
+
+{% block head %}
+  <link rel="stylesheet" href="{% static 'netbox_map/css/leaflet-1.9.4.min.css' %}">
+  <link rel="stylesheet" href="{% static 'netbox_map/css/floorplan.css' %}">
+  <link rel="stylesheet" href="{% static 'netbox_map/css/site_map.css' %}">
+{% endblock %}
+
+{% block content %}
+{% if can_edit %}
+<div class="site-map-edit-toggle">
+  <button class="btn btn-sm btn-outline-warning" id="edit-mode-btn">
+    <i class="mdi mdi-pencil-lock-outline"></i> {% trans "Edit Mode" %}
+  </button>
+</div>
+
+<div class="site-map-toolbar d-none" id="site-map-toolbar">
+  <div class="site-map-toolbar-row">
+    <div class="site-map-toolbar-group">
+      <label class="toolbar-label">{% trans "Place Existing" %}</label>
+      <select id="unplaced-sites-select" class="form-select form-select-sm">
+        <option value="">{% trans "Site..." %}</option>
+      </select>
+      <button class="btn btn-sm btn-primary" id="place-site-btn" disabled>
+        <i class="mdi mdi-map-marker-plus"></i> {% trans "Place" %}
+      </button>
+      <select id="unplaced-locations-select" class="form-select form-select-sm">
+        <option value="">{% trans "Location..." %}</option>
+      </select>
+      <button class="btn btn-sm btn-outline-primary" id="place-location-btn" disabled>
+        <i class="mdi mdi-map-marker-outline"></i> {% trans "Place" %}
+      </button>
+      <select id="unplaced-tiles-select" class="form-select form-select-sm">
+        <option value="">{% trans "Tile..." %}</option>
+      </select>
+      <button class="btn btn-sm btn-outline-secondary" id="place-tile-btn" disabled>
+        <i class="mdi mdi-crosshairs-gps"></i> {% trans "Place" %}
+      </button>
+    </div>
+    <div class="site-map-toolbar-sep"></div>
+    <div class="site-map-toolbar-group">
+      <label class="toolbar-label">{% trans "New Marker" %}</label>
+      <select id="new-marker-type" class="form-select form-select-sm">
+        <option value="camera">{% trans "Camera" %}</option>
+        <option value="ap">{% trans "Access Point" %}</option>
+        <option value="printer">{% trans "Printer" %}</option>
+        <option value="rack">{% trans "Rack" %}</option>
+        <option value="power">{% trans "Power" %}</option>
+        <option value="cooling">{% trans "Cooling" %}</option>
+        <option value="door">{% trans "Door" %}</option>
+        <option value="wall">{% trans "Wall" %}</option>
+        <option value="column">{% trans "Column" %}</option>
+        <option value="aisle">{% trans "Aisle" %}</option>
+        <option value="empty">{% trans "Empty" %}</option>
+        <option value="reserved">{% trans "Reserved" %}</option>
+      </select>
+      <input type="text" id="new-marker-label" class="form-control form-control-sm" placeholder="{% trans 'Label...' %}">
+      <button class="btn btn-sm btn-success" id="add-marker-btn">
+        <i class="mdi mdi-plus"></i> {% trans "Add Marker" %}
+      </button>
+    </div>
+    <div class="site-map-toolbar-status">
+      <span id="placement-status" class="text-muted small"></span>
+      <button id="cancel-placement-btn" class="btn btn-sm btn-outline-danger d-none">{% trans "Cancel" %}</button>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<div class="site-map-layout">
+  <div id="site-map-container"
+       class="site-map-container"
+       data-placed-sites='{{ placed_sites_json }}'
+       data-unplaced-sites='{{ unplaced_sites_json }}'
+       data-locations='{{ locations_json }}'
+       data-unplaced-locations='{{ unplaced_locations_json }}'
+       data-tiles='{{ tiles_json }}'
+       data-unplaced-tiles='{{ unplaced_tiles_json }}'
+       data-markers='{{ markers_json }}'
+       data-csrf-token="{{ csrf_token }}"
+       data-can-edit="{{ can_edit|yesno:'true,false' }}"
+       data-site-api-url="/api/dcim/sites/"
+       data-loc-coords-api-url="{% url 'plugins-api:netbox_map-api:locationcoordinates-list' %}"
+       data-tile-api-url="{% url 'plugins-api:netbox_map-api:floorplantile-list' %}"
+       data-marker-api-url="{% url 'plugins-api:netbox_map-api:mapmarker-list' %}">
+  </div>
+
+  <div class="site-map-sidebar" id="site-map-sidebar">
+    <div class="sidebar-tiles-section">
+      <div class="sidebar-header">
+        <input type="text" id="sidebar-search" class="form-control form-control-sm" placeholder="{% trans 'Search markers...' %}">
+      </div>
+      <div class="sidebar-toggles" id="sidebar-toggles"></div>
+      <div class="sidebar-filter-row">
+        <span id="sidebar-count" class="text-muted" style="font-size:11px"></span>
+      </div>
+      <div class="sidebar-tile-list" id="sidebar-list"></div>
+    </div>
+    <div class="sidebar-context-section" id="sidebar-detail">
+      <div class="sidebar-empty-state">
+        <i class="mdi mdi-cursor-default-click-outline"></i>
+        <span>{% trans "Click a marker to see details" %}</span>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block javascript %}
+  <script src="{% static 'netbox_map/js/leaflet-1.9.4.min.js' %}"></script>
+  <script src="{% static 'netbox_map/js/site_map.js' %}"></script>
+{% endblock %}

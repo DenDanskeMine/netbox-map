@@ -3,6 +3,9 @@ from netbox.views.generic import ObjectChangeLogView
 from . import models, views
 
 urlpatterns = (
+    # Site Map
+    path('sitemap/', views.SiteMapView.as_view(), name='sitemap'),
+
     # FloorPlan
     path('floorplans/', views.FloorPlanListView.as_view(), name='floorplan_list'),
     path('floorplans/add/', views.FloorPlanEditView.as_view(), name='floorplan_add'),
@@ -22,4 +25,13 @@ urlpatterns = (
     path('tiles/<int:pk>/edit/', views.FloorPlanTileEditView.as_view(), name='floorplantile_edit'),
     path('tiles/<int:pk>/delete/', views.FloorPlanTileDeleteView.as_view(), name='floorplantile_delete'),
     path('tiles/<int:pk>/changelog/', ObjectChangeLogView.as_view(), name='floorplantile_changelog', kwargs={'model': models.FloorPlanTile}),
+
+    # MapMarker
+    path('map-markers/', views.MapMarkerListView.as_view(), name='mapmarker_list'),
+    path('map-markers/add/', views.MapMarkerEditView.as_view(), name='mapmarker_add'),
+    path('map-markers/delete/', views.MapMarkerBulkDeleteView.as_view(), name='mapmarker_bulk_delete'),
+    path('map-markers/<int:pk>/', views.MapMarkerView.as_view(), name='mapmarker'),
+    path('map-markers/<int:pk>/edit/', views.MapMarkerEditView.as_view(), name='mapmarker_edit'),
+    path('map-markers/<int:pk>/delete/', views.MapMarkerDeleteView.as_view(), name='mapmarker_delete'),
+    path('map-markers/<int:pk>/changelog/', ObjectChangeLogView.as_view(), name='mapmarker_changelog', kwargs={'model': models.MapMarker}),
 )

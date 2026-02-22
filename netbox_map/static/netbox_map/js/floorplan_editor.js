@@ -498,6 +498,114 @@
         });
     }
 
+    // ===== Resize Tile =====
+
+    var resizeBtn = document.getElementById('resize-tile-btn');
+    var resizeWidthInput = document.getElementById('resize-width-input');
+    var resizeHeightInput = document.getElementById('resize-height-input');
+
+    /**
+     * Check if a grid position is occupied by any tile other than the given one.
+     */
+    function isPositionOccupiedExcept(gridX, gridY, newWidth, newHeight, excludeId) {
+        var viewer = window.floorplanViewer;
+        if (!viewer) return false;
+
+        for (var i = 0; i < viewer.tiles.length; i++) {
+            var t = viewer.tiles[i];
+            if (t.id === excludeId) continue;
+            if (gridX < t.x + t.w && gridX + newWidth > t.x &&
+                gridY < t.y + t.h && gridY + newHeight > t.y) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    if (resizeBtn) {
+        resizeBtn.addEventListener('click', function() {
+            var viewer = window.floorplanViewer;
+            if (!viewer) return;
+            var tile = viewer.getSelectedTile();
+            if (!tile) { alert('No tile selected.'); return; }
+
+            var newW = parseInt(resizeWidthInput.value, 10);
+            var newH = parseInt(resizeHeightInput.value, 10);
+
+            // Clamp to 1-10
+            newW = Math.max(1, Math.min(10, newW || 1));
+            newH = Math.max(1, Math.min(10, newH || 1));
+            resizeWidthInput.value = newW;
+            resizeHeightInput.value = newH;
+
+            // No change
+            if (newW === tile.w && newH === tile.h) return;
+
+            // Check grid boundary
+            if (tile.x + newW > viewer.gridWidth || tile.y + newH > viewer.gridHeight) {
+                alert('Tile would exceed grid boundaries.');
+                return;
+            }
+
+            // Check overlap (skip self)
+            if (isPositionOccupiedExcept(tile.x, tile.y, newW, newH, tile.id)) {
+                alert('Resize would overlap with another tile.');
+                return;
+            }
+
+            // Optimistic update
+            var origW = tile.w;
+            var origH = tile.h;
+            tile.w = newW;
+            tile.h = newH;
+            viewer.render();
+
+            resizeBtn.disabled = true;
+            resizeBtn.textContent = 'Saving...';
+
+            fetch(apiUrl + tile.id + '/', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+                body: JSON.stringify({ width: newW, height: newH })
+            })
+            .then(function(r) {
+                if (r.ok) {
+                    // Update detail panel size display
+                    var sizeEl = document.getElementById('tile-detail-size');
+                    if (sizeEl) sizeEl.textContent = newW + ' x ' + newH;
+                    resizeBtn.innerHTML = '<i class="mdi mdi-check"></i> Saved!';
+                    resizeBtn.classList.remove('btn-primary');
+                    resizeBtn.classList.add('btn-success');
+                    if (viewer.buildSidebar) viewer.buildSidebar();
+                    setTimeout(function() {
+                        resizeBtn.innerHTML = '<i class="mdi mdi-resize"></i> Resize';
+                        resizeBtn.classList.remove('btn-success');
+                        resizeBtn.classList.add('btn-primary');
+                        resizeBtn.disabled = false;
+                    }, 1500);
+                } else {
+                    // Revert on failure
+                    tile.w = origW;
+                    tile.h = origH;
+                    viewer.render();
+                    r.json().then(function(err) {
+                        alert('Resize failed: ' + JSON.stringify(err));
+                    });
+                    resizeBtn.innerHTML = '<i class="mdi mdi-resize"></i> Resize';
+                    resizeBtn.disabled = false;
+                }
+            })
+            .catch(function(err) {
+                tile.w = origW;
+                tile.h = origH;
+                viewer.render();
+                alert('Network error: ' + err.message);
+                resizeBtn.innerHTML = '<i class="mdi mdi-resize"></i> Resize';
+                resizeBtn.disabled = false;
+            });
+        });
+    }
+
     // ===== Canvas Event Handlers =====
 
     // Double-click to add tile (uses viewer's screenToWorld for pan/zoom support)

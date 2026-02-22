@@ -1,0 +1,25 @@
+{% load i18n %}
+<div class="card">
+  <h5 class="card-header">{% trans "Floor Plan" %}</h5>
+  <div class="card-body">
+    <table class="table table-hover mb-0">
+      <tr>
+        <th>{% trans "Floor Plan" %}</th>
+        <td><a href="{{ floorplan.get_absolute_url }}">{{ floorplan.name }}</a></td>
+      </tr>
+      <tr>
+        <th>{% trans "Site" %}</th>
+        <td>{{ floorplan.site }}</td>
+      </tr>
+      <tr>
+        <th>{% trans "Position" %}</th>
+        <td>{{ tile.x_position }}, {{ tile.y_position }}</td>
+      </tr>
+    </table>
+    <div class="mt-2">
+      <a href="/plugins/map/floorplans/{{ floorplan.pk }}/visualization/" class="btn btn-sm btn-primary">
+        <i class="mdi mdi-floor-plan"></i> {% trans "View on Floor Plan" %}
+      </a>
+    </div>
+  </div>
+</div>

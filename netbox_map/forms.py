@@ -10,7 +10,7 @@ from utilities.forms.fields import (
     CommentField,
 )
 from utilities.forms.rendering import FieldSet
-from .models import FloorPlan, FloorPlanTile, ASSIGNABLE_MODELS
+from .models import FloorPlan, FloorPlanTile, MapMarker, ASSIGNABLE_MODELS
 from .choices import FloorPlanTileTypeChoices, FloorPlanTileStatusChoices
 
 
@@ -231,4 +231,120 @@ class FloorPlanTileFilterForm(NetBoxModelFilterSetForm):
 
     fieldsets = (
         FieldSet('floorplan_id', 'assigned_object_type', 'tile_type', 'status'),
+    )
+
+
+#
+# MapMarker forms
+#
+
+class MapMarkerForm(NetBoxModelForm):
+    site = DynamicModelChoiceField(
+        label=_('Site'),
+        queryset=Site.objects.all(),
+        required=False,
+    )
+    assigned_object_type = ContentTypeChoiceField(
+        label=_('Object Type'),
+        queryset=get_assignable_content_types(),
+        required=False,
+        help_text=_('Select the type of object to assign')
+    )
+    rack = DynamicModelChoiceField(
+        label=_('Rack'),
+        queryset=Rack.objects.all(),
+        required=False,
+        query_params={'site_id': '$site'},
+    )
+    device = DynamicModelChoiceField(
+        label=_('Device'),
+        queryset=Device.objects.all(),
+        required=False,
+        query_params={'site_id': '$site'},
+    )
+    powerpanel = DynamicModelChoiceField(
+        label=_('Power Panel'),
+        queryset=PowerPanel.objects.all(),
+        required=False,
+        query_params={'site_id': '$site'},
+    )
+    powerfeed = DynamicModelChoiceField(
+        label=_('Power Feed'),
+        queryset=PowerFeed.objects.all(),
+        required=False,
+    )
+
+    fieldsets = (
+        FieldSet(
+            'latitude', 'longitude', 'label', 'marker_type', 'status', 'site', 'description', 'tags',
+            name=_('Map Marker')
+        ),
+        FieldSet(
+            'fov_direction', 'fov_angle', 'fov_distance',
+            name=_('Camera FOV Settings')
+        ),
+        FieldSet(
+            'assigned_object_type', 'rack', 'device', 'powerpanel', 'powerfeed',
+            name=_('Assigned Object')
+        ),
+    )
+
+    class Meta:
+        model = MapMarker
+        fields = [
+            'latitude', 'longitude', 'label', 'marker_type', 'status', 'site',
+            'fov_direction', 'fov_angle', 'fov_distance',
+            'assigned_object_type', 'description', 'tags',
+        ]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.instance.pk and self.instance.assigned_object_type:
+            model_name = self.instance.assigned_object_type.model
+            if model_name in ('rack', 'device', 'powerpanel', 'powerfeed'):
+                field = self.fields.get(model_name)
+                if field and self.instance.assigned_object_id:
+                    field.initial = self.instance.assigned_object_id
+
+    def clean(self):
+        super().clean()
+        assigned_object_type = self.cleaned_data.get('assigned_object_type')
+        if assigned_object_type:
+            model_name = assigned_object_type.model
+            obj = self.cleaned_data.get(model_name)
+            if obj:
+                self.instance.assigned_object_id = obj.pk
+            else:
+                self.instance.assigned_object_id = None
+                self.cleaned_data['assigned_object_type'] = None
+        else:
+            self.cleaned_data['assigned_object_type'] = None
+            self.instance.assigned_object_id = None
+        return self.cleaned_data
+
+    def save(self, *args, **kwargs):
+        self.instance.assigned_object_type = self.cleaned_data.get('assigned_object_type')
+        return super().save(*args, **kwargs)
+
+
+class MapMarkerFilterForm(NetBoxModelFilterSetForm):
+    model = MapMarker
+    site_id = DynamicModelChoiceField(
+        queryset=Site.objects.all(),
+        required=False,
+        label=_('Site')
+    )
+    marker_type = forms.MultipleChoiceField(
+        choices=FloorPlanTileTypeChoices,
+        required=False,
+        label=_('Marker Type')
+    )
+    status = forms.MultipleChoiceField(
+        choices=FloorPlanTileStatusChoices,
+        required=False,
+        label=_('Status')
+    )
+
+    fieldsets = (
+        FieldSet('site_id', 'marker_type', 'status'),
     )

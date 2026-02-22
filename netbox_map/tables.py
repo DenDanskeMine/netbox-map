@@ -2,7 +2,7 @@ import django_tables2 as tables
 from django.utils.translation import gettext_lazy as _
 
 from netbox.tables import NetBoxTable, columns
-from .models import FloorPlanTile, FloorPlan
+from .models import FloorPlanTile, FloorPlan, MapMarker
 
 
 class FloorPlanTable(NetBoxTable):
@@ -99,3 +99,37 @@ class FloorPlanTileTable(NetBoxTable):
         if value:
             return str(value)
         return '-'
+
+
+class MapMarkerTable(NetBoxTable):
+    label = tables.Column(
+        linkify=True,
+        verbose_name=_('Label')
+    )
+    marker_type = tables.Column(
+        verbose_name=_('Type')
+    )
+    status = tables.Column(
+        verbose_name=_('Status')
+    )
+    site = tables.Column(
+        linkify=True,
+        verbose_name=_('Site')
+    )
+    latitude = tables.Column(
+        verbose_name=_('Latitude')
+    )
+    longitude = tables.Column(
+        verbose_name=_('Longitude')
+    )
+    tags = columns.TagColumn()
+
+    class Meta(NetBoxTable.Meta):
+        model = MapMarker
+        fields = (
+            'pk', 'id', 'label', 'marker_type', 'status', 'site',
+            'latitude', 'longitude', 'description', 'tags', 'actions',
+        )
+        default_columns = (
+            'pk', 'label', 'marker_type', 'status', 'site', 'latitude', 'longitude',
+        )

@@ -290,6 +290,13 @@
     font-weight: 500;
 }
 
+.sidebar-tile-ip {
+    font-size: 10px;
+    color: var(--fp-link-color);
+    font-family: monospace;
+    flex-shrink: 0;
+}
+
 .sidebar-tile-type {
     font-size: 10px;
     color: var(--fp-text-muted);
@@ -546,6 +553,45 @@
 
 .edit-toolbar strong {
     color: var(--fp-text);
+}
+
+/* ===== Tile Popover ===== */
+
+.tile-popover {
+    display: none;
+    position: absolute;
+    z-index: 20;
+    pointer-events: none;
+    max-width: 280px;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--fp-text);
+    background: var(--fp-bg-deep);
+    border: 1px solid var(--fp-border);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+    backdrop-filter: blur(8px);
+    white-space: nowrap;
+}
+
+.tile-popover strong {
+    color: var(--fp-text);
+}
+
+.tile-popover .popover-dim {
+    color: var(--fp-text-muted);
+    font-size: 11px;
+}
+
+/* ===== Resize Controls ===== */
+
+.resize-controls .detail-value {
+    padding: 2px 0;
+}
+
+#resize-tile-panel {
+    border-top: 1px solid var(--fp-border-light);
 }
 
 /* ===== Scrollbar styling ===== */

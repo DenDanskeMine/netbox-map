@@ -3,7 +3,7 @@ from netbox.plugins import PluginConfig
 
 class MapConfig(PluginConfig):
     name = 'netbox_map'
-    verbose_name = 'Map'
+    verbose_name = 'NetBox Map'
     author = 'Christian Rose'
     description = 'Interactive floor plan visualization for NetBox sites'
     version = '0.1.0'
