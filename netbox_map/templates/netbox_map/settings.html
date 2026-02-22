@@ -1,0 +1,135 @@
+{% extends 'base/layout.html' %}
+{% load helpers %}
+
+{% block title %}Map Settings{% endblock %}
+
+{% block header %}
+  <h1>Map Settings</h1>
+{% endblock %}
+
+{% block content %}
+<form method="post">
+  {% csrf_token %}
+
+  {# ── General Toggles ── #}
+  <div class="row mb-4">
+    <div class="col-md-6">
+      <div class="card h-100">
+        <h5 class="card-header">
+          <span class="mdi mdi-cog"></span> General
+        </h5>
+        <div class="card-body">
+          {% for field in form %}
+            {% if field.name in 'show_mac,show_custom_fields,sync_device_gps' %}
+            <div class="mb-3 form-check">
+              {{ field }}
+              <label for="{{ field.id_for_label }}" class="form-check-label fw-bold">{{ field.label }}</label>
+              {% if field.help_text %}
+              <div class="form-text text-muted">{{ field.help_text }}</div>
+              {% endif %}
+              {% for error in field.errors %}
+              <div class="text-danger">{{ error }}</div>
+              {% endfor %}
+            </div>
+            {% endif %}
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    {# ── Device Detail Fields ── #}
+    <div class="col-md-6">
+      <div class="card h-100">
+        <h5 class="card-header">
+          <span class="mdi mdi-server"></span> Device Detail Fields
+        </h5>
+        <div class="card-body checkbox-list">
+          {% for field in form %}
+            {% if field.name == 'device_fields' %}
+              {{ field }}
+              {% for error in field.errors %}
+              <div class="text-danger">{{ error }}</div>
+              {% endfor %}
+            {% endif %}
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {# ── Other Object Fields ── #}
+  <div class="row mb-4">
+    <div class="col-md-4">
+      <div class="card h-100">
+        <h5 class="card-header">
+          <span class="mdi mdi-collage"></span> Rack Fields
+        </h5>
+        <div class="card-body checkbox-list">
+          {% for field in form %}
+            {% if field.name == 'rack_fields' %}
+              {{ field }}
+              {% for error in field.errors %}
+              <div class="text-danger">{{ error }}</div>
+              {% endfor %}
+            {% endif %}
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-4">
+      <div class="card h-100">
+        <h5 class="card-header">
+          <span class="mdi mdi-flash"></span> Power Panel Fields
+        </h5>
+        <div class="card-body checkbox-list">
+          {% for field in form %}
+            {% if field.name == 'powerpanel_fields' %}
+              {{ field }}
+              {% for error in field.errors %}
+              <div class="text-danger">{{ error }}</div>
+              {% endfor %}
+            {% endif %}
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-4">
+      <div class="card h-100">
+        <h5 class="card-header">
+          <span class="mdi mdi-power-plug"></span> Power Feed Fields
+        </h5>
+        <div class="card-body checkbox-list">
+          {% for field in form %}
+            {% if field.name == 'powerfeed_fields' %}
+              {{ field }}
+              {% for error in field.errors %}
+              <div class="text-danger">{{ error }}</div>
+              {% endfor %}
+            {% endif %}
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="text-end mb-4">
+    <button type="submit" class="btn btn-primary">
+      <span class="mdi mdi-content-save"></span> Save Settings
+    </button>
+  </div>
+</form>
+
+<script>
+  // Rewrite Django's CheckboxSelectMultiple output to use NetBox/Bootstrap 5 form-check classes
+  document.querySelectorAll('.checkbox-list input[type="checkbox"]').forEach(function(input) {
+    input.classList.remove('form-control');
+    input.classList.add('form-check-input');
+    var wrapper = input.closest('div:not([id])');
+    if (wrapper) wrapper.classList.add('form-check');
+    var label = input.closest('label');
+    if (label) label.classList.add('form-check-label');
+  });
+</script>
+{% endblock %}

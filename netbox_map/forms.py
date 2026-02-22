@@ -10,7 +10,7 @@ from utilities.forms.fields import (
     CommentField,
 )
 from utilities.forms.rendering import FieldSet
-from .models import FloorPlan, FloorPlanTile, MapMarker, ASSIGNABLE_MODELS
+from .models import FloorPlan, FloorPlanTile, MapMarker, MapSettings, ASSIGNABLE_MODELS
 from .choices import FloorPlanTileTypeChoices, FloorPlanTileStatusChoices
 
 
@@ -325,6 +325,105 @@ class MapMarkerForm(NetBoxModelForm):
     def save(self, *args, **kwargs):
         self.instance.assigned_object_type = self.cleaned_data.get('assigned_object_type')
         return super().save(*args, **kwargs)
+
+
+#
+# MapSettings form
+#
+
+DEVICE_FIELD_CHOICES = [
+    ('status', _('Status')),
+    ('role', _('Role')),
+    ('device_type', _('Device Type')),
+    ('platform', _('Platform')),
+    ('serial', _('Serial')),
+    ('asset_tag', _('Asset Tag')),
+    ('tenant', _('Tenant')),
+    ('site', _('Site')),
+    ('location', _('Location')),
+    ('rack', _('Rack')),
+    ('position', _('Position')),
+    ('face', _('Face')),
+    ('airflow', _('Airflow')),
+    ('primary_ip4', _('Primary IPv4')),
+    ('primary_ip6', _('Primary IPv6')),
+    ('oob_ip', _('OOB IP')),
+    ('cluster', _('Cluster')),
+    ('virtual_chassis', _('Virtual Chassis')),
+    ('vc_position', _('VC Position')),
+    ('description', _('Description')),
+]
+
+RACK_FIELD_CHOICES = [
+    ('status', _('Status')),
+    ('role', _('Role')),
+    ('facility_id', _('Facility ID')),
+    ('serial', _('Serial')),
+    ('asset_tag', _('Asset Tag')),
+    ('u_height', _('U Height')),
+    ('width', _('Width')),
+    ('type', _('Type')),
+    ('weight', _('Weight')),
+    ('max_weight', _('Max Weight')),
+    ('tenant', _('Tenant')),
+    ('site', _('Site')),
+    ('location', _('Location')),
+    ('description', _('Description')),
+]
+
+POWERPANEL_FIELD_CHOICES = [
+    ('site', _('Site')),
+    ('location', _('Location')),
+    ('description', _('Description')),
+]
+
+POWERFEED_FIELD_CHOICES = [
+    ('status', _('Status')),
+    ('type', _('Type')),
+    ('supply', _('Supply')),
+    ('voltage', _('Voltage')),
+    ('amperage', _('Amperage')),
+    ('max_utilization', _('Max Utilization')),
+    ('power_panel', _('Power Panel')),
+    ('rack', _('Rack')),
+    ('description', _('Description')),
+]
+
+
+class MapSettingsForm(forms.ModelForm):
+    """Form for editing map detail panel settings."""
+
+    device_fields = forms.MultipleChoiceField(
+        choices=DEVICE_FIELD_CHOICES,
+        widget=forms.CheckboxSelectMultiple,
+        required=False,
+        label=_('Device Fields'),
+    )
+    rack_fields = forms.MultipleChoiceField(
+        choices=RACK_FIELD_CHOICES,
+        widget=forms.CheckboxSelectMultiple,
+        required=False,
+        label=_('Rack Fields'),
+    )
+    powerpanel_fields = forms.MultipleChoiceField(
+        choices=POWERPANEL_FIELD_CHOICES,
+        widget=forms.CheckboxSelectMultiple,
+        required=False,
+        label=_('Power Panel Fields'),
+    )
+    powerfeed_fields = forms.MultipleChoiceField(
+        choices=POWERFEED_FIELD_CHOICES,
+        widget=forms.CheckboxSelectMultiple,
+        required=False,
+        label=_('Power Feed Fields'),
+    )
+
+    class Meta:
+        model = MapSettings
+        fields = (
+            'show_mac', 'show_custom_fields', 'sync_device_gps',
+            'device_fields', 'rack_fields', 'powerpanel_fields', 'powerfeed_fields',
+        )
 
 
 class MapMarkerFilterForm(NetBoxModelFilterSetForm):

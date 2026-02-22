@@ -16,6 +16,7 @@
     const gridHeight = parseInt(container.dataset.gridHeight, 10);
     const tileSize = parseInt(container.dataset.tileSize, 10);
     const backgroundImageUrl = container.dataset.backgroundImage || null;
+    var detailBaseUrl = container.dataset.detailBaseUrl || '/plugins/map/marker-detail/';
 
     // Parse tile data
     let tiles = [];
@@ -429,6 +430,8 @@
             }
             var deleteBtn = document.getElementById('delete-tile-btn');
             if (deleteBtn) deleteBtn.disabled = true;
+            var enrichedEl = document.getElementById('fp-enriched-detail');
+            if (enrichedEl) enrichedEl.innerHTML = '';
             return;
         }
 
@@ -490,6 +493,54 @@
                 } else {
                     objectLinkEl.textContent = '-';
                 }
+            }
+        }
+
+        // Fetch enriched detail via AJAX
+        var enrichedEl = document.getElementById('fp-enriched-detail');
+        if (enrichedEl) {
+            if (tile.object_type_model && tile.object_id) {
+                enrichedEl.innerHTML = '<div class="sidebar-detail-loading">Loading details\u2026</div>';
+                fetch(detailBaseUrl + tile.object_type_model + '/' + tile.object_id + '/')
+                    .then(function(r) {
+                        if (!r.ok) throw new Error('HTTP ' + r.status);
+                        return r.json();
+                    })
+                    .then(function(detail) {
+                        if (selectedTile !== tile) return;
+                        var html = '';
+                        if (detail.mac_address) {
+                            html += '<div class="sidebar-detail-list">';
+                            html += '<div class="detail-row"><span class="detail-label">MAC</span>';
+                            html += '<span class="detail-value"><code>' + detail.mac_address + '</code></span></div></div>';
+                        }
+                        if (detail.standard_fields && detail.standard_fields.length) {
+                            html += '<div class="sidebar-section-title">Details</div>';
+                            html += '<div class="sidebar-detail-list">';
+                            for (var i = 0; i < detail.standard_fields.length; i++) {
+                                var f = detail.standard_fields[i];
+                                html += '<div class="detail-row"><span class="detail-label">' + f.label + '</span>';
+                                html += '<span class="detail-value">' + f.value + '</span></div>';
+                            }
+                            html += '</div>';
+                        }
+                        if (detail.custom_fields && detail.custom_fields.length) {
+                            html += '<div class="sidebar-section-title">Custom Fields</div>';
+                            html += '<div class="sidebar-detail-list">';
+                            for (var j = 0; j < detail.custom_fields.length; j++) {
+                                var cf = detail.custom_fields[j];
+                                html += '<div class="detail-row"><span class="detail-label">' + cf.label + '</span>';
+                                html += '<span class="detail-value">' + cf.value + '</span></div>';
+                            }
+                            html += '</div>';
+                        }
+                        enrichedEl.innerHTML = html;
+                    })
+                    .catch(function() {
+                        if (selectedTile === tile) enrichedEl.innerHTML = '';
+                    });
+            } else {
+                enrichedEl.innerHTML = '';
             }
         }
 
@@ -1322,6 +1373,69 @@
         'reserved': '#b06820', 'ap': '#7b42c8', 'camera': '#c42020', 'printer': '#e67e22'
     };
 
+    // ===== Rack Device Expansion =====
+
+    var rackDevicesMap = {};     // rackId -> [{id, name, url, ip, position}]
+    var rackDevicesLoaded = false;
+    var expandedRacks = new Set();
+
+    function loadAllRackDevices(callback) {
+        if (rackDevicesLoaded) { callback(); return; }
+
+        var rackIds = [];
+        for (var i = 0; i < tiles.length; i++) {
+            if (tiles[i].object_type_model === 'rack' && tiles[i].object_id) {
+                if (rackIds.indexOf(tiles[i].object_id) === -1) {
+                    rackIds.push(tiles[i].object_id);
+                }
+            }
+        }
+
+        if (rackIds.length === 0) { rackDevicesLoaded = true; callback(); return; }
+
+        var params = rackIds.map(function(id) { return 'rack_id=' + id; }).join('&');
+        fetch('/api/dcim/devices/?' + params + '&limit=1000', {
+            credentials: 'same-origin',
+            headers: { 'Accept': 'application/json' }
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            var results = data.results || [];
+            rackDevicesMap = {};
+            for (var i = 0; i < results.length; i++) {
+                var d = results[i];
+                var rackId = d.rack ? d.rack.id : null;
+                if (!rackId) continue;
+                if (!rackDevicesMap[rackId]) rackDevicesMap[rackId] = [];
+
+                var ip = null;
+                if (d.primary_ip4 && d.primary_ip4.address) ip = d.primary_ip4.address.split('/')[0];
+                else if (d.primary_ip6 && d.primary_ip6.address) ip = d.primary_ip6.address.split('/')[0];
+
+                rackDevicesMap[rackId].push({
+                    id: d.id,
+                    name: d.display || d.name || ('Device #' + d.id),
+                    url: d.display_url || ('/dcim/devices/' + d.id + '/'),
+                    ip: ip,
+                    position: d.position
+                });
+            }
+            // Sort by U position descending within each rack
+            for (var rid in rackDevicesMap) {
+                rackDevicesMap[rid].sort(function(a, b) {
+                    return (b.position || 0) - (a.position || 0);
+                });
+            }
+            rackDevicesLoaded = true;
+            callback();
+        })
+        .catch(function(err) {
+            console.error('Failed to load rack devices:', err);
+            rackDevicesLoaded = true;
+            callback();
+        });
+    }
+
     // ===== Type Toggle Buttons =====
 
     var toggleContainer = document.getElementById('type-toggles');
@@ -1406,17 +1520,33 @@
 
     /**
      * Build/rebuild the sidebar tile list based on search + filter.
+     * Rack tiles with linked racks show a collapsible list of devices.
      */
     function buildSidebar() {
         if (!tileListEl) return;
 
+        // Lazy-load rack devices on first call
+        if (!rackDevicesLoaded) {
+            loadAllRackDevices(function() { buildSidebar(); });
+            return;
+        }
+
         var query = tileSearchInput ? tileSearchInput.value.toLowerCase().trim() : '';
 
         var filtered = tiles.filter(function(t) {
-            if (!visibleTypes.has(t.type)) return false;  // respect type toggles
+            if (!visibleTypes.has(t.type)) return false;
             if (query) {
                 var text = (t.label || '').toLowerCase() + ' ' + (t.type || '').toLowerCase();
-                if (text.indexOf(query) === -1) return false;
+                if (text.indexOf(query) !== -1) return true;
+                // Also match devices inside rack
+                if (t.object_type_model === 'rack' && t.object_id && rackDevicesMap[t.object_id]) {
+                    var devs = rackDevicesMap[t.object_id];
+                    for (var d = 0; d < devs.length; d++) {
+                        var dText = (devs[d].name || '').toLowerCase() + ' ' + (devs[d].ip || '').toLowerCase();
+                        if (dText.indexOf(query) !== -1) return true;
+                    }
+                }
+                return false;
             }
             return true;
         });
@@ -1439,24 +1569,71 @@
             var t = filtered[i];
             var color = t.type === 'rack' ? getUtilizationColor(t.utilization) : (TYPE_COLORS[t.type] || '#6b6b80');
             var isActive = selectedTile && selectedTile.id === t.id;
+            var rackDevices = (t.object_type_model === 'rack' && t.object_id) ? (rackDevicesMap[t.object_id] || []) : [];
+            var hasDevices = rackDevices.length > 0;
+            var isExpanded = expandedRacks.has(t.id);
+
+            // Auto-expand if search matches a device inside this rack
+            if (query && hasDevices) {
+                for (var d = 0; d < rackDevices.length; d++) {
+                    var dText = (rackDevices[d].name || '').toLowerCase() + ' ' + (rackDevices[d].ip || '').toLowerCase();
+                    if (dText.indexOf(query) !== -1) { isExpanded = true; break; }
+                }
+            }
+
             html += '<div class="sidebar-tile-item' + (isActive ? ' active' : '') + '" data-tile-id="' + t.id + '">';
+            if (hasDevices) {
+                html += '<span class="rack-expand-toggle" data-tile-id="' + t.id + '">' +
+                    (isExpanded ? '&#9662;' : '&#9656;') + '</span>';
+            }
             html += '<div class="sidebar-tile-dot" style="background:' + color + '"></div>';
             html += '<span class="sidebar-tile-label" title="' + (t.label || t.type) + '">' + (t.label || '<em>' + t.type + '</em>') + '</span>';
+            if (hasDevices) {
+                html += '<span class="rack-device-count">' + rackDevices.length + 'd</span>';
+            }
             if (t.primary_ip) {
                 html += '<span class="sidebar-tile-ip">' + t.primary_ip + '</span>';
             }
             html += '<span class="sidebar-tile-type">' + t.type + '</span>';
             html += '<span class="sidebar-tile-pos">' + t.x + ',' + t.y + '</span>';
             html += '</div>';
+
+            // Expanded device sub-list
+            if (hasDevices && isExpanded) {
+                html += '<div class="rack-devices-list">';
+                for (var di = 0; di < rackDevices.length; di++) {
+                    var dev = rackDevices[di];
+                    // When searching, only show matching devices
+                    if (query) {
+                        var devMatch = (dev.name || '').toLowerCase().indexOf(query) !== -1 ||
+                                       (dev.ip || '').toLowerCase().indexOf(query) !== -1;
+                        if (!devMatch) continue;
+                    }
+                    html += '<div class="rack-device-item' + (query ? ' search-match' : '') + '">';
+                    html += '<i class="mdi mdi-server rack-device-icon"></i>';
+                    html += '<span class="rack-device-name">';
+                    if (dev.url) {
+                        html += '<a href="' + dev.url + '" title="' + dev.name + '">' + dev.name + '</a>';
+                    } else {
+                        html += dev.name;
+                    }
+                    html += '</span>';
+                    if (dev.ip) html += '<span class="rack-device-ip">' + dev.ip + '</span>';
+                    if (dev.position) html += '<span class="rack-device-pos">U' + dev.position + '</span>';
+                    html += '</div>';
+                }
+                html += '</div>';
+            }
         }
 
         tileListEl.innerHTML = html;
 
-        // Click handlers
+        // Click handlers for tile items (zoom to tile)
         var items = tileListEl.querySelectorAll('.sidebar-tile-item');
         for (var j = 0; j < items.length; j++) {
             items[j].addEventListener('click', (function(item) {
-                return function() {
+                return function(e) {
+                    if (e.target.closest('.rack-expand-toggle')) return;
                     var id = parseInt(item.dataset.tileId);
                     for (var k = 0; k < tiles.length; k++) {
                         if (tiles[k].id === id) {
@@ -1466,6 +1643,23 @@
                     }
                 };
             })(items[j]));
+        }
+
+        // Click handlers for expand toggles
+        var toggles = tileListEl.querySelectorAll('.rack-expand-toggle');
+        for (var ti = 0; ti < toggles.length; ti++) {
+            toggles[ti].addEventListener('click', (function(toggle) {
+                return function(e) {
+                    e.stopPropagation();
+                    var tileId = parseInt(toggle.dataset.tileId);
+                    if (expandedRacks.has(tileId)) {
+                        expandedRacks.delete(tileId);
+                    } else {
+                        expandedRacks.add(tileId);
+                    }
+                    buildSidebar();
+                };
+            })(toggles[ti]));
         }
     }
 

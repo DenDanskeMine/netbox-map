@@ -594,6 +594,94 @@
     border-top: 1px solid var(--fp-border-light);
 }
 
+/* ===== Rack device expand/collapse ===== */
+
+.rack-expand-toggle {
+    width: 16px;
+    height: 16px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 10px;
+    color: var(--fp-text-muted);
+    flex-shrink: 0;
+    border-radius: 3px;
+    transition: background 0.1s;
+    margin-left: -2px;
+}
+
+.rack-expand-toggle:hover {
+    background: var(--fp-hover);
+    color: var(--fp-text);
+}
+
+.rack-devices-list {
+    border-left: 2px solid var(--fp-border-light);
+    margin-left: 13px;
+}
+
+.rack-device-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 10px 3px 10px;
+    font-size: 11px;
+    color: var(--fp-text);
+    border-bottom: 1px solid var(--fp-border-light);
+}
+
+.rack-device-item:last-child {
+    border-bottom: none;
+}
+
+.rack-device-item.search-match {
+    background: var(--fp-accent-glow);
+}
+
+.rack-device-icon {
+    font-size: 12px;
+    color: var(--fp-text-dim);
+    flex-shrink: 0;
+}
+
+.rack-device-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.rack-device-name a {
+    color: var(--fp-link-color);
+    text-decoration: none;
+}
+
+.rack-device-name a:hover {
+    text-decoration: underline;
+}
+
+.rack-device-ip {
+    font-size: 10px;
+    color: var(--fp-link-color);
+    font-family: monospace;
+    flex-shrink: 0;
+}
+
+.rack-device-pos {
+    font-size: 10px;
+    color: var(--fp-text-dim);
+    flex-shrink: 0;
+    min-width: 22px;
+    text-align: right;
+}
+
+.rack-device-count {
+    font-size: 10px;
+    color: var(--fp-text-muted);
+    flex-shrink: 0;
+}
+
 /* ===== Scrollbar styling ===== */
 
 .sidebar-tile-list::-webkit-scrollbar,

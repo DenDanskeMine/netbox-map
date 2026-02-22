@@ -24,6 +24,7 @@
     var locCoordsApiUrl  = container.getAttribute('data-loc-coords-api-url') || '';
     var tileApiUrl       = container.getAttribute('data-tile-api-url') || '';
     var markerApiUrl     = container.getAttribute('data-marker-api-url') || '';
+    var detailBaseUrl    = container.getAttribute('data-detail-base-url') || '/plugins/map/marker-detail/';
 
     /* ── Edit mode state ──────────────────────────────────────────── */
     var editMode = false;   // starts OFF — view only
@@ -813,6 +814,11 @@
             html += detailRow('Position', item.data.latitude.toFixed(6) + ', ' + item.data.longitude.toFixed(6));
             html += '</div>';
 
+            // Enriched detail placeholder
+            if (item.data.assigned_object_type && item.data.assigned_object_id) {
+                html += '<div id="enriched-detail" class="sidebar-detail-loading">Loading details\u2026</div>';
+            }
+
             // Remove from map button (only in edit mode)
             if (editMode) {
                 html += '<div class="sidebar-detail-actions">';
@@ -839,6 +845,11 @@
             if (d.description) html += detailRow('Description', escHtml(d.description));
             html += detailRow('Position', d.latitude.toFixed(6) + ', ' + d.longitude.toFixed(6));
             html += '</div>';
+
+            // Enriched detail placeholder
+            if (d.assigned_object_type && d.assigned_object_id) {
+                html += '<div id="enriched-detail" class="sidebar-detail-loading">Loading details\u2026</div>';
+            }
 
             // Camera FOV controls (only in edit mode)
             if (d.type === 'camera' && editMode) {
@@ -871,6 +882,27 @@
         }
 
         sidebarDetail.innerHTML = html;
+
+        // Fetch enriched detail via AJAX if item has an assigned object
+        var enrichedEl = document.getElementById('enriched-detail');
+        if (enrichedEl && item.data && item.data.assigned_object_type && item.data.assigned_object_id) {
+            fetchMarkerDetail(item.data.assigned_object_type, item.data.assigned_object_id)
+                .then(function (detail) {
+                    // Only render if this item is still selected
+                    var currentEnrichedEl = document.getElementById('enriched-detail');
+                    if (currentEnrichedEl && selectedItem === item) {
+                        currentEnrichedEl.classList.remove('sidebar-detail-loading');
+                        renderEnrichedDetail(currentEnrichedEl, detail);
+                    }
+                })
+                .catch(function () {
+                    var currentEnrichedEl = document.getElementById('enriched-detail');
+                    if (currentEnrichedEl && selectedItem === item) {
+                        currentEnrichedEl.classList.remove('sidebar-detail-loading');
+                        currentEnrichedEl.innerHTML = '';
+                    }
+                });
+        }
 
         // Wire up FOV controls
         if (item.kind === 'mapmarker' && item.data.type === 'camera' && editMode) {
@@ -995,6 +1027,59 @@
                'style="width:70px;display:inline-block;margin-left:4px">' +
                (suffix ? '<span style="font-size:11px;color:var(--fp-text-muted)">' + suffix + '</span>' : '') +
                '</label>';
+    }
+
+    /* ── AJAX enriched detail ─────────────────────────────────────── */
+    function fetchMarkerDetail(objectType, objectId) {
+        return fetch(detailBaseUrl + objectType + '/' + objectId + '/')
+            .then(function (r) {
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                return r.json();
+            });
+    }
+
+    function renderEnrichedDetail(targetEl, detail) {
+        var html = '';
+
+        // MAC address
+        if (detail.mac_address) {
+            html += '<div class="sidebar-detail-list">';
+            html += detailRow('MAC', '<code>' + escHtml(detail.mac_address) + '</code>');
+            html += '</div>';
+        }
+
+        // Standard fields
+        if (detail.standard_fields && detail.standard_fields.length) {
+            html += '<div class="sidebar-detail-section">Details</div>';
+            html += '<div class="sidebar-detail-list">';
+            detail.standard_fields.forEach(function (f) {
+                html += detailRow(escHtml(f.label), escHtml(f.value));
+            });
+            html += '</div>';
+        }
+
+        // Custom fields
+        if (detail.custom_fields && detail.custom_fields.length) {
+            html += '<div class="sidebar-detail-section">Custom Fields</div>';
+            html += '<div class="sidebar-detail-list">';
+            var currentGroup = null;
+            detail.custom_fields.forEach(function (f) {
+                if (f.group && f.group !== currentGroup) {
+                    currentGroup = f.group;
+                    html += '</div>';
+                    html += '<div class="sidebar-detail-section" style="padding-top:4px">' + escHtml(f.group) + '</div>';
+                    html += '<div class="sidebar-detail-list">';
+                }
+                html += detailRow(escHtml(f.label), escHtml(f.value));
+            });
+            html += '</div>';
+        }
+
+        if (html) {
+            targetEl.innerHTML = html;
+        } else {
+            targetEl.innerHTML = '';
+        }
     }
 
     // Initial sidebar build

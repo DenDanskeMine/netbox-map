@@ -44,10 +44,10 @@
     gap: 10px;
 }
 
-.site-map-edit-toggle .btn.active {
-    background: var(--bs-warning);
-    border-color: var(--bs-warning);
-    color: #000;
+#edit-mode-btn.active {
+    background-color: #ffc107 !important;
+    border-color: #ffc107 !important;
+    color: #000 !important;
 }
 
 /* ── Toolbar ──────────────────────────────────────────────────── */
@@ -396,6 +396,28 @@
     display: flex;
     align-items: center;
     justify-content: center;
+}
+
+/* ── Sidebar detail label width (wider for enriched fields) ──── */
+.site-map-sidebar .detail-label {
+    width: 100px;
+}
+
+/* ── Sidebar enriched detail sections ─────────────────────────── */
+.sidebar-detail-section {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--fp-text-muted, #6c757d);
+    padding: 6px 12px 2px;
+    opacity: 0.7;
+}
+
+.sidebar-detail-loading {
+    padding: 12px;
+    text-align: center;
+    color: var(--fp-text-muted, #6c757d);
+    font-size: 12px;
 }
 
 /* ── Sidebar detail actions ───────────────────────────────────── */

@@ -1,16 +1,20 @@
 import json
 
-from django.contrib.auth.mixins import LoginRequiredMixin
+from django.contrib import messages
+from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
+from django.contrib.contenttypes.models import ContentType
 from django.db.models import Count, Prefetch
-from django.shortcuts import render
+from django.http import JsonResponse
+from django.shortcuts import redirect, render
 from django.utils.translation import gettext_lazy as _
 from django.views import View
 
+from dcim.models import Device, Location, Site
 from netbox.views import generic
 from utilities.views import ViewTab, register_model_view
-from dcim.models import Location, Site
+
 from . import filtersets, forms, tables
-from .models import FloorPlan, FloorPlanTile, LocationCoordinates, MapMarker
+from .models import FloorPlan, FloorPlanTile, LocationCoordinates, MapMarker, MapSettings
 
 
 #
@@ -125,6 +129,7 @@ class SiteMapView(LoginRequiredMixin, View):
                 'assigned_object_name': assigned_obj_name,
                 'assigned_object_url': assigned_obj_url,
                 'assigned_object_type': tile.assigned_object_type.model if tile.assigned_object_type else None,
+                'assigned_object_id': tile.assigned_object_id,
             }
 
             if tile.latitude is not None and tile.longitude is not None:
@@ -393,3 +398,189 @@ class MapMarkerBulkDeleteView(generic.BulkDeleteView):
     queryset = MapMarker.objects.all()
     filterset = filtersets.MapMarkerFilterSet
     table = tables.MapMarkerTable
+
+
+#
+# AJAX Marker Detail endpoint
+#
+
+class MarkerDetailView(LoginRequiredMixin, View):
+    """AJAX endpoint returning enriched detail for a marker's assigned object."""
+
+    SETTINGS_FIELD_MAP = {
+        'device': 'device_fields',
+        'rack': 'rack_fields',
+        'powerpanel': 'powerpanel_fields',
+        'powerfeed': 'powerfeed_fields',
+    }
+
+    SELECT_RELATED = {
+        'device': ['role', 'platform', 'device_type__manufacturer', 'tenant', 'site'],
+        'rack': ['role', 'site', 'location', 'tenant'],
+        'powerpanel': ['site', 'location'],
+        'powerfeed': ['power_panel', 'rack'],
+    }
+
+    def get(self, request, object_type, object_id):
+        try:
+            ct = ContentType.objects.get(app_label='dcim', model=object_type)
+        except ContentType.DoesNotExist:
+            return JsonResponse({'error': 'Unknown object type'}, status=404)
+
+        model = ct.model_class()
+        related = self.SELECT_RELATED.get(object_type, [])
+        qs = model.objects.all()
+        if related:
+            qs = qs.select_related(*related)
+
+        try:
+            obj = qs.get(pk=object_id)
+        except model.DoesNotExist:
+            return JsonResponse({'error': 'Object not found'}, status=404)
+
+        # Standard fields from DB settings
+        settings = MapSettings.load()
+        attr = self.SETTINGS_FIELD_MAP.get(object_type)
+        fields_list = getattr(settings, attr, []) if attr else []
+
+        standard_fields = []
+        for field_name in fields_list:
+            value = self._resolve_field(obj, field_name)
+            if value is not None:
+                label = field_name.replace('_', ' ').title()
+                try:
+                    label = obj._meta.get_field(field_name).verbose_name.title()
+                except Exception:
+                    pass
+                standard_fields.append({'label': label, 'value': str(value)})
+
+        # MAC address (device only)
+        mac_address = None
+        if object_type == 'device' and settings.show_mac:
+            mac_address = self._get_mac_address(obj)
+
+        # Custom fields
+        custom_fields = []
+        if settings.show_custom_fields:
+            custom_fields = self._get_custom_fields(obj)
+
+        return JsonResponse({
+            'standard_fields': standard_fields,
+            'mac_address': mac_address,
+            'custom_fields': custom_fields,
+        })
+
+    def _resolve_field(self, obj, field_name):
+        """Resolve a field value, handling FK and choice fields."""
+        display_method = f'get_{field_name}_display'
+        if hasattr(obj, display_method):
+            return getattr(obj, display_method)()
+
+        value = getattr(obj, field_name, None)
+        if value is None:
+            return None
+
+        if hasattr(value, 'get_absolute_url'):
+            return str(value)
+
+        return value
+
+    def _get_mac_address(self, device):
+        """Get MAC from primary IP's interface, fallback to first interface with MAC."""
+        try:
+            primary_ip = device.primary_ip4 or device.primary_ip6
+            if primary_ip and hasattr(primary_ip, 'assigned_object') and primary_ip.assigned_object:
+                iface = primary_ip.assigned_object
+                if hasattr(iface, 'mac_address') and iface.mac_address:
+                    return str(iface.mac_address)
+
+            from dcim.models import Interface
+            iface = Interface.objects.filter(
+                device=device,
+                mac_address__isnull=False,
+            ).exclude(mac_address='').first()
+            if iface and iface.mac_address:
+                return str(iface.mac_address)
+        except Exception:
+            pass
+        return None
+
+    def _get_custom_fields(self, obj):
+        """Get visible custom fields with their values."""
+        result = []
+        try:
+            for cf, value in obj.get_custom_fields(omit_hidden=True).items():
+                if value is not None and value != '' and value != []:
+                    result.append({
+                        'label': cf.label,
+                        'value': str(value),
+                        'group': cf.group_name if cf.group_name else None,
+                    })
+        except Exception:
+            pass
+        return result
+
+
+#
+# Map Settings
+#
+
+class MapSettingsView(LoginRequiredMixin, PermissionRequiredMixin, View):
+    permission_required = 'netbox_map.view_floorplan'
+
+    def get(self, request):
+        settings = MapSettings.load()
+        form = forms.MapSettingsForm(instance=settings)
+        return render(request, 'netbox_map/settings.html', {'form': form})
+
+    def post(self, request):
+        settings = MapSettings.load()
+        form = forms.MapSettingsForm(request.POST, instance=settings)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Map settings saved.')
+            return redirect('plugins:netbox_map:settings')
+        return render(request, 'netbox_map/settings.html', {'form': form})
+
+
+#
+# Device tab: Map Locations
+#
+
+def _count_device_locations(device):
+    device_ct = ContentType.objects.get_for_model(device)
+    tile_count = FloorPlanTile.objects.filter(
+        assigned_object_type=device_ct,
+        assigned_object_id=device.pk,
+    ).count()
+    marker_count = MapMarker.objects.filter(
+        assigned_object_type=device_ct,
+        assigned_object_id=device.pk,
+    ).count()
+    return tile_count + marker_count
+
+
+@register_model_view(Device, 'map_locations', path='map-locations')
+class DeviceMapLocationsView(generic.ObjectView):
+    queryset = Device.objects.all()
+    template_name = 'netbox_map/device_map_locations.html'
+    tab = ViewTab(
+        label=_('Map Locations'),
+        badge=lambda obj: _count_device_locations(obj),
+        permission='netbox_map.view_floorplantile',
+    )
+
+    def get_extra_context(self, request, instance):
+        device_ct = ContentType.objects.get_for_model(Device)
+        tiles = FloorPlanTile.objects.filter(
+            assigned_object_type=device_ct,
+            assigned_object_id=instance.pk,
+        ).select_related('floorplan__site')
+        markers = MapMarker.objects.filter(
+            assigned_object_type=device_ct,
+            assigned_object_id=instance.pk,
+        ).select_related('site')
+        return {
+            'tiles': tiles,
+            'markers': markers,
+        }

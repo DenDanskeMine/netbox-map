@@ -56,6 +56,12 @@ menu = PluginMenu(
                 )
             ),
         )),
+        (_('Configuration'), (
+            PluginMenuItem(
+                link='plugins:netbox_map:settings',
+                link_text=_('Settings'),
+            ),
+        )),
     ),
     icon_class='mdi mdi-floor-plan'
 )

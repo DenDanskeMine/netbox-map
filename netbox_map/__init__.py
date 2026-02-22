@@ -15,5 +15,9 @@ class MapConfig(PluginConfig):
         'default_tile_size': 60,
     }
 
+    def ready(self):
+        super().ready()
+        from . import signals  # noqa: F401
+
 
 config = MapConfig

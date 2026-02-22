@@ -107,6 +107,7 @@
              data-api-url="{% url 'plugins-api:netbox_map-api:floorplantile-list' %}"
              data-floorplan-id="{{ object.pk }}"
              data-site-id="{{ site_id }}"
+             data-detail-base-url="/plugins/map/marker-detail/"
              data-csrf-token="{{ csrf_token }}"
              {% if object.background_image %}
              data-background-image="{{ object.background_image.url }}"
@@ -244,6 +245,9 @@
               <span class="detail-value" id="tile-detail-object-link">-</span>
             </div>
           </div>
+
+          {# Enriched detail loaded via AJAX #}
+          <div id="fp-enriched-detail"></div>
 
           {# Camera FOV edit (inline, for camera tiles only) #}
           <div id="camera-fov-edit-panel" class="d-none sidebar-fov-panel">

@@ -3,8 +3,14 @@ from netbox.views.generic import ObjectChangeLogView
 from . import models, views
 
 urlpatterns = (
+    # Settings
+    path('settings/', views.MapSettingsView.as_view(), name='settings'),
+
     # Site Map
     path('sitemap/', views.SiteMapView.as_view(), name='sitemap'),
+
+    # AJAX marker detail
+    path('marker-detail/<str:object_type>/<int:object_id>/', views.MarkerDetailView.as_view(), name='marker_detail'),
 
     # FloorPlan
     path('floorplans/', views.FloorPlanListView.as_view(), name='floorplan_list'),

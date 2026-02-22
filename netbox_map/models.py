@@ -397,3 +397,68 @@ class MapMarker(NetBoxModel):
         if self.assigned_object:
             return str(self.assigned_object)
         return self.get_marker_type_display()
+
+
+class MapSettings(models.Model):
+    """Singleton model for map detail panel & GPS sync configuration."""
+
+    # ── Toggles ──
+    show_mac = models.BooleanField(
+        default=True,
+        verbose_name=_('Show MAC Address'),
+        help_text=_('Display MAC address for devices in the detail panel'),
+    )
+    show_custom_fields = models.BooleanField(
+        default=True,
+        verbose_name=_('Show Custom Fields'),
+        help_text=_('Display custom fields in the detail panel'),
+    )
+    sync_device_gps = models.BooleanField(
+        default=True,
+        verbose_name=_('Sync Device GPS'),
+        help_text=_('Automatically update device latitude/longitude when placed on a map'),
+    )
+
+    # ── Per-object-type field lists ──
+    device_fields = models.JSONField(
+        default=list,
+        verbose_name=_('Device Fields'),
+        help_text=_('Standard fields to show for devices'),
+    )
+    rack_fields = models.JSONField(
+        default=list,
+        verbose_name=_('Rack Fields'),
+        help_text=_('Standard fields to show for racks'),
+    )
+    powerpanel_fields = models.JSONField(
+        default=list,
+        verbose_name=_('Power Panel Fields'),
+        help_text=_('Standard fields to show for power panels'),
+    )
+    powerfeed_fields = models.JSONField(
+        default=list,
+        verbose_name=_('Power Feed Fields'),
+        help_text=_('Standard fields to show for power feeds'),
+    )
+
+    class Meta:
+        verbose_name = _('Map Settings')
+        verbose_name_plural = _('Map Settings')
+
+    def __str__(self):
+        return 'Map Settings'
+
+    @classmethod
+    def load(cls):
+        obj, created = cls.objects.get_or_create(pk=1)
+        if created:
+            obj.device_fields = [
+                'status', 'role', 'device_type', 'platform', 'serial', 'asset_tag', 'tenant',
+            ]
+            obj.rack_fields = [
+                'status', 'role', 'facility_id', 'serial', 'asset_tag', 'u_height',
+            ]
+            obj.powerpanel_fields = ['site', 'location']
+            obj.powerfeed_fields = ['status', 'type', 'supply', 'voltage', 'amperage']
+            obj.save()
+        return obj
