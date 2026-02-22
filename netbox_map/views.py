@@ -301,6 +301,11 @@ class FloorPlanDeleteView(generic.ObjectDeleteView):
     queryset = FloorPlan.objects.all()
 
 
+class FloorPlanBulkImportView(generic.BulkImportView):
+    queryset = FloorPlan.objects.all()
+    model_form = forms.FloorPlanImportForm
+
+
 class FloorPlanBulkEditView(generic.BulkEditView):
     queryset = FloorPlan.objects.all()
     filterset = filtersets.FloorPlanFilterSet
@@ -378,6 +383,11 @@ class FloorPlanTileDeleteView(generic.ObjectDeleteView):
     queryset = FloorPlanTile.objects.all()
 
 
+class FloorPlanTileBulkImportView(generic.BulkImportView):
+    queryset = FloorPlanTile.objects.all()
+    model_form = forms.FloorPlanTileImportForm
+
+
 class FloorPlanTileBulkDeleteView(generic.BulkDeleteView):
     queryset = FloorPlanTile.objects.all()
     filterset = filtersets.FloorPlanTileFilterSet
@@ -431,6 +441,11 @@ class MapMarkerEditView(generic.ObjectEditView):
 @register_model_view(MapMarker, 'delete')
 class MapMarkerDeleteView(generic.ObjectDeleteView):
     queryset = MapMarker.objects.all()
+
+
+class MapMarkerBulkImportView(generic.BulkImportView):
+    queryset = MapMarker.objects.all()
+    model_form = forms.MapMarkerImportForm
 
 
 class MapMarkerBulkDeleteView(generic.BulkDeleteView):

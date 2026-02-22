@@ -15,6 +15,7 @@ urlpatterns = (
     # FloorPlan
     path('floorplans/', views.FloorPlanListView.as_view(), name='floorplan_list'),
     path('floorplans/add/', views.FloorPlanEditView.as_view(), name='floorplan_add'),
+    path('floorplans/import/', views.FloorPlanBulkImportView.as_view(), name='floorplan_bulk_import'),
     path('floorplans/edit/', views.FloorPlanBulkEditView.as_view(), name='floorplan_bulk_edit'),
     path('floorplans/delete/', views.FloorPlanBulkDeleteView.as_view(), name='floorplan_bulk_delete'),
     path('floorplans/<int:pk>/', views.FloorPlanView.as_view(), name='floorplan'),
@@ -26,6 +27,7 @@ urlpatterns = (
     # FloorPlanTile
     path('tiles/', views.FloorPlanTileListView.as_view(), name='floorplantile_list'),
     path('tiles/add/', views.FloorPlanTileEditView.as_view(), name='floorplantile_add'),
+    path('tiles/import/', views.FloorPlanTileBulkImportView.as_view(), name='floorplantile_bulk_import'),
     path('tiles/delete/', views.FloorPlanTileBulkDeleteView.as_view(), name='floorplantile_bulk_delete'),
     path('tiles/<int:pk>/', views.FloorPlanTileView.as_view(), name='floorplantile'),
     path('tiles/<int:pk>/edit/', views.FloorPlanTileEditView.as_view(), name='floorplantile_edit'),
@@ -35,6 +37,7 @@ urlpatterns = (
     # MapMarker
     path('map-markers/', views.MapMarkerListView.as_view(), name='mapmarker_list'),
     path('map-markers/add/', views.MapMarkerEditView.as_view(), name='mapmarker_add'),
+    path('map-markers/import/', views.MapMarkerBulkImportView.as_view(), name='mapmarker_bulk_import'),
     path('map-markers/delete/', views.MapMarkerBulkDeleteView.as_view(), name='mapmarker_bulk_delete'),
     path('map-markers/<int:pk>/', views.MapMarkerView.as_view(), name='mapmarker'),
     path('map-markers/<int:pk>/edit/', views.MapMarkerEditView.as_view(), name='mapmarker_edit'),

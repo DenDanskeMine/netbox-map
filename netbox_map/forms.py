@@ -3,9 +3,11 @@ from django.contrib.contenttypes.models import ContentType
 from django.utils.translation import gettext_lazy as _
 
 from dcim.models import Site, Location, Rack, Device, PowerPanel, PowerFeed
-from netbox.forms import NetBoxModelForm, NetBoxModelFilterSetForm, NetBoxModelBulkEditForm
+from netbox.forms import NetBoxModelForm, NetBoxModelFilterSetForm, NetBoxModelBulkEditForm, NetBoxModelImportForm
 from utilities.forms.fields import (
     ContentTypeChoiceField,
+    CSVChoiceField,
+    CSVModelChoiceField,
     DynamicModelChoiceField,
     CommentField,
 )
@@ -93,6 +95,27 @@ class FloorPlanBulkEditForm(NetBoxModelBulkEditForm):
 
     model = FloorPlan
     nullable_fields = ('location', 'description', 'background_image')
+
+
+class FloorPlanImportForm(NetBoxModelImportForm):
+    site = CSVModelChoiceField(
+        queryset=Site.objects.all(),
+        to_field_name='name',
+        help_text=_('Site name'),
+    )
+    location = CSVModelChoiceField(
+        queryset=Location.objects.all(),
+        to_field_name='name',
+        required=False,
+        help_text=_('Location name'),
+    )
+
+    class Meta:
+        model = FloorPlan
+        fields = (
+            'name', 'site', 'location', 'grid_width', 'grid_height',
+            'tile_size', 'description',
+        )
 
 
 #
@@ -234,6 +257,30 @@ class FloorPlanTileFilterForm(NetBoxModelFilterSetForm):
     )
 
 
+class FloorPlanTileImportForm(NetBoxModelImportForm):
+    floorplan = CSVModelChoiceField(
+        queryset=FloorPlan.objects.all(),
+        to_field_name='name',
+        help_text=_('Floor plan name'),
+    )
+    tile_type = CSVChoiceField(
+        choices=FloorPlanTileTypeChoices,
+        help_text=_('Tile type'),
+    )
+    status = CSVChoiceField(
+        choices=FloorPlanTileStatusChoices,
+        help_text=_('Status'),
+    )
+
+    class Meta:
+        model = FloorPlanTile
+        fields = (
+            'floorplan', 'x_position', 'y_position', 'width', 'height',
+            'label', 'tile_type', 'status', 'orientation',
+            'fov_direction', 'fov_angle', 'fov_distance',
+        )
+
+
 #
 # MapMarker forms
 #
@@ -325,6 +372,30 @@ class MapMarkerForm(NetBoxModelForm):
     def save(self, *args, **kwargs):
         self.instance.assigned_object_type = self.cleaned_data.get('assigned_object_type')
         return super().save(*args, **kwargs)
+
+
+class MapMarkerImportForm(NetBoxModelImportForm):
+    site = CSVModelChoiceField(
+        queryset=Site.objects.all(),
+        to_field_name='name',
+        required=False,
+        help_text=_('Site name'),
+    )
+    marker_type = CSVChoiceField(
+        choices=FloorPlanTileTypeChoices,
+        help_text=_('Marker type'),
+    )
+    status = CSVChoiceField(
+        choices=FloorPlanTileStatusChoices,
+        help_text=_('Status'),
+    )
+
+    class Meta:
+        model = MapMarker
+        fields = (
+            'latitude', 'longitude', 'label', 'marker_type', 'status', 'site',
+            'fov_direction', 'fov_angle', 'fov_distance', 'description',
+        )
 
 
 #
