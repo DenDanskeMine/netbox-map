@@ -62,6 +62,7 @@ Check my other Plugin: [NetBox Ping](https://github.com/DenDanskeMine/netbox-pin
   - [Detail Panel Configuration](#detail-panel-configuration)
   - [GPS Sync Toggle](#gps-sync-toggle)
 - [NetBox Integration](#netbox-integration)
+  - [Maps URL Deep-Linking](#maps-url-deep-linking)
 - [REST API](#rest-api)
 - [Controls Reference](#controls-reference)
 - [Development](#development)
@@ -343,6 +344,24 @@ The plugin integrates with existing NetBox pages:
 | **Device detail page** | "Map Locations" tab listing all floor plan tiles and map markers where the device appears |
 | **Global search** | Floor plans, tiles, and map markers are indexed for NetBox search |
 | **Change logging** | All models support NetBox's change log |
+| **Maps URL deep-link** | Configure NetBox to open the plugin's site map when clicking the Map button on Sites and Devices |
+
+### Maps URL Deep-Linking
+
+NetBox has a built-in **Maps URL** setting (under **Admin > Configuration > Miscellaneous**) that controls where the **Map** button links on Site and Device detail pages. By default it opens Google Maps.
+
+You can point it to this plugin's site map instead, so clicking the Map button opens the global site map centered on the object's coordinates:
+
+1. Go to **Admin > Configuration > Miscellaneous**
+2. Set **Maps URL** to:
+   ```
+   https://your-netbox-url/plugins/map/sitemap/?q=
+   ```
+3. Save
+
+Now when you click the **Map** button on any Site or Device that has GPS coordinates, the plugin's site map will open and automatically center on that location at zoom level 16.
+
+> **Note:** NetBox appends `latitude,longitude` to the configured URL, so the final URL becomes something like `https://your-netbox-url/plugins/map/sitemap/?q=55.67,12.56`.
 
 ---
 

@@ -105,6 +105,11 @@ class FloorPlanTileTable(NetBoxTable):
     label = tables.Column(
         verbose_name=_('Label')
     )
+    linked_floorplan = tables.Column(
+        linkify=True,
+        verbose_name=_('Linked Floor Plan'),
+        visible=False,
+    )
     tags = columns.TagColumn()
 
     class Meta(NetBoxTable.Meta):
@@ -112,6 +117,7 @@ class FloorPlanTileTable(NetBoxTable):
         fields = (
             'pk', 'id', 'floorplan', 'position', 'x_position', 'y_position',
             'assigned_object_type', 'assigned_object', 'label', 'tile_type', 'status',
+            'linked_floorplan',
             'width', 'height', 'orientation',
             'fov_direction', 'fov_angle', 'fov_distance',
             'tags', 'actions',

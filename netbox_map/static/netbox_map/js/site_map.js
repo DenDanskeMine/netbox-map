@@ -70,7 +70,8 @@
         column:  { color: '#6e6e80', icon: 'mdi-pillar',                 label: 'Column' },
         aisle:   { color: '#3a3a50', icon: 'mdi-walk',                   label: 'Aisle' },
         empty:   { color: '#2a2a3e', icon: 'mdi-checkbox-blank-outline', label: 'Empty' },
-        reserved:{ color: '#b06820', icon: 'mdi-lock-outline',           label: 'Reserved' }
+        reserved:{ color: '#b06820', icon: 'mdi-lock-outline',           label: 'Reserved' },
+        floorplan_link: { color: '#4a50c8', icon: 'mdi-floor-plan',      label: 'Floor Plan Link' }
     };
 
     /* ── Tracking all sidebar items and their Leaflet objects ─────── */
@@ -1090,6 +1091,25 @@
     // Initial sidebar build
     buildToggleButtons();
     buildSidebarList();
+
+    // Auto-select nearest marker when opened via ?q=lat,lng (Maps URL)
+    if (!isNaN(focusLat) && !isNaN(focusLng)) {
+        var focusPoint = L.latLng(focusLat, focusLng);
+        var closestItem = null;
+        var closestDist = Infinity;
+        allItems.forEach(function (item) {
+            if (!item.marker) return;
+            var d = focusPoint.distanceTo(item.marker.getLatLng());
+            if (d < closestDist) {
+                closestDist = d;
+                closestItem = item;
+            }
+        });
+        if (closestItem) {
+            selectItem(closestItem);
+            if (closestItem.marker) closestItem.marker.openPopup();
+        }
+    }
 
     /* ══════════════════════════════════════════════════════════════════
        PLACEMENT MODE (edit only)

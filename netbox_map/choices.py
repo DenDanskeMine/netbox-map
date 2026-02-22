@@ -15,6 +15,7 @@ class FloorPlanTileTypeChoices(ChoiceSet):
     TYPE_AP = 'ap'
     TYPE_CAMERA = 'camera'
     TYPE_PRINTER = 'printer'
+    TYPE_FLOORPLAN_LINK = 'floorplan_link'
 
     CHOICES = [
         (TYPE_RACK, _('Rack'), 'blue'),
@@ -29,6 +30,7 @@ class FloorPlanTileTypeChoices(ChoiceSet):
         (TYPE_AP, _('Access Point'), 'purple'),
         (TYPE_CAMERA, _('Camera'), 'red'),
         (TYPE_PRINTER, _('Printer'), 'orange'),
+        (TYPE_FLOORPLAN_LINK, _('Floor Plan Link'), 'indigo'),
     ]
 
 

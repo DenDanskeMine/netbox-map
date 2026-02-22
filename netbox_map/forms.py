@@ -178,6 +178,11 @@ class FloorPlanTileForm(NetBoxModelForm):
         label=_('Floor Plan'),
         queryset=FloorPlan.objects.all()
     )
+    linked_floorplan = DynamicModelChoiceField(
+        label=_('Linked Floor Plan'),
+        queryset=FloorPlan.objects.all(),
+        required=False,
+    )
     assigned_object_type = ContentTypeChoiceField(
         label=_('Object Type'),
         queryset=get_assignable_content_types(),
@@ -221,7 +226,7 @@ class FloorPlanTileForm(NetBoxModelForm):
             name=_('Position')
         ),
         FieldSet(
-            'tile_type', 'status', 'label',
+            'tile_type', 'status', 'label', 'linked_floorplan',
             name=_('Tile')
         ),
         FieldSet(
@@ -239,6 +244,7 @@ class FloorPlanTileForm(NetBoxModelForm):
         fields = [
             'floorplan', 'x_position', 'y_position', 'width', 'height',
             'label', 'tile_type', 'status', 'orientation',
+            'linked_floorplan',
             'fov_direction', 'fov_angle', 'fov_distance',
             'assigned_object_type', 'tags',
         ]
@@ -322,6 +328,12 @@ class FloorPlanTileImportForm(NetBoxModelImportForm):
         choices=FloorPlanTileStatusChoices,
         help_text=_('Status (key or display name, e.g. "active" or "Active")'),
     )
+    linked_floorplan = CSVModelChoiceField(
+        queryset=FloorPlan.objects.all(),
+        to_field_name='name',
+        required=False,
+        help_text=_('Linked floor plan name (for floorplan_link tiles)'),
+    )
 
     fov_direction = forms.IntegerField(required=False)
     fov_angle = forms.IntegerField(required=False)
@@ -332,6 +344,7 @@ class FloorPlanTileImportForm(NetBoxModelImportForm):
         fields = (
             'floorplan', 'x_position', 'y_position', 'width', 'height',
             'label', 'tile_type', 'status', 'orientation',
+            'linked_floorplan',
             'fov_direction', 'fov_angle', 'fov_distance',
         )
 
@@ -653,6 +666,7 @@ TILE_TYPE_INFO = [
     ('ap', _('Access Point')),
     ('camera', _('Camera')),
     ('printer', _('Printer')),
+    ('floorplan_link', _('Floor Plan Link')),
 ]
 
 
