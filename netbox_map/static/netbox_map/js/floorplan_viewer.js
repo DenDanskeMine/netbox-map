@@ -489,7 +489,7 @@
             if (objectLinkEl) {
                 if (tile.object_url) {
                     objectLinkEl.innerHTML = '<a href="' + tile.object_url + '">' +
-                        (tile.object_type || 'Object') + '</a>';
+                        (tile.object_name || tile.object_type || 'Object') + '</a>';
                 } else {
                     objectLinkEl.textContent = '-';
                 }
