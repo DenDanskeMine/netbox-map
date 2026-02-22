@@ -117,14 +117,35 @@ class FloorPlanImportForm(NetBoxModelImportForm):
             'tile_size', 'description',
         )
 
-    def __init__(self, data=None, *args, **kwargs):
+    # Headers to silently drop (computed / non-importable columns)
+    _SKIP_HEADERS = {'tiles', 'id', ''}
+
+    def __init__(self, data=None, *args, headers=None, **kwargs):
+        if headers:
+            headers = self._normalize_headers(headers)
         if data and isinstance(data, dict):
             data = self._normalize_row(data)
-        super().__init__(data=data, *args, **kwargs)
+        super().__init__(data=data, *args, headers=headers, **kwargs)
+
+    @classmethod
+    def _normalize_headers(cls, headers):
+        """Remap export-format CSV headers to import field names."""
+        new_headers = {}
+        for header, to_field in headers.items():
+            k = header.strip().lower().replace(' ', '_')
+            if k in cls._SKIP_HEADERS:
+                continue
+            if k == 'grid_size':
+                # Split into two fields
+                new_headers['grid_width'] = None
+                new_headers['grid_height'] = None
+                continue
+            new_headers[k] = to_field
+        return new_headers
 
     @staticmethod
     def _normalize_row(row):
-        """Accept both export-format and import-format CSV headers/values."""
+        """Accept both export-format and import-format CSV values."""
         import re
         normalized = {}
         for key, value in row.items():
@@ -136,8 +157,8 @@ class FloorPlanImportForm(NetBoxModelImportForm):
                 if m:
                     normalized['grid_width'] = m.group(1)
                     normalized['grid_height'] = m.group(2)
-            elif k in ('tiles', 'id', '', 'floorplan'):
-                continue  # skip computed / non-importable columns
+            elif k in ('tiles', 'id', ''):
+                continue
             else:
                 normalized[k] = v
 
@@ -313,15 +334,36 @@ class FloorPlanTileImportForm(NetBoxModelImportForm):
     # Build reverse maps: display name → key (e.g. "Access Point" → "ap")
     _TILE_TYPE_MAP = {str(v).lower(): k for k, v, *_ in FloorPlanTileTypeChoices.CHOICES}
     _STATUS_MAP = {str(v).lower(): k for k, v, *_ in FloorPlanTileStatusChoices.CHOICES}
+    _SKIP_HEADERS = {'id', 'object_type', 'assigned_object'}
 
-    def __init__(self, data=None, *args, **kwargs):
+    def __init__(self, data=None, *args, headers=None, **kwargs):
+        if headers:
+            headers = self._normalize_headers(headers)
         if data and isinstance(data, dict):
             data = self._normalize_row(data)
-        super().__init__(data=data, *args, **kwargs)
+        super().__init__(data=data, *args, headers=headers, **kwargs)
+
+    @classmethod
+    def _normalize_headers(cls, headers):
+        """Remap export-format CSV headers to import field names."""
+        new_headers = {}
+        for header, to_field in headers.items():
+            k = header.strip().lower().replace(' ', '_')
+            if k in cls._SKIP_HEADERS:
+                continue
+            if k == 'floor_plan':
+                new_headers['floorplan'] = to_field
+                continue
+            if k == 'position':
+                new_headers['x_position'] = None
+                new_headers['y_position'] = None
+                continue
+            new_headers[k] = to_field
+        return new_headers
 
     @classmethod
     def _normalize_row(cls, row):
-        """Accept both export-format and import-format CSV headers/values."""
+        """Accept both export-format and import-format CSV values."""
         import re
         normalized = {}
         for key, value in row.items():
@@ -344,8 +386,8 @@ class FloorPlanTileImportForm(NetBoxModelImportForm):
                 normalized['tile_type'] = cls._TILE_TYPE_MAP.get(v.lower(), v) if v else v
             elif k == 'status':
                 normalized['status'] = cls._STATUS_MAP.get(v.lower(), v) if v else v
-            elif k in ('id', 'object_type', 'assigned_object'):
-                continue  # skip non-importable columns
+            elif k in cls._SKIP_HEADERS:
+                continue
             else:
                 normalized[k] = v
 
@@ -470,28 +512,44 @@ class MapMarkerImportForm(NetBoxModelImportForm):
 
     _TILE_TYPE_MAP = {str(v).lower(): k for k, v, *_ in FloorPlanTileTypeChoices.CHOICES}
     _STATUS_MAP = {str(v).lower(): k for k, v, *_ in FloorPlanTileStatusChoices.CHOICES}
+    _SKIP_HEADERS = {'id'}
 
-    def __init__(self, data=None, *args, **kwargs):
+    def __init__(self, data=None, *args, headers=None, **kwargs):
+        if headers:
+            headers = self._normalize_headers(headers)
         if data and isinstance(data, dict):
             data = self._normalize_row(data)
-        super().__init__(data=data, *args, **kwargs)
+        super().__init__(data=data, *args, headers=headers, **kwargs)
+
+    @classmethod
+    def _normalize_headers(cls, headers):
+        """Remap export-format CSV headers to import field names."""
+        new_headers = {}
+        for header, to_field in headers.items():
+            k = header.strip().lower().replace(' ', '_')
+            if k in cls._SKIP_HEADERS:
+                continue
+            if k == 'type':
+                new_headers['marker_type'] = to_field
+                continue
+            new_headers[k] = to_field
+        return new_headers
 
     @classmethod
     def _normalize_row(cls, row):
-        """Accept both export-format and import-format CSV headers/values."""
+        """Accept both export-format and import-format CSV values."""
         normalized = {}
         for key, value in row.items():
             k = key.strip().lower().replace(' ', '_')
             v = str(value).strip() if value is not None else ''
 
             if k == 'type':
-                # Export header is "Type", import field is "marker_type"
                 normalized['marker_type'] = cls._TILE_TYPE_MAP.get(v.lower(), v) if v else v
             elif k == 'marker_type':
                 normalized['marker_type'] = cls._TILE_TYPE_MAP.get(v.lower(), v) if v else v
             elif k == 'status':
                 normalized['status'] = cls._STATUS_MAP.get(v.lower(), v) if v else v
-            elif k == 'id':
+            elif k in cls._SKIP_HEADERS:
                 continue
             else:
                 normalized[k] = v
