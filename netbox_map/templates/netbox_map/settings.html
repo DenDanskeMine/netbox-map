@@ -57,6 +57,28 @@
     </div>
   </div>
 
+  {# ── Popover Fields (Hover Tooltip) ── #}
+  <div class="row mb-4">
+    <div class="col-md-12">
+      <div class="card h-100">
+        <h5 class="card-header">
+          <span class="mdi mdi-tooltip-text"></span> Popover Fields (Hover Tooltip)
+        </h5>
+        <div class="card-body checkbox-list">
+          <p class="text-muted small mb-2">Choose which fields appear when hovering over a tile on the floor plan.</p>
+          {% for field in form %}
+            {% if field.name == 'popover_fields' %}
+              {{ field }}
+              {% for error in field.errors %}
+              <div class="text-danger">{{ error }}</div>
+              {% endfor %}
+            {% endif %}
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
+
   {# ── Other Object Fields ── #}
   <div class="row mb-4">
     <div class="col-md-4">

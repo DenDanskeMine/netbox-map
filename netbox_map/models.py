@@ -440,6 +440,11 @@ class MapSettings(models.Model):
         verbose_name=_('Power Feed Fields'),
         help_text=_('Standard fields to show for power feeds'),
     )
+    popover_fields = models.JSONField(
+        default=list,
+        verbose_name=_('Popover Fields'),
+        help_text=_('Fields to display in the hover popover on the floor plan'),
+    )
 
     class Meta:
         verbose_name = _('Map Settings')
@@ -460,5 +465,6 @@ class MapSettings(models.Model):
             ]
             obj.powerpanel_fields = ['site', 'location']
             obj.powerfeed_fields = ['status', 'type', 'supply', 'voltage', 'amperage']
+            obj.popover_fields = ['label', 'object_info', 'primary_ip', 'utilization', 'position', 'size']
             obj.save()
         return obj

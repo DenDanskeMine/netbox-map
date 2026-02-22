@@ -301,6 +301,8 @@ class FloorPlanVisualizationView(generic.ObjectView):
             site=instance.site
         ).values('id', 'name', 'location__name'))
 
+        settings = MapSettings.load()
+
         return {
             'tile_data_json': json.dumps(tile_data),
             'grid_width': instance.grid_width,
@@ -309,6 +311,7 @@ class FloorPlanVisualizationView(generic.ObjectView):
             'site_floorplans': site_floorplans,
             'edit_mode': request.GET.get('edit', '') == 'true',
             'site_id': instance.site_id,
+            'popover_fields_json': json.dumps(settings.popover_fields),
         }
 
 

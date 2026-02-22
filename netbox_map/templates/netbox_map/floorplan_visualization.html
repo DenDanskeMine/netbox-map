@@ -107,6 +107,7 @@
              data-api-url="{% url 'plugins-api:netbox_map-api:floorplantile-list' %}"
              data-floorplan-id="{{ object.pk }}"
              data-site-id="{{ site_id }}"
+             data-popover-fields='{{ popover_fields_json }}'
              data-detail-base-url="/plugins/map/marker-detail/"
              data-csrf-token="{{ csrf_token }}"
              {% if object.background_image %}

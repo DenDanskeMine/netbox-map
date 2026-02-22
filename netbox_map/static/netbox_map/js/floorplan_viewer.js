@@ -26,6 +26,17 @@
         console.error('Failed to parse tile data:', e);
     }
 
+    // Parse popover field configuration
+    var popoverFields = ['label', 'object_info', 'primary_ip', 'utilization', 'position', 'size'];
+    try {
+        var pf = JSON.parse(container.dataset.popoverFields || '[]');
+        if (Array.isArray(pf) && pf.length > 0) {
+            popoverFields = pf;
+        }
+    } catch (e) {
+        // keep defaults
+    }
+
     // World dimensions (the full grid in pixels)
     const worldWidth = gridWidth * tileSize;
     const worldHeight = gridHeight * tileSize;
@@ -931,18 +942,54 @@
         if (!popoverEl) return;
 
         var lines = [];
-        lines.push('<strong>' + (tile.label || tile.type) + '</strong>');
-        if (tile.object_type && tile.object_name) {
-            lines.push('<span class="popover-dim">' + tile.object_type + ':</span> ' + tile.object_name);
+        for (var fi = 0; fi < popoverFields.length; fi++) {
+            switch (popoverFields[fi]) {
+                case 'label':
+                    lines.push('<strong>' + (tile.label || tile.type) + '</strong>');
+                    break;
+                case 'object_info':
+                    if (tile.object_type && tile.object_name) {
+                        lines.push('<span class="popover-dim">' + tile.object_type + ':</span> ' + tile.object_name);
+                    }
+                    break;
+                case 'primary_ip':
+                    if (tile.primary_ip) {
+                        lines.push('<span class="popover-dim">IP:</span> ' + tile.primary_ip);
+                    }
+                    break;
+                case 'utilization':
+                    if (tile.utilization !== null && tile.utilization !== undefined) {
+                        lines.push('<span class="popover-dim">Util:</span> ' + Math.round(tile.utilization) + '%');
+                    }
+                    break;
+                case 'position':
+                    lines.push('<span class="popover-dim">Pos:</span> ' + tile.x + ', ' + tile.y);
+                    break;
+                case 'size':
+                    lines.push('<span class="popover-dim">Size:</span> ' + tile.w + '&times;' + tile.h);
+                    break;
+                case 'status':
+                    if (tile.status) {
+                        lines.push('<span class="popover-dim">Status:</span> ' + tile.status);
+                    }
+                    break;
+                case 'type':
+                    if (tile.type) {
+                        lines.push('<span class="popover-dim">Type:</span> ' + tile.type);
+                    }
+                    break;
+                case 'orientation':
+                    if (tile.orientation !== undefined && tile.orientation !== null) {
+                        lines.push('<span class="popover-dim">Orientation:</span> ' + tile.orientation + '&deg;');
+                    }
+                    break;
+            }
         }
-        if (tile.primary_ip) {
-            lines.push('<span class="popover-dim">IP:</span> ' + tile.primary_ip);
+
+        // Fallback: always show at least the label
+        if (lines.length === 0) {
+            lines.push('<strong>' + (tile.label || tile.type) + '</strong>');
         }
-        if (tile.utilization !== null && tile.utilization !== undefined) {
-            lines.push('<span class="popover-dim">Util:</span> ' + Math.round(tile.utilization) + '%');
-        }
-        lines.push('<span class="popover-dim">Pos:</span> ' + tile.x + ', ' + tile.y +
-            ' &nbsp; <span class="popover-dim">Size:</span> ' + tile.w + '&times;' + tile.h);
 
         popoverEl.innerHTML = lines.join('<br>');
         popoverEl.style.display = 'block';

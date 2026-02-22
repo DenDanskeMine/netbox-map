@@ -389,6 +389,18 @@ POWERFEED_FIELD_CHOICES = [
     ('description', _('Description')),
 ]
 
+POPOVER_FIELD_CHOICES = [
+    ('label', _('Label')),
+    ('object_info', _('Object Type & Name')),
+    ('primary_ip', _('IP Address')),
+    ('utilization', _('Utilization')),
+    ('position', _('Position')),
+    ('size', _('Size')),
+    ('status', _('Status')),
+    ('type', _('Tile Type')),
+    ('orientation', _('Orientation')),
+]
+
 
 class MapSettingsForm(forms.ModelForm):
     """Form for editing map detail panel settings."""
@@ -417,12 +429,19 @@ class MapSettingsForm(forms.ModelForm):
         required=False,
         label=_('Power Feed Fields'),
     )
+    popover_fields = forms.MultipleChoiceField(
+        choices=POPOVER_FIELD_CHOICES,
+        widget=forms.CheckboxSelectMultiple,
+        required=False,
+        label=_('Popover Fields'),
+    )
 
     class Meta:
         model = MapSettings
         fields = (
             'show_mac', 'show_custom_fields', 'sync_device_gps',
             'device_fields', 'rack_fields', 'powerpanel_fields', 'powerfeed_fields',
+            'popover_fields',
         )
 
 
