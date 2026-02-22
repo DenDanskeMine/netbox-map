@@ -43,13 +43,13 @@
       </div>
     </div>
 
-    {# ── 2. Popover Fields ── #}
+    {# ── 2. Default Popover Fields ── #}
     <div class="accordion-item">
       <h2 class="accordion-header" id="headingPopover">
         <button class="accordion-button" type="button"
                 data-bs-toggle="collapse" data-bs-target="#collapsePopover"
                 aria-expanded="true" aria-controls="collapsePopover">
-          <span class="mdi mdi-tooltip-text me-2"></span> Popover Fields (Hover Tooltip)
+          <span class="mdi mdi-tooltip-text me-2"></span> Default Popover Fields (Fallback)
           <span class="ms-auto me-3 select-all-none" data-target="id_popover_fields">
             <a href="#" class="btn-select-all text-primary small" onclick="return false;">All</a>
             <span class="text-muted small">|</span>
@@ -60,7 +60,7 @@
       <div id="collapsePopover" class="accordion-collapse collapse show"
            aria-labelledby="headingPopover">
         <div class="accordion-body checkbox-list">
-          <p class="text-muted small mb-2">Choose which fields appear when hovering over a tile on the floor plan.</p>
+          <p class="text-muted small mb-2">Fallback popover fields used when a tile type has no per-type configuration.</p>
           {% for field in form %}
             {% if field.name == 'popover_fields' %}
               {{ field }}
@@ -73,7 +73,39 @@
       </div>
     </div>
 
-    {# ── 3. Device Detail Fields ── #}
+    {# ── Per-Tile-Type Popover Fields ── #}
+    {% for tp in tile_popover_types %}
+    <div class="accordion-item">
+      <h2 class="accordion-header" id="headingPopover_{{ tp.key }}">
+        <button class="accordion-button collapsed" type="button"
+                data-bs-toggle="collapse" data-bs-target="#collapsePopover_{{ tp.key }}"
+                aria-expanded="false" aria-controls="collapsePopover_{{ tp.key }}">
+          <span class="mdi {{ tp.icon }} me-2"></span> {{ tp.label }} Popover Fields
+          <span class="ms-auto me-3 select-all-none" data-target="id_{{ tp.field_name }}">
+            <a href="#" class="btn-select-all text-primary small" onclick="return false;">All</a>
+            <span class="text-muted small">|</span>
+            <a href="#" class="btn-select-none text-primary small" onclick="return false;">None</a>
+          </span>
+        </button>
+      </h2>
+      <div id="collapsePopover_{{ tp.key }}" class="accordion-collapse collapse"
+           aria-labelledby="headingPopover_{{ tp.key }}">
+        <div class="accordion-body checkbox-list">
+          <p class="text-muted small mb-2">Popover fields shown when hovering a <strong>{{ tp.label }}</strong> tile.</p>
+          {% for field in form %}
+            {% if field.name == tp.field_name %}
+              {{ field }}
+              {% for error in field.errors %}
+              <div class="text-danger">{{ error }}</div>
+              {% endfor %}
+            {% endif %}
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+
+    {# ── Detail Panel Fields ── #}
     <div class="accordion-item">
       <h2 class="accordion-header" id="headingDevice">
         <button class="accordion-button collapsed" type="button"

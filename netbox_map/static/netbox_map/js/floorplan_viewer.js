@@ -978,6 +978,11 @@
                         lines.push('<span class="popover-dim">IP:</span> ' + tile.primary_ip);
                     }
                     break;
+                case 'mac':
+                    if (tile.mac) {
+                        lines.push('<span class="popover-dim">MAC:</span> ' + tile.mac);
+                    }
+                    break;
                 case 'utilization':
                     if (tile.utilization !== null && tile.utilization !== undefined) {
                         lines.push('<span class="popover-dim">Util:</span> ' + Math.round(tile.utilization) + '%');

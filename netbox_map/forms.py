@@ -393,6 +393,7 @@ POPOVER_FIELD_CHOICES = [
     ('label', _('Label')),
     ('object_info', _('Object Type & Name')),
     ('primary_ip', _('IP Address')),
+    ('mac', _('MAC Address')),
     ('utilization', _('Utilization')),
     ('position', _('Position')),
     ('size', _('Size')),

@@ -198,6 +198,7 @@ class SiteMapView(LoginRequiredMixin, View):
 def _serialize_tile(tile):
     """Serialize a tile for JSON consumption by the JavaScript viewer."""
     primary_ip = None
+    mac_address = None
     if (tile.assigned_object_type and
             tile.assigned_object_type.model == 'device' and
             tile.assigned_object):
@@ -205,8 +206,25 @@ def _serialize_tile(tile):
             ip_obj = tile.assigned_object.primary_ip
             if ip_obj:
                 primary_ip = str(ip_obj.address.ip)
+                # Get MAC from the primary IP's assigned interface
+                if hasattr(ip_obj, 'assigned_object') and ip_obj.assigned_object:
+                    iface = ip_obj.assigned_object
+                    if hasattr(iface, 'mac_address') and iface.mac_address:
+                        mac_address = str(iface.mac_address)
         except Exception:
             pass
+        # Fallback: first interface with a MAC
+        if not mac_address:
+            try:
+                from dcim.models import Interface
+                iface = Interface.objects.filter(
+                    device=tile.assigned_object,
+                    mac_address__isnull=False,
+                ).exclude(mac_address='').first()
+                if iface and iface.mac_address:
+                    mac_address = str(iface.mac_address)
+            except Exception:
+                pass
 
     # Collect custom field values for popover display.
     # Read directly from custom_field_data (JSONField on the model) to avoid
@@ -237,6 +255,7 @@ def _serialize_tile(tile):
         'object_id': tile.assigned_object_id,
         'object_url': tile.assigned_object_url,
         'primary_ip': primary_ip,
+        'mac': mac_address,
         'custom_fields': custom_fields,
         'utilization': round(tile.utilization, 1) if tile.utilization is not None else None,
         'fov_direction': tile.fov_direction,
