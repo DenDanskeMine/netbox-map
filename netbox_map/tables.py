@@ -112,7 +112,9 @@ class FloorPlanTileTable(NetBoxTable):
         fields = (
             'pk', 'id', 'floorplan', 'position', 'x_position', 'y_position',
             'assigned_object_type', 'assigned_object', 'label', 'tile_type', 'status',
-            'width', 'height', 'orientation', 'tags', 'actions',
+            'width', 'height', 'orientation',
+            'fov_direction', 'fov_angle', 'fov_distance',
+            'tags', 'actions',
         )
         default_columns = (
             'pk', 'floorplan', 'position', 'assigned_object_type',
@@ -180,7 +182,9 @@ class MapMarkerTable(NetBoxTable):
         model = MapMarker
         fields = (
             'pk', 'id', 'label', 'marker_type', 'status', 'site',
-            'latitude', 'longitude', 'description', 'tags', 'actions',
+            'latitude', 'longitude',
+            'fov_direction', 'fov_angle', 'fov_distance',
+            'description', 'tags', 'actions',
         )
         default_columns = (
             'pk', 'label', 'marker_type', 'status', 'site', 'latitude', 'longitude',
