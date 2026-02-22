@@ -328,7 +328,6 @@ class FloorPlanTileImportForm(NetBoxModelImportForm):
         fields = (
             'floorplan', 'x_position', 'y_position', 'width', 'height',
             'label', 'tile_type', 'status', 'orientation',
-            'fov_direction', 'fov_angle', 'fov_distance',
         )
 
     # Build reverse maps: display name → key (e.g. "Access Point" → "ap")
@@ -507,7 +506,7 @@ class MapMarkerImportForm(NetBoxModelImportForm):
         model = MapMarker
         fields = (
             'latitude', 'longitude', 'label', 'marker_type', 'status', 'site',
-            'fov_direction', 'fov_angle', 'fov_distance', 'description',
+            'description',
         )
 
     _TILE_TYPE_MAP = {str(v).lower(): k for k, v, *_ in FloorPlanTileTypeChoices.CHOICES}
