@@ -194,6 +194,9 @@
                             object_type: null,
                             object_url: null,
                             utilization: null,
+                            linked_floorplan_id: null,
+                            linked_floorplan_name: null,
+                            linked_floorplan_url: null,
                             fov_direction: newTile.fov_direction || 0,
                             fov_angle: newTile.fov_angle || 90,
                             fov_distance: newTile.fov_distance || 5
@@ -257,9 +260,11 @@
         var deleteBtn = document.getElementById('delete-tile-btn');
         if (deleteBtn) deleteBtn.disabled = true;
 
-        // Hide link panel
+        // Hide link panels
         var linkPanel = document.getElementById('link-object-panel');
         if (linkPanel) linkPanel.classList.add('d-none');
+        var fpLinkPanel = document.getElementById('link-floorplan-panel');
+        if (fpLinkPanel) fpLinkPanel.classList.add('d-none');
     }
 
     // ===== Object Linking =====
@@ -277,14 +282,25 @@
      * Called by the viewer via a custom event or override.
      */
     function onTileSelected(tile) {
-        if (!linkPanel) return;
+        var fpLinkPanel = document.getElementById('link-floorplan-panel');
 
         if (!tile) {
-            linkPanel.classList.add('d-none');
+            if (linkPanel) linkPanel.classList.add('d-none');
+            if (fpLinkPanel) fpLinkPanel.classList.add('d-none');
             return;
         }
 
-        linkPanel.classList.remove('d-none');
+        // Show floorplan link panel only for floorplan_link tiles
+        if (fpLinkPanel) {
+            if (tile.type === 'floorplan_link') {
+                fpLinkPanel.classList.remove('d-none');
+            } else {
+                fpLinkPanel.classList.add('d-none');
+            }
+        }
+
+        // Show object link panel
+        if (linkPanel) linkPanel.classList.remove('d-none');
 
         // Show current linked object
         if (tile.object_type && tile.object_url) {

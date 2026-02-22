@@ -302,6 +302,31 @@
         </div>
 
         {% if edit_mode %}
+        {# Link Floor Plan panel (edit mode, for floorplan_link tiles) #}
+        <div id="link-floorplan-panel" class="d-none">
+          <div class="sidebar-section-title">{% trans "Link Floor Plan" %}</div>
+          <div class="sidebar-link-controls">
+            <select id="link-floorplan-select" class="form-select form-select-sm sidebar-input no-ts">
+              <option value="">-- {% trans "Select Floor Plan" %} --</option>
+              {% for fp in site_floorplans %}
+                {% if fp.id != object.pk %}
+                <option value="{{ fp.id }}">{{ fp.name }}{% if fp.location__name %} ({{ fp.location__name }}){% endif %}</option>
+                {% endif %}
+              {% endfor %}
+            </select>
+            <div class="d-flex gap-1 align-items-center">
+              <button id="link-floorplan-btn" class="btn btn-sm btn-primary" disabled>
+                <i class="mdi mdi-link"></i> {% trans "Link" %}
+              </button>
+              <button id="unlink-floorplan-btn" class="btn btn-sm btn-outline-danger" disabled>
+                <i class="mdi mdi-link-off"></i> {% trans "Unlink" %}
+              </button>
+              <span id="link-floorplan-status" class="small text-muted ms-1"></span>
+            </div>
+            <div id="link-floorplan-current" class="small text-muted"></div>
+          </div>
+        </div>
+
         {# Link Object panel (edit mode only) #}
         <div id="link-object-panel" class="d-none">
           <div class="sidebar-section-title">{% trans "Link Object" %}</div>
@@ -542,6 +567,176 @@
           } else {
             alert('Error unlinking.');
             unlinkBtn.disabled = false;
+          }
+        })
+        .catch(function(err) { alert('Network error: ' + err.message); });
+      });
+    })();
+
+    // Floor Plan linking logic (for floorplan_link tiles)
+    (function() {
+      var container = document.getElementById('floorplan-container');
+      if (!container) return;
+
+      var apiUrl = container.dataset.apiUrl;
+      var csrfToken = container.dataset.csrfToken;
+
+      var fpLinkPanel = document.getElementById('link-floorplan-panel');
+      var fpLinkSelect = document.getElementById('link-floorplan-select');
+      var fpLinkBtn = document.getElementById('link-floorplan-btn');
+      var fpUnlinkBtn = document.getElementById('unlink-floorplan-btn');
+      var fpLinkStatus = document.getElementById('link-floorplan-status');
+      var fpLinkCurrent = document.getElementById('link-floorplan-current');
+
+      if (!fpLinkPanel || !fpLinkSelect) return;
+
+      // Show/hide panel and update state when a tile is selected
+      document.getElementById('floorplan-canvas').addEventListener('click', function() {
+        setTimeout(function() {
+          var viewer = window.floorplanViewer;
+          if (!viewer) return;
+          var tile = viewer.getSelectedTile();
+          if (!tile || tile.type !== 'floorplan_link') {
+            fpLinkPanel.classList.add('d-none');
+            return;
+          }
+          fpLinkPanel.classList.remove('d-none');
+          updateFpLinkState(tile);
+        }, 70);
+      });
+
+      function updateFpLinkState(tile) {
+        if (tile.linked_floorplan_id) {
+          var name = tile.linked_floorplan_name || ('Floor Plan #' + tile.linked_floorplan_id);
+          if (tile.linked_floorplan_url) {
+            fpLinkCurrent.innerHTML = 'Linked to: <a href="' + tile.linked_floorplan_url + '"><strong>' + name + '</strong></a>';
+          } else {
+            fpLinkCurrent.innerHTML = 'Linked to: <strong>' + name + '</strong>';
+          }
+          fpUnlinkBtn.disabled = false;
+          // Pre-select the linked floor plan in the dropdown
+          fpLinkSelect.value = String(tile.linked_floorplan_id);
+        } else {
+          fpLinkCurrent.textContent = 'No floor plan linked.';
+          fpUnlinkBtn.disabled = true;
+          fpLinkSelect.value = '';
+        }
+        fpLinkStatus.textContent = '';
+        fpLinkBtn.disabled = !fpLinkSelect.value;
+      }
+
+      // Enable link button when a floor plan is selected
+      fpLinkSelect.addEventListener('change', function() {
+        fpLinkBtn.disabled = !this.value;
+      });
+
+      // Link button
+      fpLinkBtn.addEventListener('click', function() {
+        var detailPanel = document.getElementById('tile-detail-panel');
+        var tileId = detailPanel ? detailPanel.dataset.selectedTileId : null;
+        if (!tileId) { alert('No tile selected.'); return; }
+
+        var fpId = parseInt(fpLinkSelect.value, 10);
+        if (!fpId) { alert('Select a floor plan.'); return; }
+
+        fpLinkStatus.textContent = 'Linking...';
+        fpLinkBtn.disabled = true;
+
+        fetch(apiUrl + tileId + '/', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+          body: JSON.stringify({ linked_floorplan: fpId })
+        })
+        .then(function(r) {
+          if (r.ok) return r.json();
+          return r.json().then(function(e) { throw new Error(JSON.stringify(e)); });
+        })
+        .then(function(updated) {
+          fpLinkStatus.textContent = 'Linked!';
+          fpLinkStatus.className = 'small text-success ms-1';
+
+          // Update the tile in the viewer
+          var viewer = window.floorplanViewer;
+          if (viewer) {
+            var selectedOpt = fpLinkSelect.options[fpLinkSelect.selectedIndex];
+            var fpName = selectedOpt ? selectedOpt.textContent : '';
+            for (var i = 0; i < viewer.tiles.length; i++) {
+              if (viewer.tiles[i].id === parseInt(tileId)) {
+                viewer.tiles[i].linked_floorplan_id = fpId;
+                viewer.tiles[i].linked_floorplan_name = fpName;
+                viewer.tiles[i].linked_floorplan_url = '/plugins/map/floorplans/' + fpId + '/visualization/';
+                if (!viewer.tiles[i].label) viewer.tiles[i].label = fpName;
+                break;
+              }
+            }
+            viewer.render();
+            viewer.buildSidebar();
+            // Update detail panel
+            var fpLinkEl = document.getElementById('tile-detail-fplink');
+            var fpLinkRow = document.getElementById('tile-detail-fplink-row');
+            if (fpLinkEl && fpLinkRow) {
+              fpLinkRow.style.display = '';
+              fpLinkEl.innerHTML = '<a href="/plugins/map/floorplans/' + fpId + '/visualization/">' + fpName + '</a>';
+            }
+          }
+
+          fpUnlinkBtn.disabled = false;
+          var name = fpName || ('Floor Plan #' + fpId);
+          fpLinkCurrent.innerHTML = 'Linked to: <a href="/plugins/map/floorplans/' + fpId + '/visualization/"><strong>' + name + '</strong></a>';
+
+          setTimeout(function() { fpLinkStatus.textContent = ''; fpLinkStatus.className = 'small text-muted ms-1'; }, 2000);
+        })
+        .catch(function(err) {
+          fpLinkStatus.textContent = 'Error!';
+          fpLinkStatus.className = 'small text-danger ms-1';
+          alert('Error: ' + err.message);
+          fpLinkBtn.disabled = false;
+        });
+      });
+
+      // Unlink button
+      fpUnlinkBtn.addEventListener('click', function() {
+        var detailPanel = document.getElementById('tile-detail-panel');
+        var tileId = detailPanel ? detailPanel.dataset.selectedTileId : null;
+        if (!tileId) return;
+
+        fpLinkStatus.textContent = 'Unlinking...';
+        fpUnlinkBtn.disabled = true;
+
+        fetch(apiUrl + tileId + '/', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+          body: JSON.stringify({ linked_floorplan: null })
+        })
+        .then(function(r) {
+          if (r.ok) {
+            fpLinkStatus.textContent = 'Unlinked!';
+            fpLinkStatus.className = 'small text-success ms-1';
+
+            var viewer = window.floorplanViewer;
+            if (viewer) {
+              for (var i = 0; i < viewer.tiles.length; i++) {
+                if (viewer.tiles[i].id === parseInt(tileId)) {
+                  viewer.tiles[i].linked_floorplan_id = null;
+                  viewer.tiles[i].linked_floorplan_name = null;
+                  viewer.tiles[i].linked_floorplan_url = null;
+                  break;
+                }
+              }
+              viewer.render();
+              viewer.buildSidebar();
+              // Update detail panel
+              var fpLinkRow = document.getElementById('tile-detail-fplink-row');
+              if (fpLinkRow) fpLinkRow.style.display = 'none';
+            }
+
+            fpLinkCurrent.textContent = 'No floor plan linked.';
+            fpLinkSelect.value = '';
+            fpLinkBtn.disabled = true;
+            setTimeout(function() { fpLinkStatus.textContent = ''; fpLinkStatus.className = 'small text-muted ms-1'; }, 2000);
+          } else {
+            alert('Error unlinking floor plan.');
+            fpUnlinkBtn.disabled = false;
           }
         })
         .catch(function(err) { alert('Network error: ' + err.message); });
