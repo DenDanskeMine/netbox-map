@@ -31,6 +31,7 @@ class FloorPlanSerializer(NetBoxModelSerializer):
 
 class FloorPlanTileSerializer(NetBoxModelSerializer):
     floorplan = FloorPlanSerializer(nested=True)
+    linked_floorplan = FloorPlanSerializer(nested=True, required=False, allow_null=True, default=None)
     assigned_object_type = ContentTypeField(
         queryset=ContentType.objects.filter(
             app_label='dcim',
@@ -49,6 +50,7 @@ class FloorPlanTileSerializer(NetBoxModelSerializer):
             'x_position', 'y_position', 'width', 'height',
             'assigned_object_type', 'assigned_object_id', 'assigned_object',
             'label', 'tile_type', 'status', 'orientation',
+            'linked_floorplan',
             'fov_direction', 'fov_angle', 'fov_distance',
             'latitude', 'longitude',
             'utilization',

@@ -275,6 +275,12 @@ def _serialize_tile(tile):
         'fov_direction': tile.fov_direction,
         'fov_angle': tile.fov_angle,
         'fov_distance': tile.fov_distance,
+        'linked_floorplan_id': tile.linked_floorplan_id,
+        'linked_floorplan_name': str(tile.linked_floorplan) if tile.linked_floorplan else None,
+        'linked_floorplan_url': (
+            f'/plugins/map/floorplans/{tile.linked_floorplan_id}/visualization/'
+            if tile.linked_floorplan_id else None
+        ),
     }
 
 
@@ -296,7 +302,7 @@ class FloorPlanView(generic.ObjectView):
     queryset = FloorPlan.objects.all()
 
     def get_extra_context(self, request, instance):
-        tiles = instance.tiles.select_related('assigned_object_type').all()
+        tiles = instance.tiles.select_related('assigned_object_type', 'linked_floorplan').all()
         tile_data = [_serialize_tile(tile) for tile in tiles]
         return {
             'tile_data_json': json.dumps(tile_data),
@@ -346,7 +352,7 @@ class FloorPlanVisualizationView(generic.ObjectView):
     )
 
     def get_extra_context(self, request, instance):
-        tiles = instance.tiles.select_related('assigned_object_type').all()
+        tiles = instance.tiles.select_related('assigned_object_type', 'linked_floorplan').all()
         tile_data = [_serialize_tile(tile) for tile in tiles]
 
         site_floorplans = list(FloorPlan.objects.filter(
@@ -609,6 +615,7 @@ class MapSettingsView(LoginRequiredMixin, PermissionRequiredMixin, View):
         {'key': 'ap', 'label': 'Access Point', 'icon': 'mdi-wifi', 'field_name': 'ap_popover_fields'},
         {'key': 'camera', 'label': 'Camera', 'icon': 'mdi-cctv', 'field_name': 'camera_popover_fields'},
         {'key': 'printer', 'label': 'Printer', 'icon': 'mdi-printer', 'field_name': 'printer_popover_fields'},
+        {'key': 'floorplan_link', 'label': 'Floor Plan Link', 'icon': 'mdi-floor-plan', 'field_name': 'floorplan_link_popover_fields'},
     ]
 
     def _get_context(self, form):

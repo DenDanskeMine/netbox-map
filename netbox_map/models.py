@@ -160,6 +160,17 @@ class FloorPlanTile(NetBoxModel):
         help_text=_('Rotation in degrees (0, 90, 180, 270)')
     )
 
+    # Floor plan link (for floorplan_link tile type)
+    linked_floorplan = models.ForeignKey(
+        to='netbox_map.FloorPlan',
+        on_delete=models.SET_NULL,
+        related_name='linked_tiles',
+        blank=True,
+        null=True,
+        verbose_name=_('linked floor plan'),
+        help_text=_('Floor plan to navigate to when this tile is clicked')
+    )
+
     # Camera FOV fields
     fov_direction = models.PositiveSmallIntegerField(
         verbose_name=_('FOV direction'),
@@ -476,7 +487,7 @@ class MapSettings(models.Model):
                 t: list(default_popover) for t in [
                     'rack', 'aisle', 'wall', 'column', 'door',
                     'cooling', 'power', 'empty', 'reserved',
-                    'ap', 'camera', 'printer',
+                    'ap', 'camera', 'printer', 'floorplan_link',
                 ]
             }
             obj.save()

@@ -52,7 +52,7 @@
     let bgImg = null;
 
     // ===== Visible Types (toggle filtering) =====
-    var ALL_TYPES = ['rack', 'aisle', 'wall', 'column', 'door', 'cooling', 'power', 'empty', 'reserved', 'ap', 'camera', 'printer'];
+    var ALL_TYPES = ['rack', 'aisle', 'wall', 'column', 'door', 'cooling', 'power', 'empty', 'reserved', 'ap', 'camera', 'printer', 'floorplan_link'];
     var visibleTypes = new Set(ALL_TYPES);
     var showFOV = true;
 
@@ -136,17 +136,18 @@
      */
     function getTileTypeColor(tileType) {
         var colors = {
-            'aisle':    '#3a3a50',
-            'wall':     '#5c5c6e',
-            'column':   '#6e6e80',
-            'door':     '#1a8a7a',
-            'cooling':  '#1890b0',
-            'power':    '#c89a20',
-            'empty':    '#2a2a3e',
-            'reserved': '#b06820',
-            'ap':       '#7b42c8',
-            'camera':   '#c42020',
-            'printer':  '#e67e22'
+            'aisle':          '#3a3a50',
+            'wall':           '#5c5c6e',
+            'column':         '#6e6e80',
+            'door':           '#1a8a7a',
+            'cooling':        '#1890b0',
+            'power':          '#c89a20',
+            'empty':          '#2a2a3e',
+            'reserved':       '#b06820',
+            'ap':             '#7b42c8',
+            'camera':         '#c42020',
+            'printer':        '#e67e22',
+            'floorplan_link': '#4a50c8'
         };
         return colors[tileType] || '#6b6b80';
     }
@@ -314,6 +315,37 @@
             ctx.lineTo(arrowX - Math.cos(dirRad - headAngle) * headLen, arrowY - Math.sin(dirRad - headAngle) * headLen);
             ctx.moveTo(arrowX, arrowY);
             ctx.lineTo(arrowX - Math.cos(dirRad + headAngle) * headLen, arrowY - Math.sin(dirRad + headAngle) * headLen);
+            ctx.stroke();
+            ctx.restore();
+        }
+
+        // Draw portal icon on floorplan_link tiles
+        if (tile.type === 'floorplan_link') {
+            var iconSize = Math.min(w, h) * 0.3;
+            ctx.save();
+            ctx.strokeStyle = textColor;
+            ctx.lineWidth = 2 / zoom;
+            ctx.globalAlpha = 0.8;
+            // Draw a door frame
+            var doorW = iconSize * 0.6;
+            var doorH = iconSize * 0.8;
+            var doorX = centerX - doorW / 2;
+            var doorY = centerY - doorH / 2;
+            ctx.strokeRect(doorX, doorY, doorW, doorH);
+            // Draw an arrow pointing right (through the door)
+            var arwStartX = centerX - iconSize * 0.15;
+            var arwEndX = centerX + iconSize * 0.4;
+            var arwY = centerY;
+            ctx.beginPath();
+            ctx.moveTo(arwStartX, arwY);
+            ctx.lineTo(arwEndX, arwY);
+            ctx.stroke();
+            var arwHeadLen = iconSize * 0.2;
+            ctx.beginPath();
+            ctx.moveTo(arwEndX, arwY);
+            ctx.lineTo(arwEndX - arwHeadLen, arwY - arwHeadLen * 0.6);
+            ctx.moveTo(arwEndX, arwY);
+            ctx.lineTo(arwEndX - arwHeadLen, arwY + arwHeadLen * 0.6);
             ctx.stroke();
             ctx.restore();
         }
@@ -510,6 +542,20 @@
                         (tile.object_name || tile.object_type || 'Object') + '</a>';
                 } else {
                     objectLinkEl.textContent = '-';
+                }
+            }
+
+            // Show linked floor plan info
+            var fpLinkRow = document.getElementById('tile-detail-fplink-row');
+            var fpLinkEl = document.getElementById('tile-detail-fplink');
+            if (fpLinkRow && fpLinkEl) {
+                if (tile.linked_floorplan_url && tile.linked_floorplan_name) {
+                    fpLinkRow.style.display = '';
+                    fpLinkEl.innerHTML = '<a href="' + tile.linked_floorplan_url + '">' +
+                        tile.linked_floorplan_name + '</a>';
+                } else {
+                    fpLinkRow.style.display = 'none';
+                    fpLinkEl.textContent = '-';
                 }
             }
         }
@@ -933,6 +979,13 @@
         var world = screenToWorld(pos.x, pos.y);
 
         selectedTile = findTileAt(world.x, world.y);
+
+        // Navigate to linked floor plan when clicking a floorplan_link tile (view mode only)
+        if (selectedTile && selectedTile.type === 'floorplan_link' && selectedTile.linked_floorplan_url && !editMode) {
+            window.location.href = selectedTile.linked_floorplan_url;
+            return;
+        }
+
         render();
         updateDetailPanel(selectedTile);
         updateRackElevation(selectedTile);
@@ -1340,7 +1393,8 @@
         var typeNames = {
             'rack': 'Rack', 'ap': 'AP', 'cooling': 'Cooling', 'power': 'Power',
             'aisle': 'Aisle', 'wall': 'Wall', 'door': 'Door', 'column': 'Column',
-            'empty': 'Empty', 'reserved': 'Reserved', 'camera': 'Camera', 'printer': 'Printer'
+            'empty': 'Empty', 'reserved': 'Reserved', 'camera': 'Camera', 'printer': 'Printer',
+            'floorplan_link': 'Floor Plan Link'
         };
         for (var ti = 0; ti < ALL_TYPES.length; ti++) {
             if (visibleTypes.has(ALL_TYPES[ti])) {
@@ -1443,7 +1497,8 @@
     var TYPE_COLORS = {
         'rack': '#6b6b80', 'aisle': '#3a3a50', 'wall': '#5c5c6e', 'column': '#6e6e80',
         'door': '#1a8a7a', 'cooling': '#1890b0', 'power': '#c89a20', 'empty': '#2a2a3e',
-        'reserved': '#b06820', 'ap': '#7b42c8', 'camera': '#c42020', 'printer': '#e67e22'
+        'reserved': '#b06820', 'ap': '#7b42c8', 'camera': '#c42020', 'printer': '#e67e22',
+        'floorplan_link': '#4a50c8'
     };
 
     // ===== Rack Device Expansion =====

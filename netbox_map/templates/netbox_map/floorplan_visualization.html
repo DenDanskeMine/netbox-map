@@ -66,6 +66,7 @@
       <option value="ap">{% trans "Access Point" %}</option>
       <option value="camera">{% trans "Camera" %}</option>
       <option value="printer">{% trans "Printer" %}</option>
+      <option value="floorplan_link">{% trans "Floor Plan Link" %}</option>
     </select>
     <input type="text" id="tile-label-input" class="form-control form-control-sm"
            placeholder="{% trans 'Label' %}" style="width: 150px;">
@@ -158,6 +159,7 @@
           <button class="type-toggle active" data-type="reserved"><span class="toggle-dot" style="background:#b06820"></span>{% trans "Reserved" %}</button>
           <button class="type-toggle active" data-type="camera"><span class="toggle-dot" style="background:#c42020"></span>{% trans "Camera" %}</button>
           <button class="type-toggle active" data-type="printer"><span class="toggle-dot" style="background:#e67e22"></span>{% trans "Printer" %}</button>
+          <button class="type-toggle active" data-type="floorplan_link"><span class="toggle-dot" style="background:#4a50c8"></span>{% trans "FP Link" %}</button>
           <button class="type-toggle active" id="fov-toggle"><span class="toggle-dot" style="background:#ff4444; opacity:0.5"></span>{% trans "FOV" %}</button>
         </div>
         <div class="sidebar-filter-row">
@@ -244,6 +246,10 @@
             <div class="detail-row">
               <span class="detail-label">{% trans "Linked Object" %}</span>
               <span class="detail-value" id="tile-detail-object-link">-</span>
+            </div>
+            <div class="detail-row" id="tile-detail-fplink-row" style="display:none">
+              <span class="detail-label">{% trans "Linked Floor Plan" %}</span>
+              <span class="detail-value" id="tile-detail-fplink">-</span>
             </div>
           </div>
 
