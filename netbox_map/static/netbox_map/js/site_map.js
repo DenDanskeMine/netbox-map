@@ -589,8 +589,13 @@
         createMapMarker(m);
     });
 
-    /* ── Fit bounds ───────────────────────────────────────────────── */
-    if (hasBounds && bounds.isValid()) {
+    /* ── Focus from ?q=lat,lng (NetBox Maps URL) or fit bounds ──── */
+    var focusLat = parseFloat(container.dataset.focusLat);
+    var focusLng = parseFloat(container.dataset.focusLng);
+
+    if (!isNaN(focusLat) && !isNaN(focusLng)) {
+        map.setView([focusLat, focusLng], 16);
+    } else if (hasBounds && bounds.isValid()) {
         var allPoints = [];
         placedSites.forEach(function (s) { allPoints.push(s); });
         locations.forEach(function (l) { allPoints.push(l); });

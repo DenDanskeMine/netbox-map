@@ -91,7 +91,8 @@
        data-loc-coords-api-url="{% url 'plugins-api:netbox_map-api:locationcoordinates-list' %}"
        data-tile-api-url="{% url 'plugins-api:netbox_map-api:floorplantile-list' %}"
        data-marker-api-url="{% url 'plugins-api:netbox_map-api:mapmarker-list' %}"
-       data-detail-base-url="/plugins/map/marker-detail/">
+       data-detail-base-url="/plugins/map/marker-detail/"
+       {% if focus_lat %}data-focus-lat="{{ focus_lat }}" data-focus-lng="{{ focus_lng }}"{% endif %}>
   </div>
 
   <div class="site-map-sidebar" id="site-map-sidebar">

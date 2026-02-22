@@ -183,6 +183,18 @@ class SiteMapView(LoginRequiredMixin, View):
 
         can_edit = request.user.has_perm('dcim.change_site')
 
+        # Support ?q=lat,lng from NetBox's Maps URL setting
+        focus_lat = focus_lng = None
+        q = request.GET.get('q', '').strip()
+        if q:
+            parts = q.split(',')
+            if len(parts) == 2:
+                try:
+                    focus_lat = float(parts[0].strip())
+                    focus_lng = float(parts[1].strip())
+                except (ValueError, IndexError):
+                    pass
+
         return render(request, 'netbox_map/site_map.html', {
             'placed_sites_json': json.dumps(placed_sites),
             'unplaced_sites_json': json.dumps(unplaced_sites),
@@ -192,6 +204,8 @@ class SiteMapView(LoginRequiredMixin, View):
             'unplaced_tiles_json': json.dumps(unplaced_tiles),
             'markers_json': json.dumps(markers_data),
             'can_edit': can_edit,
+            'focus_lat': focus_lat,
+            'focus_lng': focus_lng,
         })
 
 
