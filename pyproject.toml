@@ -7,7 +7,7 @@ name = "netbox-map"
 version = "0.1.0"
 description = "Interactive floor plan visualization for NetBox sites"
 readme = "README.md"
-license = {text = "Apache-2.0"}
+license = "Apache-2.0"
 requires-python = ">=3.12"
 authors = [
     { name = "Christian Rose" },
