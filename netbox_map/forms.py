@@ -117,6 +117,36 @@ class FloorPlanImportForm(NetBoxModelImportForm):
             'tile_size', 'description',
         )
 
+    def __init__(self, data=None, *args, **kwargs):
+        if data and isinstance(data, dict):
+            data = self._normalize_row(data)
+        super().__init__(data=data, *args, **kwargs)
+
+    @staticmethod
+    def _normalize_row(row):
+        """Accept both export-format and import-format CSV headers/values."""
+        import re
+        normalized = {}
+        for key, value in row.items():
+            k = key.strip().lower().replace(' ', '_')
+            v = str(value).strip() if value is not None else ''
+
+            if k == 'grid_size':
+                m = re.match(r'(\d+)\s*x\s*(\d+)', v)
+                if m:
+                    normalized['grid_width'] = m.group(1)
+                    normalized['grid_height'] = m.group(2)
+            elif k in ('tiles', 'id', '', 'floorplan'):
+                continue  # skip computed / non-importable columns
+            else:
+                normalized[k] = v
+
+        # Default tile_size when importing from old export (which lacks it)
+        if 'tile_size' not in normalized:
+            normalized['tile_size'] = '60'
+
+        return normalized
+
 
 #
 # FloorPlanTile forms
@@ -265,11 +295,11 @@ class FloorPlanTileImportForm(NetBoxModelImportForm):
     )
     tile_type = CSVChoiceField(
         choices=FloorPlanTileTypeChoices,
-        help_text=_('Tile type'),
+        help_text=_('Tile type (key or display name, e.g. "ap" or "Access Point")'),
     )
     status = CSVChoiceField(
         choices=FloorPlanTileStatusChoices,
-        help_text=_('Status'),
+        help_text=_('Status (key or display name, e.g. "active" or "Active")'),
     )
 
     class Meta:
@@ -279,6 +309,47 @@ class FloorPlanTileImportForm(NetBoxModelImportForm):
             'label', 'tile_type', 'status', 'orientation',
             'fov_direction', 'fov_angle', 'fov_distance',
         )
+
+    # Build reverse maps: display name → key (e.g. "Access Point" → "ap")
+    _TILE_TYPE_MAP = {str(v).lower(): k for k, v, *_ in FloorPlanTileTypeChoices.CHOICES}
+    _STATUS_MAP = {str(v).lower(): k for k, v, *_ in FloorPlanTileStatusChoices.CHOICES}
+
+    def __init__(self, data=None, *args, **kwargs):
+        if data and isinstance(data, dict):
+            data = self._normalize_row(data)
+        super().__init__(data=data, *args, **kwargs)
+
+    @classmethod
+    def _normalize_row(cls, row):
+        """Accept both export-format and import-format CSV headers/values."""
+        import re
+        normalized = {}
+        for key, value in row.items():
+            k = key.strip().lower().replace(' ', '_')
+            v = str(value).strip() if value is not None else ''
+
+            if k == 'floor_plan':
+                # Export gives "1. Floor (Test)" — strip the "(Site)" suffix
+                normalized['floorplan'] = re.sub(r'\s*\([^)]+\)\s*$', '', v)
+            elif k == 'floorplan':
+                normalized['floorplan'] = v
+            elif k == 'position':
+                # Export gives "(31, 18)" — split into x_position / y_position
+                m = re.match(r'\((\d+),\s*(\d+)\)', v)
+                if m:
+                    normalized['x_position'] = m.group(1)
+                    normalized['y_position'] = m.group(2)
+            elif k == 'tile_type':
+                # Accept display name ("Access Point") or key ("ap")
+                normalized['tile_type'] = cls._TILE_TYPE_MAP.get(v.lower(), v) if v else v
+            elif k == 'status':
+                normalized['status'] = cls._STATUS_MAP.get(v.lower(), v) if v else v
+            elif k in ('id', 'object_type', 'assigned_object'):
+                continue  # skip non-importable columns
+            else:
+                normalized[k] = v
+
+        return normalized
 
 
 #
@@ -383,11 +454,11 @@ class MapMarkerImportForm(NetBoxModelImportForm):
     )
     marker_type = CSVChoiceField(
         choices=FloorPlanTileTypeChoices,
-        help_text=_('Marker type'),
+        help_text=_('Marker type (key or display name, e.g. "camera" or "Camera")'),
     )
     status = CSVChoiceField(
         choices=FloorPlanTileStatusChoices,
-        help_text=_('Status'),
+        help_text=_('Status (key or display name, e.g. "active" or "Active")'),
     )
 
     class Meta:
@@ -396,6 +467,36 @@ class MapMarkerImportForm(NetBoxModelImportForm):
             'latitude', 'longitude', 'label', 'marker_type', 'status', 'site',
             'fov_direction', 'fov_angle', 'fov_distance', 'description',
         )
+
+    _TILE_TYPE_MAP = {str(v).lower(): k for k, v, *_ in FloorPlanTileTypeChoices.CHOICES}
+    _STATUS_MAP = {str(v).lower(): k for k, v, *_ in FloorPlanTileStatusChoices.CHOICES}
+
+    def __init__(self, data=None, *args, **kwargs):
+        if data and isinstance(data, dict):
+            data = self._normalize_row(data)
+        super().__init__(data=data, *args, **kwargs)
+
+    @classmethod
+    def _normalize_row(cls, row):
+        """Accept both export-format and import-format CSV headers/values."""
+        normalized = {}
+        for key, value in row.items():
+            k = key.strip().lower().replace(' ', '_')
+            v = str(value).strip() if value is not None else ''
+
+            if k == 'type':
+                # Export header is "Type", import field is "marker_type"
+                normalized['marker_type'] = cls._TILE_TYPE_MAP.get(v.lower(), v) if v else v
+            elif k == 'marker_type':
+                normalized['marker_type'] = cls._TILE_TYPE_MAP.get(v.lower(), v) if v else v
+            elif k == 'status':
+                normalized['status'] = cls._STATUS_MAP.get(v.lower(), v) if v else v
+            elif k == 'id':
+                continue
+            else:
+                normalized[k] = v
+
+        return normalized
 
 
 #

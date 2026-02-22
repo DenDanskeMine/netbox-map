@@ -23,6 +23,21 @@ class FloorPlanTable(NetBoxTable):
         accessor='grid_width',
         orderable=False
     )
+    grid_width = tables.Column(
+        verbose_name=_('grid_width'),
+        accessor='grid_width',
+        visible=False,
+    )
+    grid_height = tables.Column(
+        verbose_name=_('grid_height'),
+        accessor='grid_height',
+        visible=False,
+    )
+    tile_size = tables.Column(
+        verbose_name=_('tile_size'),
+        accessor='tile_size',
+        visible=False,
+    )
     tile_count = tables.Column(
         verbose_name=_('Tiles'),
         accessor='tile_count',
@@ -40,6 +55,7 @@ class FloorPlanTable(NetBoxTable):
         model = FloorPlan
         fields = (
             'pk', 'id', 'name', 'site', 'location', 'grid_size',
+            'grid_width', 'grid_height', 'tile_size',
             'tile_count', 'description', 'floorplan_link', 'tags', 'actions',
         )
         default_columns = (
@@ -59,6 +75,16 @@ class FloorPlanTileTable(NetBoxTable):
         verbose_name=_('Position'),
         accessor='x_position',
         orderable=False
+    )
+    x_position = tables.Column(
+        verbose_name=_('x_position'),
+        accessor='x_position',
+        visible=False,
+    )
+    y_position = tables.Column(
+        verbose_name=_('y_position'),
+        accessor='y_position',
+        visible=False,
     )
     assigned_object_type = tables.Column(
         verbose_name=_('Object Type'),
@@ -84,8 +110,8 @@ class FloorPlanTileTable(NetBoxTable):
     class Meta(NetBoxTable.Meta):
         model = FloorPlanTile
         fields = (
-            'pk', 'id', 'floorplan', 'position', 'assigned_object_type',
-            'assigned_object', 'label', 'tile_type', 'status',
+            'pk', 'id', 'floorplan', 'position', 'x_position', 'y_position',
+            'assigned_object_type', 'assigned_object', 'label', 'tile_type', 'status',
             'width', 'height', 'orientation', 'tags', 'actions',
         )
         default_columns = (
@@ -105,6 +131,26 @@ class FloorPlanTileTable(NetBoxTable):
         if value:
             return str(value)
         return '-'
+
+    # value_* methods control CSV export output (raw importable values)
+    def value_floorplan(self, value, record):
+        return record.floorplan.name
+
+    def value_tile_type(self, value, record):
+        return record.tile_type
+
+    def value_status(self, value, record):
+        return record.status
+
+    def value_assigned_object_type(self, value, record):
+        if record.assigned_object_type:
+            return record.assigned_object_type.model
+        return ''
+
+    def value_assigned_object(self, value, record):
+        if record.assigned_object:
+            return str(record.assigned_object)
+        return ''
 
 
 class MapMarkerTable(NetBoxTable):
@@ -139,3 +185,10 @@ class MapMarkerTable(NetBoxTable):
         default_columns = (
             'pk', 'label', 'marker_type', 'status', 'site', 'latitude', 'longitude',
         )
+
+    # value_* methods control CSV export output (raw importable values)
+    def value_marker_type(self, value, record):
+        return record.marker_type
+
+    def value_status(self, value, record):
+        return record.status
