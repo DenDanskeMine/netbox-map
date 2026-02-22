@@ -7,7 +7,7 @@
 
 A comprehensive mapping and floor plan visualization plugin for NetBox. Build interactive data center floor plans, place assets on a global geographic map, visualize rack utilization, explore devices nested inside racks, and configure everything from a web-based settings page — no restart required.
 
-Check my other Plugin: [NetBox Ping](https://github.com/DenDanskeMine/netbox-ping)
+Check my other Plugin: [NetBox Ping](https://github.com/DenDanskeMine/netbox-ping) | [Website](https://www.danbyte.net/)
 
 ---
 
