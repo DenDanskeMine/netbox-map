@@ -319,36 +319,6 @@
             ctx.restore();
         }
 
-        // Draw portal icon on floorplan_link tiles
-        if (tile.type === 'floorplan_link') {
-            var iconSize = Math.min(w, h) * 0.3;
-            ctx.save();
-            ctx.strokeStyle = textColor;
-            ctx.lineWidth = 2 / zoom;
-            ctx.globalAlpha = 0.8;
-            // Draw a door frame
-            var doorW = iconSize * 0.6;
-            var doorH = iconSize * 0.8;
-            var doorX = centerX - doorW / 2;
-            var doorY = centerY - doorH / 2;
-            ctx.strokeRect(doorX, doorY, doorW, doorH);
-            // Draw an arrow pointing right (through the door)
-            var arwStartX = centerX - iconSize * 0.15;
-            var arwEndX = centerX + iconSize * 0.4;
-            var arwY = centerY;
-            ctx.beginPath();
-            ctx.moveTo(arwStartX, arwY);
-            ctx.lineTo(arwEndX, arwY);
-            ctx.stroke();
-            var arwHeadLen = iconSize * 0.2;
-            ctx.beginPath();
-            ctx.moveTo(arwEndX, arwY);
-            ctx.lineTo(arwEndX - arwHeadLen, arwY - arwHeadLen * 0.6);
-            ctx.moveTo(arwEndX, arwY);
-            ctx.lineTo(arwEndX - arwHeadLen, arwY + arwHeadLen * 0.6);
-            ctx.stroke();
-            ctx.restore();
-        }
     }
 
     /**
