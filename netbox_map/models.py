@@ -445,6 +445,11 @@ class MapSettings(models.Model):
         verbose_name=_('Popover Fields'),
         help_text=_('Fields to display in the hover popover on the floor plan'),
     )
+    tile_popover_config = models.JSONField(
+        default=dict,
+        verbose_name=_('Tile Popover Configuration'),
+        help_text=_('Per-tile-type popover field configuration'),
+    )
 
     class Meta:
         verbose_name = _('Map Settings')
@@ -466,5 +471,13 @@ class MapSettings(models.Model):
             obj.powerpanel_fields = ['site', 'location']
             obj.powerfeed_fields = ['status', 'type', 'supply', 'voltage', 'amperage']
             obj.popover_fields = ['label', 'object_info', 'primary_ip', 'utilization', 'position', 'size']
+            default_popover = list(obj.popover_fields)
+            obj.tile_popover_config = {
+                t: list(default_popover) for t in [
+                    'rack', 'aisle', 'wall', 'column', 'door',
+                    'cooling', 'power', 'empty', 'reserved',
+                    'ap', 'camera', 'printer',
+                ]
+            }
             obj.save()
         return obj

@@ -26,15 +26,22 @@
         console.error('Failed to parse tile data:', e);
     }
 
-    // Parse popover field configuration
-    var popoverFields = ['label', 'object_info', 'primary_ip', 'utilization', 'position', 'size'];
+    // Parse popover field configuration (supports dict per tile type or flat array for backward compat)
+    var defaultPopoverFields = ['label', 'object_info', 'primary_ip', 'utilization', 'position', 'size'];
+    var popoverConfig = {};
     try {
-        var pf = JSON.parse(container.dataset.popoverFields || '[]');
-        if (Array.isArray(pf) && pf.length > 0) {
-            popoverFields = pf;
+        var pf = JSON.parse(container.dataset.popoverFields || '{}');
+        if (Array.isArray(pf)) {
+            // Backward compat: flat array = default config for all types
+            popoverConfig = {'default': pf.length > 0 ? pf : defaultPopoverFields};
+        } else if (typeof pf === 'object' && pf !== null) {
+            popoverConfig = pf;
         }
     } catch (e) {
         // keep defaults
+    }
+    if (!popoverConfig['default']) {
+        popoverConfig['default'] = defaultPopoverFields;
     }
 
     // World dimensions (the full grid in pixels)
@@ -941,9 +948,13 @@
     function showPopover(tile, mouseX, mouseY) {
         if (!popoverEl) return;
 
+        // Resolve the field list for this tile type
+        var typeKey = tile.type || 'default';
+        var activeFields = popoverConfig[typeKey] || popoverConfig['default'];
+
         var lines = [];
-        for (var fi = 0; fi < popoverFields.length; fi++) {
-            var fieldKey = popoverFields[fi];
+        for (var fi = 0; fi < activeFields.length; fi++) {
+            var fieldKey = activeFields[fi];
             // Handle custom field keys (cf_xxx)
             if (fieldKey.startsWith('cf_')) {
                 var cfName = fieldKey.substring(3);

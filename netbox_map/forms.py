@@ -401,6 +401,21 @@ POPOVER_FIELD_CHOICES = [
     ('orientation', _('Orientation')),
 ]
 
+TILE_TYPE_INFO = [
+    ('rack', _('Rack')),
+    ('aisle', _('Aisle')),
+    ('wall', _('Wall')),
+    ('column', _('Column')),
+    ('door', _('Door')),
+    ('cooling', _('Cooling')),
+    ('power', _('Power')),
+    ('empty', _('Empty')),
+    ('reserved', _('Reserved')),
+    ('ap', _('Access Point')),
+    ('camera', _('Camera')),
+    ('printer', _('Printer')),
+]
+
 
 class MapSettingsForm(forms.ModelForm):
     """Form for editing map detail panel settings."""
@@ -446,8 +461,9 @@ class MapSettingsForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Dynamically discover NetBox custom fields for assignable object types
-        # and add them as choices to the popover_fields field.
+
+        # Dynamically discover NetBox custom fields for assignable object types.
+        all_cf_choices = []
         try:
             from extras.models import CustomField
             from django.contrib.contenttypes.models import ContentType
@@ -463,13 +479,46 @@ class MapSettingsForm(forms.ModelForm):
                 .order_by('name')
                 .values_list('name', 'label')
             )
-            if cf_choices:
-                self.fields['popover_fields'].choices = list(POPOVER_FIELD_CHOICES) + [
-                    (f'cf_{name}', f'CF: {label or name}')
-                    for name, label in cf_choices
-                ]
+            all_cf_choices = [
+                (f'cf_{name}', f'CF: {label or name}')
+                for name, label in cf_choices
+            ]
         except Exception:
             pass
+
+        extended_choices = list(POPOVER_FIELD_CHOICES) + all_cf_choices
+        if all_cf_choices:
+            self.fields['popover_fields'].choices = extended_choices
+
+        # Add per-tile-type popover fields from tile_popover_config
+        config = {}
+        if self.instance and self.instance.pk:
+            config = self.instance.tile_popover_config or {}
+
+        for type_key, type_label in TILE_TYPE_INFO:
+            field_name = f'{type_key}_popover_fields'
+            self.fields[field_name] = forms.MultipleChoiceField(
+                choices=extended_choices,
+                widget=forms.CheckboxSelectMultiple,
+                required=False,
+                label=_('%s Popover Fields') % type_label,
+            )
+            if type_key in config:
+                self.initial[field_name] = config[type_key]
+
+    def save(self, commit=True):
+        instance = super().save(commit=False)
+
+        # Reconstruct tile_popover_config dict from per-type form fields
+        config = {}
+        for type_key, _ in TILE_TYPE_INFO:
+            field_name = f'{type_key}_popover_fields'
+            config[type_key] = self.cleaned_data.get(field_name, [])
+        instance.tile_popover_config = config
+
+        if commit:
+            instance.save()
+        return instance
 
 
 class MapMarkerFilterForm(NetBoxModelFilterSetForm):

@@ -317,6 +317,9 @@ class FloorPlanVisualizationView(generic.ObjectView):
 
         settings = MapSettings.load()
 
+        popover_config = {'default': settings.popover_fields}
+        popover_config.update(settings.tile_popover_config or {})
+
         return {
             'tile_data_json': json.dumps(tile_data),
             'grid_width': instance.grid_width,
@@ -325,7 +328,7 @@ class FloorPlanVisualizationView(generic.ObjectView):
             'site_floorplans': site_floorplans,
             'edit_mode': request.GET.get('edit', '') == 'true',
             'site_id': instance.site_id,
-            'popover_fields_json': json.dumps(settings.popover_fields),
+            'popover_fields_json': json.dumps(popover_config),
         }
 
 
@@ -545,10 +548,31 @@ class MarkerDetailView(LoginRequiredMixin, View):
 class MapSettingsView(LoginRequiredMixin, PermissionRequiredMixin, View):
     permission_required = 'netbox_map.view_floorplan'
 
+    TILE_POPOVER_TYPES = [
+        {'key': 'rack', 'label': 'Rack', 'icon': 'mdi-collage', 'field_name': 'rack_popover_fields'},
+        {'key': 'aisle', 'label': 'Aisle', 'icon': 'mdi-arrow-expand-horizontal', 'field_name': 'aisle_popover_fields'},
+        {'key': 'wall', 'label': 'Wall', 'icon': 'mdi-wall', 'field_name': 'wall_popover_fields'},
+        {'key': 'column', 'label': 'Column', 'icon': 'mdi-square-outline', 'field_name': 'column_popover_fields'},
+        {'key': 'door', 'label': 'Door', 'icon': 'mdi-door-open', 'field_name': 'door_popover_fields'},
+        {'key': 'cooling', 'label': 'Cooling', 'icon': 'mdi-snowflake', 'field_name': 'cooling_popover_fields'},
+        {'key': 'power', 'label': 'Power', 'icon': 'mdi-flash-outline', 'field_name': 'power_popover_fields'},
+        {'key': 'empty', 'label': 'Empty', 'icon': 'mdi-checkbox-blank-outline', 'field_name': 'empty_popover_fields'},
+        {'key': 'reserved', 'label': 'Reserved', 'icon': 'mdi-calendar-clock', 'field_name': 'reserved_popover_fields'},
+        {'key': 'ap', 'label': 'Access Point', 'icon': 'mdi-wifi', 'field_name': 'ap_popover_fields'},
+        {'key': 'camera', 'label': 'Camera', 'icon': 'mdi-cctv', 'field_name': 'camera_popover_fields'},
+        {'key': 'printer', 'label': 'Printer', 'icon': 'mdi-printer', 'field_name': 'printer_popover_fields'},
+    ]
+
+    def _get_context(self, form):
+        return {
+            'form': form,
+            'tile_popover_types': self.TILE_POPOVER_TYPES,
+        }
+
     def get(self, request):
         settings = MapSettings.load()
         form = forms.MapSettingsForm(instance=settings)
-        return render(request, 'netbox_map/settings.html', {'form': form})
+        return render(request, 'netbox_map/settings.html', self._get_context(form))
 
     def post(self, request):
         settings = MapSettings.load()
@@ -557,7 +581,7 @@ class MapSettingsView(LoginRequiredMixin, PermissionRequiredMixin, View):
             form.save()
             messages.success(request, 'Map settings saved.')
             return redirect('plugins:netbox_map:settings')
-        return render(request, 'netbox_map/settings.html', {'form': form})
+        return render(request, 'netbox_map/settings.html', self._get_context(form))
 
 
 #
