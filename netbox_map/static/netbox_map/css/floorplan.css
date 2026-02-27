@@ -160,12 +160,11 @@
 
 /* Top section: tile list */
 .sidebar-tiles-section {
-    flex: 1 1 50%;
+    flex: 1 1 auto;
     min-height: 150px;
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    border-bottom: 1px solid var(--fp-border);
 }
 
 .sidebar-header {
@@ -326,12 +325,43 @@
     flex-shrink: 0;
 }
 
+/* ===== Draggable sidebar divider ===== */
+
+.sidebar-divider {
+    height: 5px;
+    flex-shrink: 0;
+    cursor: row-resize;
+    background: var(--fp-border);
+    position: relative;
+    transition: background 0.15s;
+}
+.sidebar-divider::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: 24px;
+    height: 2px;
+    border-radius: 1px;
+    background: var(--fp-text-dim);
+    opacity: 0.4;
+}
+.sidebar-divider:hover,
+.sidebar-divider.dragging {
+    background: var(--fp-accent);
+}
+.sidebar-divider:hover::after,
+.sidebar-divider.dragging::after {
+    opacity: 0;
+}
+
 /* ===== Bottom section: context / detail panels ===== */
 
 .sidebar-context-section {
     flex: 1 1 50%;
     overflow-y: auto;
-    min-height: 100px;
+    min-height: 48px;
 }
 
 /* Placeholder when no tile selected */
@@ -343,6 +373,21 @@
     height: 100%;
     gap: 8px;
     padding: 20px;
+}
+
+/* Compact variant: small strip at the bottom instead of centered in half the sidebar */
+.sidebar-empty-state-compact {
+    flex-direction: row;
+    justify-content: center;
+    height: auto;
+    padding: 10px 16px;
+    gap: 6px;
+}
+.sidebar-empty-state-compact .mdi {
+    font-size: 16px;
+}
+.sidebar-empty-state-compact span {
+    font-size: 12px;
 }
 
 .sidebar-empty-state .mdi {
@@ -626,6 +671,10 @@
     backdrop-filter: blur(8px);
     white-space: nowrap;
 }
+.tile-popover.popover-has-trace {
+    max-width: 340px;
+    white-space: normal;
+}
 
 .tile-popover strong {
     color: var(--fp-text);
@@ -634,6 +683,96 @@
 .tile-popover .popover-dim {
     color: var(--fp-text-muted);
     font-size: 11px;
+}
+
+/* ===== Popover Trace (Full) ===== */
+.pt-section {
+    margin-top: 6px;
+    border-top: 1px solid var(--fp-border);
+    padding-top: 5px;
+}
+.pt-iface {
+    margin-bottom: 4px;
+}
+.pt-iface:last-child { margin-bottom: 0; }
+.pt-iface-header {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--fp-text);
+    margin-bottom: 3px;
+    white-space: nowrap;
+}
+.pt-iface-header .mdi {
+    color: var(--fp-accent);
+    font-size: 13px;
+}
+.pt-path {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+    margin-left: 4px;
+    border-left: 2px solid var(--fp-border);
+    padding-left: 8px;
+}
+.pt-device {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 6px;
+    border-radius: 3px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.pt-dev-source {
+    color: #0d6efd;
+}
+.pt-dev-middle {
+    color: #e5a200;
+}
+.pt-dev-endpoint {
+    color: #198754;
+}
+[data-bs-theme="dark"] .pt-dev-source  { color: #00d4ff; }
+[data-bs-theme="dark"] .pt-dev-middle  { color: #ffc107; }
+[data-bs-theme="dark"] .pt-dev-endpoint { color: #20c997; }
+
+.pt-port {
+    font-size: 10px;
+    color: var(--fp-text-muted);
+    padding: 1px 6px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.pt-port .mdi {
+    font-size: 11px;
+    color: var(--fp-text-dim);
+    margin-right: 2px;
+}
+.pt-cable {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 10px;
+    color: var(--fp-text-dim);
+    padding: 1px 6px;
+}
+.pt-cable .mdi {
+    font-size: 11px;
+}
+.pt-separator {
+    border: none;
+    border-top: 1px dashed var(--fp-border);
+    margin: 4px 0;
+}
+.pt-overflow {
+    font-size: 10px;
+    color: var(--fp-text-dim);
+    margin-top: 2px;
 }
 
 /* ===== Resize Controls ===== */
@@ -732,6 +871,311 @@
     font-size: 10px;
     color: var(--fp-text-muted);
     flex-shrink: 0;
+}
+
+/* ===== Rack device trace dropdowns ===== */
+
+.rack-device-wrapper {
+    border-bottom: 1px solid var(--fp-border-light);
+}
+
+.rack-device-wrapper .rack-device-item {
+    border-bottom: none;
+}
+
+.rack-dev-trace-toggle {
+    width: 18px;
+    height: 18px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 13px;
+    color: var(--fp-text-dim);
+    flex-shrink: 0;
+    border-radius: 3px;
+    transition: background 0.1s, color 0.1s;
+}
+
+.rack-dev-trace-toggle:hover {
+    background: var(--fp-hover);
+    color: var(--fp-accent);
+}
+
+.rack-dev-traces {
+    padding: 2px 8px 4px 28px;
+}
+
+.rack-dev-trace-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 1px 0;
+    font-size: 10px;
+    color: var(--fp-text);
+    line-height: 1.5;
+}
+
+.rack-dev-trace-port {
+    font-weight: 600;
+    color: var(--fp-accent);
+    flex-shrink: 0;
+    font-family: monospace;
+}
+
+.rack-dev-trace-arrow {
+    color: var(--fp-text-dim);
+    flex-shrink: 0;
+}
+
+.rack-dev-trace-far {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--fp-text);
+}
+
+.rack-dev-trace-unterm {
+    color: var(--fp-text-dim);
+    font-style: italic;
+}
+
+.rack-dev-trace-empty {
+    font-size: 10px;
+    color: var(--fp-text-dim);
+    padding: 2px 0;
+}
+
+.rack-dev-trace-loading {
+    font-size: 10px;
+    color: var(--fp-text-muted);
+    padding: 2px 0;
+}
+
+.rack-dev-trace-loading .mdi {
+    font-size: 12px;
+}
+
+/* ===== Cable Trace panel (NetBox-style) ===== */
+
+/* Interface header row — clickable toggle */
+.ct-interface {
+    border-bottom: 1px solid var(--fp-border);
+}
+.ct-interface:last-child {
+    border-bottom: none;
+}
+.ct-interface-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 12px;
+    cursor: pointer;
+    font-size: 12px;
+    color: var(--fp-text);
+    transition: background 0.1s;
+}
+.ct-interface-header:hover {
+    background: var(--fp-hover);
+}
+.ct-iface-icon {
+    font-size: 15px;
+    color: var(--fp-accent);
+    flex-shrink: 0;
+}
+.ct-iface-name {
+    font-weight: 600;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.ct-iface-type {
+    font-size: 10px;
+    color: var(--fp-text-muted);
+    flex-shrink: 0;
+}
+.ct-chevron {
+    font-size: 16px;
+    color: var(--fp-text-dim);
+    transition: transform 0.2s;
+    flex-shrink: 0;
+}
+.ct-chevron-collapsed {
+    transform: rotate(-90deg);
+}
+
+/* Trace body — the vertical path */
+.ct-trace-body {
+    padding: 4px 10px 8px;
+    overflow: hidden;
+    transition: max-height 0.25s ease, opacity 0.2s ease;
+}
+.ct-trace-body.ct-collapsed {
+    max-height: 0 !important;
+    padding-top: 0;
+    padding-bottom: 0;
+    opacity: 0;
+}
+
+/* Device card */
+.ct-device {
+    border-radius: 4px;
+    padding: 6px 10px;
+    margin: 2px 0;
+}
+.ct-dev-source {
+    background: rgba(13, 110, 253, 0.12);
+    border-left: 3px solid #0d6efd;
+}
+.ct-dev-middle {
+    background: rgba(255, 193, 7, 0.10);
+    border-left: 3px solid #ffc107;
+}
+.ct-dev-endpoint {
+    background: rgba(25, 135, 84, 0.12);
+    border-left: 3px solid #198754;
+}
+[data-bs-theme="dark"] .ct-dev-source {
+    background: rgba(0, 212, 255, 0.10);
+    border-left-color: #00d4ff;
+}
+[data-bs-theme="dark"] .ct-dev-middle {
+    background: rgba(255, 193, 7, 0.08);
+    border-left-color: #ffc107;
+}
+[data-bs-theme="dark"] .ct-dev-endpoint {
+    background: rgba(25, 200, 100, 0.10);
+    border-left-color: #20c997;
+}
+.ct-dev-name {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--fp-text);
+    line-height: 1.3;
+}
+.ct-dev-name a {
+    color: var(--fp-link-color);
+    text-decoration: none;
+}
+.ct-dev-name a:hover {
+    text-decoration: underline;
+}
+.ct-dev-meta {
+    font-size: 10px;
+    color: var(--fp-text-muted);
+    margin-top: 1px;
+}
+
+/* Port row */
+.ct-port {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 10px;
+    margin: 0 4px;
+    background: var(--fp-toggle-bg);
+    border-radius: 3px;
+    font-size: 11px;
+}
+.ct-port-icon {
+    font-size: 13px;
+    color: var(--fp-text-dim);
+    flex-shrink: 0;
+}
+.ct-port-name {
+    font-weight: 500;
+    color: var(--fp-text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+a.ct-port-name {
+    color: var(--fp-link-color);
+    text-decoration: none;
+}
+a.ct-port-name:hover {
+    text-decoration: underline;
+}
+.ct-port-type {
+    font-size: 10px;
+    color: var(--fp-text-dim);
+    flex-shrink: 0;
+    margin-left: auto;
+}
+
+/* Cable connector (vertical line + label) */
+.ct-cable {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 0 10px;
+    margin: 0 4px;
+}
+.ct-cable-line {
+    width: 2px;
+    height: 8px;
+    background: var(--fp-text-dim);
+    border-radius: 1px;
+}
+.ct-cable-label {
+    font-size: 10px;
+    color: var(--fp-text-muted);
+    padding: 1px 0;
+    white-space: nowrap;
+}
+.ct-cable-label .mdi {
+    font-size: 11px;
+}
+.ct-cable-label a {
+    color: var(--fp-text-muted);
+    text-decoration: none;
+}
+.ct-cable-label a:hover {
+    color: var(--fp-link-color);
+    text-decoration: underline;
+}
+.ct-cable-status {
+    font-size: 9px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+/* "Show on map" button on device cards in cable traces */
+.ct-dev-map-btn {
+    float: right;
+    cursor: pointer;
+    font-size: 13px;
+    color: var(--fp-text-dim);
+    opacity: 0.5;
+    transition: opacity 0.15s, color 0.15s;
+}
+.ct-dev-map-btn:hover {
+    opacity: 1;
+    color: var(--fp-accent);
+}
+
+/* Rack device inline trace container — use full trace UI */
+.rack-dev-traces .ct-interface {
+    border-bottom-color: var(--fp-border-light);
+}
+.rack-dev-traces .ct-interface-header {
+    padding: 5px 8px;
+    font-size: 11px;
+}
+.rack-dev-traces .ct-trace-body {
+    padding: 2px 6px 6px;
+}
+.rack-dev-traces .ct-device {
+    padding: 4px 8px;
+}
+.rack-dev-traces .ct-port {
+    padding: 3px 8px;
+    font-size: 10px;
+}
+.rack-dev-traces .ct-cable {
+    padding: 0 8px;
 }
 
 /* ===== Scrollbar styling ===== */

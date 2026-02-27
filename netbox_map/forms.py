@@ -2,7 +2,7 @@ from django import forms
 from django.contrib.contenttypes.models import ContentType
 from django.utils.translation import gettext_lazy as _
 
-from dcim.models import Site, Location, Rack, Device, PowerPanel, PowerFeed
+from dcim.models import Site, Location, Rack, Device, PowerPanel, PowerFeed, RearPort, FrontPort
 from netbox.forms import NetBoxModelForm, NetBoxModelFilterSetForm, NetBoxModelBulkEditForm, NetBoxModelImportForm
 from utilities.forms.fields import (
     ContentTypeChoiceField,
@@ -23,7 +23,7 @@ def get_assignable_content_types():
     """Return a queryset of ContentTypes for assignable models."""
     return ContentType.objects.filter(
         app_label='dcim',
-        model__in=['device', 'rack', 'powerpanel', 'powerfeed'],
+        model__in=['device', 'rack', 'powerpanel', 'powerfeed', 'rearport', 'frontport'],
     ).order_by('model')
 
 
@@ -299,6 +299,16 @@ class FloorPlanTileForm(NetBoxModelForm):
         queryset=PowerFeed.objects.all(),
         required=False,
     )
+    rearport = DynamicModelChoiceField(
+        label=_('Rear Port'),
+        queryset=RearPort.objects.all(),
+        required=False,
+    )
+    frontport = DynamicModelChoiceField(
+        label=_('Front Port'),
+        queryset=FrontPort.objects.all(),
+        required=False,
+    )
 
     fieldsets = (
         FieldSet(
@@ -316,6 +326,7 @@ class FloorPlanTileForm(NetBoxModelForm):
         ),
         FieldSet(
             'assigned_object_type', 'rack', 'device', 'powerpanel', 'powerfeed',
+            'rearport', 'frontport',
             name=_('Assigned Object')
         ),
     )
@@ -339,7 +350,7 @@ class FloorPlanTileForm(NetBoxModelForm):
         # Pre-populate the object selector if editing an existing tile
         if self.instance.pk and self.instance.assigned_object_type:
             model_name = self.instance.assigned_object_type.model
-            if model_name in ('rack', 'device', 'powerpanel', 'powerfeed'):
+            if model_name in ('rack', 'device', 'powerpanel', 'powerfeed', 'rearport', 'frontport'):
                 field = self.fields.get(model_name)
                 if field and self.instance.assigned_object_id:
                     field.initial = self.instance.assigned_object_id
@@ -400,6 +411,18 @@ class FloorPlanTileFilterForm(NetBoxModelFilterSetForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['tile_type'].choices = get_all_tile_type_choices()
+
+
+class FloorPlanTileBulkEditForm(NetBoxModelBulkEditForm):
+    tile_type = forms.ChoiceField(choices=[], required=False, label=_('Tile Type'))
+    status = forms.ChoiceField(choices=FloorPlanTileStatusChoices, required=False, label=_('Status'))
+
+    model = FloorPlanTile
+    nullable_fields = ()
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['tile_type'].choices = [('', '---------')] + list(get_all_tile_type_choices())
 
 
 class FloorPlanTileImportForm(NetBoxModelImportForm):
@@ -539,6 +562,16 @@ class MapMarkerForm(NetBoxModelForm):
         queryset=PowerFeed.objects.all(),
         required=False,
     )
+    rearport = DynamicModelChoiceField(
+        label=_('Rear Port'),
+        queryset=RearPort.objects.all(),
+        required=False,
+    )
+    frontport = DynamicModelChoiceField(
+        label=_('Front Port'),
+        queryset=FrontPort.objects.all(),
+        required=False,
+    )
 
     fieldsets = (
         FieldSet(
@@ -551,6 +584,7 @@ class MapMarkerForm(NetBoxModelForm):
         ),
         FieldSet(
             'assigned_object_type', 'rack', 'device', 'powerpanel', 'powerfeed',
+            'rearport', 'frontport',
             name=_('Assigned Object')
         ),
     )
@@ -570,7 +604,7 @@ class MapMarkerForm(NetBoxModelForm):
 
         if self.instance.pk and self.instance.assigned_object_type:
             model_name = self.instance.assigned_object_type.model
-            if model_name in ('rack', 'device', 'powerpanel', 'powerfeed'):
+            if model_name in ('rack', 'device', 'powerpanel', 'powerfeed', 'rearport', 'frontport'):
                 field = self.fields.get(model_name)
                 if field and self.instance.assigned_object_id:
                     field.initial = self.instance.assigned_object_id
@@ -594,6 +628,19 @@ class MapMarkerForm(NetBoxModelForm):
     def save(self, *args, **kwargs):
         self.instance.assigned_object_type = self.cleaned_data.get('assigned_object_type')
         return super().save(*args, **kwargs)
+
+
+class MapMarkerBulkEditForm(NetBoxModelBulkEditForm):
+    marker_type = forms.ChoiceField(choices=[], required=False, label=_('Marker Type'))
+    status = forms.ChoiceField(choices=FloorPlanTileStatusChoices, required=False, label=_('Status'))
+    description = forms.CharField(max_length=200, required=False, label=_('Description'))
+
+    model = MapMarker
+    nullable_fields = ('description',)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['marker_type'].choices = [('', '---------')] + list(get_all_tile_type_choices())
 
 
 class MapMarkerImportForm(NetBoxModelImportForm):
@@ -744,6 +791,8 @@ POPOVER_FIELD_CHOICES = [
     ('status', _('Status')),
     ('type', _('Tile Type')),
     ('orientation', _('Orientation')),
+    ('cable_trace', _('Cable Trace (Simple)')),
+    ('cable_trace_full', _('Cable Trace (Full)')),
 ]
 
 def _get_tile_type_info():
@@ -804,7 +853,7 @@ class MapSettingsForm(forms.ModelForm):
 
             ct_ids = list(ContentType.objects.filter(
                 app_label='dcim',
-                model__in=['device', 'rack', 'powerpanel', 'powerfeed'],
+                model__in=['device', 'rack', 'powerpanel', 'powerfeed', 'rearport', 'frontport'],
             ).values_list('id', flat=True))
             cf_choices = list(
                 CustomField.objects.filter(object_types__in=ct_ids)

@@ -19,6 +19,8 @@ ASSIGNABLE_MODELS = (
     'dcim.rack',
     'dcim.powerpanel',
     'dcim.powerfeed',
+    'dcim.rearport',
+    'dcim.frontport',
 )
 
 

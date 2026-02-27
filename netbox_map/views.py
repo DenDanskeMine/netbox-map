@@ -457,6 +457,13 @@ class FloorPlanTileDeleteView(generic.ObjectDeleteView):
     queryset = FloorPlanTile.objects.all()
 
 
+class FloorPlanTileBulkEditView(generic.BulkEditView):
+    queryset = FloorPlanTile.objects.all()
+    filterset = filtersets.FloorPlanTileFilterSet
+    table = tables.FloorPlanTileTable
+    form = forms.FloorPlanTileBulkEditForm
+
+
 class FloorPlanTileBulkImportView(generic.BulkImportView):
     queryset = FloorPlanTile.objects.all()
     model_form = forms.FloorPlanTileImportForm
@@ -517,6 +524,13 @@ class MapMarkerDeleteView(generic.ObjectDeleteView):
     queryset = MapMarker.objects.all()
 
 
+class MapMarkerBulkEditView(generic.BulkEditView):
+    queryset = MapMarker.objects.all()
+    filterset = filtersets.MapMarkerFilterSet
+    table = tables.MapMarkerTable
+    form = forms.MapMarkerBulkEditForm
+
+
 class MapMarkerBulkImportView(generic.BulkImportView):
     queryset = MapMarker.objects.all()
     model_form = forms.MapMarkerImportForm
@@ -547,6 +561,8 @@ class MarkerDetailView(LoginRequiredMixin, View):
         'rack': ['role', 'site', 'location', 'tenant'],
         'powerpanel': ['site', 'location'],
         'powerfeed': ['power_panel', 'rack'],
+        'rearport': ['device__site'],
+        'frontport': ['device__site'],
     }
 
     def get(self, request, object_type, object_id):
@@ -592,11 +608,197 @@ class MarkerDetailView(LoginRequiredMixin, View):
         if settings.show_custom_fields:
             custom_fields = self._get_custom_fields(obj)
 
+        # Cable traces
+        try:
+            interfaces = self._get_cable_traces(obj, object_type) if object_type in ('device', 'rearport', 'frontport') else []
+        except Exception:
+            interfaces = []
+
         return JsonResponse({
             'standard_fields': standard_fields,
             'mac_address': mac_address,
             'custom_fields': custom_fields,
+            'interfaces': interfaces,
         })
+
+    def _get_cable_traces(self, obj, object_type):
+        """Return cable trace data for a device or port object."""
+        traces = []
+        if object_type == 'device':
+            from dcim.models import Interface
+            interfaces = Interface.objects.filter(
+                device=obj, cable__isnull=False
+            ).select_related('cable')
+            for iface in interfaces:
+                trace_data = self._trace_port(iface)
+                if trace_data:
+                    traces.append({
+                        'name': iface.name,
+                        'type': 'Interface',
+                        'trace': trace_data,
+                    })
+        elif object_type in ('rearport', 'frontport'):
+            from dcim.models import RearPort, FrontPort
+            # Build a single unified trace that shows the full path through
+            # the patch panel: e.g. Server:eth0 → Cable → FrontPort →
+            # RearPort → Cable → Switch:GigabitEthernet.
+            own_hops = self._trace_port(obj)
+            peer_hops = []
+            peer_name = None
+            try:
+                from dcim.models import PortMapping
+                if object_type == 'rearport':
+                    mappings = PortMapping.objects.filter(
+                        rear_port=obj
+                    ).select_related('front_port__cable')
+                    for mapping in mappings:
+                        peer = mapping.front_port
+                        if peer and peer.cable:
+                            peer_hops = self._trace_port(peer)
+                            peer_name = peer.name
+                            break
+                else:
+                    mappings = PortMapping.objects.filter(
+                        front_port=obj
+                    ).select_related('rear_port__cable')
+                    for mapping in mappings:
+                        peer = mapping.rear_port
+                        if peer and peer.cable:
+                            peer_hops = self._trace_port(peer)
+                            peer_name = peer.name
+                            break
+            except Exception:
+                pass
+
+            # Reverse peer hops (swap near_end/far_end) so path flows toward
+            # the clicked port's side of the patch panel.
+            reversed_peer = []
+            for hop in peer_hops:
+                reversed_peer.append({
+                    'cable': hop['cable'],
+                    'near_end': hop.get('far_end'),
+                    'far_end': hop.get('near_end'),
+                })
+            reversed_peer.reverse()
+
+            # Combine: for rearport the path is peer-side → own-side,
+            # for frontport it is own-side → peer-side reversed.
+            if object_type == 'rearport':
+                combined = reversed_peer + own_hops
+            else:
+                combined = own_hops + reversed_peer
+
+            if combined:
+                traces.append({
+                    'name': obj.name,
+                    'type': obj.__class__.__name__,
+                    'trace': combined,
+                })
+        return traces
+
+    def _serialize_endpoint(self, ep):
+        """Serialize a cable termination endpoint (port/interface) to dict."""
+        ep_data = {
+            'name': str(ep),
+            'type': ep.__class__.__name__,
+        }
+        if hasattr(ep, 'get_absolute_url'):
+            ep_data['url'] = ep.get_absolute_url()
+        if hasattr(ep, 'device') and ep.device:
+            dev = ep.device
+            ep_data['device'] = str(dev)
+            ep_data['device_id'] = dev.pk
+            ep_data['device_url'] = dev.get_absolute_url()
+            ep_data['device_type'] = str(dev.device_type) if hasattr(dev, 'device_type') and dev.device_type else ''
+            ep_data['device_role'] = str(dev.role) if hasattr(dev, 'role') and dev.role else ''
+            ep_data['device_site'] = str(dev.site) if hasattr(dev, 'site') and dev.site else ''
+            if hasattr(dev, 'rack') and dev.rack:
+                ep_data['device_rack'] = str(dev.rack)
+                ep_data['device_rack_url'] = dev.rack.get_absolute_url()
+        return ep_data
+
+    def _serialize_cable(self, cable):
+        """Serialize a Cable object to dict."""
+        return {
+            'id': cable.id,
+            'label': str(cable),
+            'url': cable.get_absolute_url(),
+            'status': cable.get_status_display() if hasattr(cable, 'get_status_display') else '',
+            'status_color': cable.get_status_color() if hasattr(cable, 'get_status_color') else '',
+        }
+
+    def _trace_port(self, port):
+        """Call .trace() on a port/interface and serialize each hop.
+
+        NetBox's trace() returns a list of 3-tuples:
+            (near_ends_list, cables_list, far_ends_list)
+        Each element is a *list* of model instances (not a single object).
+        """
+        import logging
+        logger = logging.getLogger('netbox_map')
+
+        try:
+            trace_result = port.trace()
+            if not trace_result:
+                return self._direct_cable_hop(port)
+
+            hops = []
+            for near_ends, cables, far_ends in trace_result:
+                if not cables:
+                    continue
+                cable = cables[0] if isinstance(cables, (list, tuple)) else cables
+                hop = {'cable': self._serialize_cable(cable)}
+                for key, ep_list in (('near_end', near_ends), ('far_end', far_ends)):
+                    if not ep_list:
+                        hop[key] = None
+                        continue
+                    ep = ep_list[0] if isinstance(ep_list, (list, tuple)) else ep_list
+                    hop[key] = self._serialize_endpoint(ep)
+                hops.append(hop)
+
+            # If .trace() returned data but all hops were passthrough (no cables),
+            # fall back to direct cable inspection.
+            return hops if hops else self._direct_cable_hop(port)
+
+        except Exception as e:
+            logger.debug('Cable trace failed for %s (pk=%s): %s', port, getattr(port, 'pk', '?'), e)
+            return self._direct_cable_hop(port)
+
+    def _direct_cable_hop(self, port):
+        """Fallback: build a single hop from the port's directly attached cable."""
+        try:
+            cable = getattr(port, 'cable', None)
+            if not cable:
+                return []
+
+            hop = {
+                'cable': self._serialize_cable(cable),
+                'near_end': self._serialize_endpoint(port),
+                'far_end': None,
+            }
+
+            # Try to find the far-end termination via link_peers
+            link_peers = getattr(port, 'link_peers', None)
+            if link_peers:
+                peers = list(link_peers) if not isinstance(link_peers, (list, tuple)) else link_peers
+                if peers:
+                    hop['far_end'] = self._serialize_endpoint(peers[0])
+            else:
+                # Fallback: query cable terminations directly
+                from dcim.models import CableTermination
+                terms = CableTermination.objects.filter(cable=cable).exclude(
+                    termination_type=ContentType.objects.get_for_model(port),
+                    termination_id=port.pk,
+                ).select_related('termination_type')
+                for term in terms:
+                    far_obj = term.termination
+                    if far_obj:
+                        hop['far_end'] = self._serialize_endpoint(far_obj)
+                        break
+
+            return [hop]
+        except Exception:
+            return []
 
     def _resolve_field(self, obj, field_name):
         """Resolve a field value, handling FK and choice fields."""

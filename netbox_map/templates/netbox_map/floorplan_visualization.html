@@ -149,10 +149,13 @@
         <div id="tile-list" class="sidebar-tile-list"></div>
       </div>
 
+      {# Draggable divider between tile list and context section #}
+      <div class="sidebar-divider" id="sidebar-divider"></div>
+
       {# Bottom section: context panels (details, rack elevation, link) #}
       <div class="sidebar-context-section" id="sidebar-context">
         {# Placeholder shown when nothing selected #}
-        <div id="sidebar-no-selection" class="sidebar-empty-state">
+        <div id="sidebar-no-selection" class="sidebar-empty-state sidebar-empty-state-compact">
           <i class="mdi mdi-cursor-default-click-outline"></i>
           <span>{% trans "Select a tile to view details" %}</span>
         </div>
@@ -282,6 +285,12 @@
           </div>
         </div>
 
+        {# Cable Trace (shown for devices, rear ports, front ports) #}
+        <div id="cable-trace-panel" class="d-none">
+          <div class="sidebar-section-title"><span id="cable-trace-title">{% trans "Ports" %}</span></div>
+          <div id="cable-trace-content"></div>
+        </div>
+
         {% if edit_mode %}
         {# Link Floor Plan panel (edit mode, for floorplan_link tiles) #}
         <div id="link-floorplan-panel" class="d-none">
@@ -318,6 +327,8 @@
               <option value="dcim.device">{% trans "Device" %}</option>
               <option value="dcim.powerpanel">{% trans "Power Panel" %}</option>
               <option value="dcim.powerfeed">{% trans "Power Feed" %}</option>
+              <option value="dcim.rearport">{% trans "Rear Port" %}</option>
+              <option value="dcim.frontport">{% trans "Front Port" %}</option>
             </select>
             <select id="link-object-select" class="form-select form-select-sm sidebar-input no-ts" disabled>
               <option value="">-- {% trans "Select object type first" %} --</option>
@@ -357,7 +368,9 @@
         'dcim.rack': '/api/dcim/racks/',
         'dcim.device': '/api/dcim/devices/',
         'dcim.powerpanel': '/api/dcim/power-panels/',
-        'dcim.powerfeed': '/api/dcim/power-feeds/'
+        'dcim.powerfeed': '/api/dcim/power-feeds/',
+        'dcim.rearport': '/api/dcim/rear-ports/',
+        'dcim.frontport': '/api/dcim/front-ports/'
       };
 
       var linkTypeSelect = document.getElementById('link-object-type');
