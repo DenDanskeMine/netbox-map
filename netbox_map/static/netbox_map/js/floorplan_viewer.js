@@ -1963,6 +1963,20 @@
                     return (b.position || 0) - (a.position || 0);
                 });
             }
+            // Add rack-child devices to deviceTileMap so "show on map"
+            // buttons appear for devices that live inside rack tiles.
+            // Clicking zooms to the parent rack tile.
+            for (var rti = 0; rti < tiles.length; rti++) {
+                var rackTile = tiles[rti];
+                if (rackTile.object_type_model === 'rack' && rackTile.object_id && rackDevicesMap[rackTile.object_id]) {
+                    var rackDevs = rackDevicesMap[rackTile.object_id];
+                    for (var rdi = 0; rdi < rackDevs.length; rdi++) {
+                        if (!deviceTileMap[rackDevs[rdi].id]) {
+                            deviceTileMap[rackDevs[rdi].id] = rackTile;
+                        }
+                    }
+                }
+            }
             rackDevicesLoaded = true;
             callback();
         })
