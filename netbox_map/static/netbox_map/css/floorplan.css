@@ -160,12 +160,11 @@
 
 /* Top section: tile list */
 .sidebar-tiles-section {
-    flex: 1 1 50%;
+    flex: 1 1 auto;
     min-height: 150px;
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    border-bottom: 1px solid var(--fp-border);
 }
 
 .sidebar-header {
@@ -326,12 +325,43 @@
     flex-shrink: 0;
 }
 
+/* ===== Draggable sidebar divider ===== */
+
+.sidebar-divider {
+    height: 5px;
+    flex-shrink: 0;
+    cursor: row-resize;
+    background: var(--fp-border);
+    position: relative;
+    transition: background 0.15s;
+}
+.sidebar-divider::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: 24px;
+    height: 2px;
+    border-radius: 1px;
+    background: var(--fp-text-dim);
+    opacity: 0.4;
+}
+.sidebar-divider:hover,
+.sidebar-divider.dragging {
+    background: var(--fp-accent);
+}
+.sidebar-divider:hover::after,
+.sidebar-divider.dragging::after {
+    opacity: 0;
+}
+
 /* ===== Bottom section: context / detail panels ===== */
 
 .sidebar-context-section {
     flex: 1 1 50%;
     overflow-y: auto;
-    min-height: 100px;
+    min-height: 48px;
 }
 
 /* Placeholder when no tile selected */
@@ -343,6 +373,21 @@
     height: 100%;
     gap: 8px;
     padding: 20px;
+}
+
+/* Compact variant: small strip at the bottom instead of centered in half the sidebar */
+.sidebar-empty-state-compact {
+    flex-direction: row;
+    justify-content: center;
+    height: auto;
+    padding: 10px 16px;
+    gap: 6px;
+}
+.sidebar-empty-state-compact .mdi {
+    font-size: 16px;
+}
+.sidebar-empty-state-compact span {
+    font-size: 12px;
 }
 
 .sidebar-empty-state .mdi {

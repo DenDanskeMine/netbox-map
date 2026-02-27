@@ -2218,6 +2218,20 @@
                         expandedRacks.delete(tileId);
                     } else {
                         expandedRacks.add(tileId);
+                        // Eagerly fetch traces for all devices in this rack
+                        // so we can show/hide the cable icon correctly
+                        var rackTile = null;
+                        for (var rt = 0; rt < tiles.length; rt++) {
+                            if (tiles[rt].id === tileId) { rackTile = tiles[rt]; break; }
+                        }
+                        if (rackTile && rackTile.object_id && rackDevicesMap[rackTile.object_id]) {
+                            var devs = rackDevicesMap[rackTile.object_id];
+                            for (var rd = 0; rd < devs.length; rd++) {
+                                if (!deviceTraceCache[devs[rd].id] && !deviceTracePending[devs[rd].id]) {
+                                    fetchDeviceTraces(devs[rd].id);
+                                }
+                            }
+                        }
                     }
                     buildSidebar();
                 };
@@ -2326,6 +2340,94 @@
         render();
         buildSidebar();
         focusTileFromURL();
+    }
+
+    // ===== Draggable Sidebar Divider =====
+
+    var sidebarDivider = document.getElementById('sidebar-divider');
+    var sidebarTilesSection = document.querySelector('.sidebar-tiles-section');
+    var sidebarContextSection = document.getElementById('sidebar-context');
+
+    if (sidebarDivider && sidebarTilesSection && sidebarContextSection) {
+        var isDraggingDivider = false;
+        var dividerStartY = 0;
+        var startTilesHeight = 0;
+        var sidebar = sidebarTilesSection.parentElement;
+
+        // Set initial split: when nothing is selected, give tiles most of the space
+        function applyDefaultSplit() {
+            var sidebarHeight = sidebar.clientHeight;
+            var dividerHeight = sidebarDivider.offsetHeight;
+            var contextMinHeight = 48;
+            var detailPanel = document.getElementById('tile-detail-panel');
+            var hasSelection = detailPanel && !detailPanel.classList.contains('d-none');
+            if (hasSelection) {
+                // 50/50 split
+                var half = (sidebarHeight - dividerHeight) / 2;
+                sidebarTilesSection.style.flex = 'none';
+                sidebarTilesSection.style.height = half + 'px';
+                sidebarContextSection.style.flex = '1';
+            } else {
+                // Tiles get most space, context gets just enough for the placeholder
+                sidebarTilesSection.style.flex = '1';
+                sidebarTilesSection.style.height = '';
+                sidebarContextSection.style.flex = 'none';
+                sidebarContextSection.style.height = contextMinHeight + 'px';
+            }
+        }
+
+        applyDefaultSplit();
+
+        // Watch for tile selection changes to adjust the split
+        var detailPanelEl = document.getElementById('tile-detail-panel');
+        if (detailPanelEl) {
+            var splitObserver = new MutationObserver(function() {
+                var nowHasSelection = !detailPanelEl.classList.contains('d-none');
+                if (!nowHasSelection) {
+                    // Tile deselected — reset user drag flag so auto-split works
+                    delete sidebarDivider.dataset.userDragged;
+                }
+                if (!isDraggingDivider && !sidebarDivider.dataset.userDragged) {
+                    applyDefaultSplit();
+                }
+            });
+            splitObserver.observe(detailPanelEl, { attributes: true, attributeFilter: ['class'] });
+        }
+
+        sidebarDivider.addEventListener('mousedown', function(e) {
+            e.preventDefault();
+            isDraggingDivider = true;
+            dividerStartY = e.clientY;
+            startTilesHeight = sidebarTilesSection.offsetHeight;
+            sidebarDivider.classList.add('dragging');
+            document.body.style.cursor = 'row-resize';
+            document.body.style.userSelect = 'none';
+        });
+
+        window.addEventListener('mousemove', function(e) {
+            if (!isDraggingDivider) return;
+            var dy = e.clientY - dividerStartY;
+            var sidebarHeight = sidebar.clientHeight;
+            var dividerHeight = sidebarDivider.offsetHeight;
+            var minTiles = 100;
+            var minContext = 48;
+            var available = sidebarHeight - dividerHeight;
+            var newTilesHeight = Math.max(minTiles, Math.min(available - minContext, startTilesHeight + dy));
+
+            sidebarTilesSection.style.flex = 'none';
+            sidebarTilesSection.style.height = newTilesHeight + 'px';
+            sidebarContextSection.style.flex = '1';
+            sidebarContextSection.style.height = '';
+            sidebarDivider.dataset.userDragged = 'true';
+        });
+
+        window.addEventListener('mouseup', function() {
+            if (!isDraggingDivider) return;
+            isDraggingDivider = false;
+            sidebarDivider.classList.remove('dragging');
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+        });
     }
 
     // Export for editor module

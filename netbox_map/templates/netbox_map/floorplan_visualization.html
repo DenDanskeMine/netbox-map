@@ -149,10 +149,13 @@
         <div id="tile-list" class="sidebar-tile-list"></div>
       </div>
 
+      {# Draggable divider between tile list and context section #}
+      <div class="sidebar-divider" id="sidebar-divider"></div>
+
       {# Bottom section: context panels (details, rack elevation, link) #}
       <div class="sidebar-context-section" id="sidebar-context">
         {# Placeholder shown when nothing selected #}
-        <div id="sidebar-no-selection" class="sidebar-empty-state">
+        <div id="sidebar-no-selection" class="sidebar-empty-state sidebar-empty-state-compact">
           <i class="mdi mdi-cursor-default-click-outline"></i>
           <span>{% trans "Select a tile to view details" %}</span>
         </div>
