@@ -6,7 +6,28 @@ from dcim.api.serializers import LocationSerializer
 from netbox.api.fields import ContentTypeField
 from netbox.api.serializers import NetBoxModelSerializer
 from utilities.api import get_serializer_for_model
-from ..models import FloorPlan, FloorPlanTile, LocationCoordinates, MapMarker
+from ..choices import BUILTIN_TYPE_SLUGS
+from ..models import FloorPlan, FloorPlanTile, CustomMarkerType, LocationCoordinates, MapMarker
+
+
+class CustomMarkerTypeSerializer(NetBoxModelSerializer):
+    class Meta:
+        model = CustomMarkerType
+        fields = [
+            'id', 'url', 'display_url', 'display',
+            'name', 'slug', 'color', 'icon', 'description',
+            'tags', 'custom_fields', 'created', 'last_updated',
+        ]
+        brief_fields = ('id', 'url', 'display', 'name', 'slug', 'color', 'icon')
+
+
+def _validate_type_slug(value):
+    """Validate that a tile/marker type slug is built-in or a valid custom type."""
+    if value in BUILTIN_TYPE_SLUGS:
+        return value
+    if CustomMarkerType.objects.filter(slug=value).exists():
+        return value
+    raise serializers.ValidationError(f'Unknown type: {value}')
 
 
 class FloorPlanSerializer(NetBoxModelSerializer):
@@ -72,6 +93,9 @@ class FloorPlanTileSerializer(NetBoxModelSerializer):
             return round(obj.assigned_object.get_utilization(), 1)
         return None
 
+    def validate_tile_type(self, value):
+        return _validate_type_slug(value)
+
 
 class LocationCoordinatesSerializer(NetBoxModelSerializer):
     location = LocationSerializer(nested=True)
@@ -115,3 +139,6 @@ class MapMarkerSerializer(NetBoxModelSerializer):
             serializer = get_serializer_for_model(obj.assigned_object)
             return serializer(obj.assigned_object, nested=True, context=self.context).data
         return None
+
+    def validate_marker_type(self, value):
+        return _validate_type_slug(value)

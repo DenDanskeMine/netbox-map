@@ -4,8 +4,8 @@ from django.utils.translation import gettext_lazy as _
 
 from dcim.models import Site, Location
 from netbox.filtersets import NetBoxModelFilterSet
-from .models import FloorPlan, FloorPlanTile, MapMarker
-from .choices import FloorPlanTileTypeChoices, FloorPlanTileStatusChoices
+from .models import FloorPlan, FloorPlanTile, CustomMarkerType, MapMarker
+from .choices import FloorPlanTileStatusChoices, get_all_tile_type_choices
 
 
 class FloorPlanFilterSet(NetBoxModelFilterSet):
@@ -45,7 +45,7 @@ class FloorPlanTileFilterSet(NetBoxModelFilterSet):
         label=_('Object Type'),
     )
     tile_type = django_filters.MultipleChoiceFilter(
-        choices=FloorPlanTileTypeChoices,
+        choices=[],
         label=_('Tile Type'),
     )
     status = django_filters.MultipleChoiceFilter(
@@ -58,8 +58,21 @@ class FloorPlanTileFilterSet(NetBoxModelFilterSet):
         fields = ['id', 'floorplan_id', 'assigned_object_type', 'tile_type', 'status',
                   'x_position', 'y_position']
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.filters['tile_type'].extra['choices'] = get_all_tile_type_choices()
+
     def search(self, queryset, name, value):
         return queryset.filter(label__icontains=value)
+
+
+class CustomMarkerTypeFilterSet(NetBoxModelFilterSet):
+    class Meta:
+        model = CustomMarkerType
+        fields = ['id', 'name', 'slug']
+
+    def search(self, queryset, name, value):
+        return queryset.filter(name__icontains=value)
 
 
 class MapMarkerFilterSet(NetBoxModelFilterSet):
@@ -74,7 +87,7 @@ class MapMarkerFilterSet(NetBoxModelFilterSet):
         label=_('Site (slug)'),
     )
     marker_type = django_filters.MultipleChoiceFilter(
-        choices=FloorPlanTileTypeChoices,
+        choices=[],
         label=_('Marker Type'),
     )
     status = django_filters.MultipleChoiceFilter(
@@ -85,6 +98,10 @@ class MapMarkerFilterSet(NetBoxModelFilterSet):
     class Meta:
         model = MapMarker
         fields = ['id', 'site_id', 'marker_type', 'status']
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.filters['marker_type'].extra['choices'] = get_all_tile_type_choices()
 
     def search(self, queryset, name, value):
         return queryset.filter(label__icontains=value)

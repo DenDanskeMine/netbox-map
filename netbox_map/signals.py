@@ -1,10 +1,11 @@
 import logging
 
 from django.contrib.contenttypes.models import ContentType
+from django.db.models import ProtectedError
 from django.db.models.signals import post_save, pre_delete, pre_save
 from django.dispatch import receiver
 
-from .models import FloorPlanTile, MapMarker
+from .models import CustomMarkerType, FloorPlanTile, MapMarker
 
 logger = logging.getLogger('netbox.plugins.netbox_map')
 
@@ -148,3 +149,21 @@ def clear_gps_on_marker_delete(sender, instance, **kwargs):
         instance.assigned_object_id,
         exclude_marker_pk=instance.pk,
     )
+
+
+# ── Prevent deletion of CustomMarkerType if in use ─────────────────────────
+
+
+@receiver(pre_delete, sender=CustomMarkerType)
+def protect_custom_marker_type_in_use(sender, instance, **kwargs):
+    referencing = set()
+    for tile in FloorPlanTile.objects.filter(tile_type=instance.slug):
+        referencing.add(tile)
+    for marker in MapMarker.objects.filter(marker_type=instance.slug):
+        referencing.add(marker)
+    if referencing:
+        raise ProtectedError(
+            f'Cannot delete custom marker type "{instance.name}": '
+            f'it is still referenced by {len(referencing)} object(s).',
+            referencing,
+        )

@@ -14,7 +14,46 @@ from netbox.views import generic
 from utilities.views import ViewTab, register_model_view
 
 from . import filtersets, forms, tables
-from .models import FloorPlan, FloorPlanTile, LocationCoordinates, MapMarker, MapSettings
+from .choices import get_all_type_configs
+from .models import FloorPlan, FloorPlanTile, CustomMarkerType, LocationCoordinates, MapMarker, MapSettings
+
+
+#
+# CustomMarkerType views
+#
+
+class CustomMarkerTypeListView(generic.ObjectListView):
+    queryset = CustomMarkerType.objects.all()
+    filterset = filtersets.CustomMarkerTypeFilterSet
+    filterset_form = forms.CustomMarkerTypeFilterForm
+    table = tables.CustomMarkerTypeTable
+
+
+@register_model_view(CustomMarkerType)
+class CustomMarkerTypeView(generic.ObjectView):
+    queryset = CustomMarkerType.objects.all()
+
+
+@register_model_view(CustomMarkerType, 'edit')
+class CustomMarkerTypeEditView(generic.ObjectEditView):
+    queryset = CustomMarkerType.objects.all()
+    form = forms.CustomMarkerTypeForm
+
+
+@register_model_view(CustomMarkerType, 'delete')
+class CustomMarkerTypeDeleteView(generic.ObjectDeleteView):
+    queryset = CustomMarkerType.objects.all()
+
+
+class CustomMarkerTypeBulkImportView(generic.BulkImportView):
+    queryset = CustomMarkerType.objects.all()
+    model_form = forms.CustomMarkerTypeImportForm
+
+
+class CustomMarkerTypeBulkDeleteView(generic.BulkDeleteView):
+    queryset = CustomMarkerType.objects.all()
+    filterset = filtersets.CustomMarkerTypeFilterSet
+    table = tables.CustomMarkerTypeTable
 
 
 #
@@ -195,6 +234,8 @@ class SiteMapView(LoginRequiredMixin, View):
                 except (ValueError, IndexError):
                     pass
 
+        type_configs = get_all_type_configs()
+
         return render(request, 'netbox_map/site_map.html', {
             'placed_sites_json': json.dumps(placed_sites),
             'unplaced_sites_json': json.dumps(unplaced_sites),
@@ -206,6 +247,8 @@ class SiteMapView(LoginRequiredMixin, View):
             'can_edit': can_edit,
             'focus_lat': focus_lat,
             'focus_lng': focus_lng,
+            'type_configs': type_configs,
+            'type_configs_json': json.dumps(type_configs),
         })
 
 
@@ -364,6 +407,8 @@ class FloorPlanVisualizationView(generic.ObjectView):
         popover_config = {'default': settings.popover_fields}
         popover_config.update(settings.tile_popover_config or {})
 
+        type_configs = get_all_type_configs()
+
         return {
             'tile_data_json': json.dumps(tile_data),
             'grid_width': instance.grid_width,
@@ -373,6 +418,8 @@ class FloorPlanVisualizationView(generic.ObjectView):
             'edit_mode': request.GET.get('edit', '') == 'true',
             'site_id': instance.site_id,
             'popover_fields_json': json.dumps(popover_config),
+            'type_configs': type_configs,
+            'type_configs_json': json.dumps(type_configs),
         }
 
 
@@ -602,26 +649,21 @@ class MarkerDetailView(LoginRequiredMixin, View):
 class MapSettingsView(LoginRequiredMixin, PermissionRequiredMixin, View):
     permission_required = 'netbox_map.view_floorplan'
 
-    TILE_POPOVER_TYPES = [
-        {'key': 'rack', 'label': 'Rack', 'icon': 'mdi-collage', 'field_name': 'rack_popover_fields'},
-        {'key': 'aisle', 'label': 'Aisle', 'icon': 'mdi-arrow-expand-horizontal', 'field_name': 'aisle_popover_fields'},
-        {'key': 'wall', 'label': 'Wall', 'icon': 'mdi-wall', 'field_name': 'wall_popover_fields'},
-        {'key': 'column', 'label': 'Column', 'icon': 'mdi-square-outline', 'field_name': 'column_popover_fields'},
-        {'key': 'door', 'label': 'Door', 'icon': 'mdi-door-open', 'field_name': 'door_popover_fields'},
-        {'key': 'cooling', 'label': 'Cooling', 'icon': 'mdi-snowflake', 'field_name': 'cooling_popover_fields'},
-        {'key': 'power', 'label': 'Power', 'icon': 'mdi-flash-outline', 'field_name': 'power_popover_fields'},
-        {'key': 'empty', 'label': 'Empty', 'icon': 'mdi-checkbox-blank-outline', 'field_name': 'empty_popover_fields'},
-        {'key': 'reserved', 'label': 'Reserved', 'icon': 'mdi-calendar-clock', 'field_name': 'reserved_popover_fields'},
-        {'key': 'ap', 'label': 'Access Point', 'icon': 'mdi-wifi', 'field_name': 'ap_popover_fields'},
-        {'key': 'camera', 'label': 'Camera', 'icon': 'mdi-cctv', 'field_name': 'camera_popover_fields'},
-        {'key': 'printer', 'label': 'Printer', 'icon': 'mdi-printer', 'field_name': 'printer_popover_fields'},
-        {'key': 'floorplan_link', 'label': 'Floor Plan Link', 'icon': 'mdi-floor-plan', 'field_name': 'floorplan_link_popover_fields'},
-    ]
+    def _build_tile_popover_types(self):
+        return [
+            {
+                'key': tc['slug'],
+                'label': tc['name'],
+                'icon': tc['icon'],
+                'field_name': f'{tc["slug"]}_popover_fields',
+            }
+            for tc in get_all_type_configs()
+        ]
 
     def _get_context(self, form):
         return {
             'form': form,
-            'tile_popover_types': self.TILE_POPOVER_TYPES,
+            'tile_popover_types': self._build_tile_popover_types(),
         }
 
     def get(self, request):

@@ -1,5 +1,5 @@
 from netbox.search import SearchIndex, register_search
-from .models import FloorPlan, FloorPlanTile, MapMarker
+from .models import FloorPlan, FloorPlanTile, CustomMarkerType, MapMarker
 
 
 @register_search
@@ -17,6 +17,16 @@ class FloorPlanTileIndex(SearchIndex):
     model = FloorPlanTile
     fields = (
         ('label', 100),
+    )
+
+
+@register_search
+class CustomMarkerTypeIndex(SearchIndex):
+    model = CustomMarkerType
+    fields = (
+        ('name', 100),
+        ('slug', 200),
+        ('description', 500),
     )
 
 

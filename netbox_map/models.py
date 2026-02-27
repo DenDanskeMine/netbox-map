@@ -1,12 +1,17 @@
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.urls import reverse
-from django.core.validators import MinValueValidator, MaxValueValidator
+from django.core.validators import MinValueValidator, MaxValueValidator, RegexValidator
+from django.utils.text import slugify
 from django.utils.translation import gettext_lazy as _
 
 from netbox.models import NetBoxModel
-from .choices import FloorPlanTileStatusChoices, FloorPlanTileTypeChoices
+from .choices import (
+    FloorPlanTileStatusChoices, FloorPlanTileTypeChoices,
+    BUILTIN_TYPE_SLUGS, get_tile_type_display,
+)
 
 # Object types that can be linked to floor plan tiles
 ASSIGNABLE_MODELS = (
@@ -15,6 +20,77 @@ ASSIGNABLE_MODELS = (
     'dcim.powerpanel',
     'dcim.powerfeed',
 )
+
+
+class CustomMarkerType(NetBoxModel):
+    """User-defined marker/tile type with custom color and icon."""
+    name = models.CharField(
+        verbose_name=_('name'),
+        max_length=100,
+        unique=True,
+    )
+    slug = models.CharField(
+        verbose_name=_('slug'),
+        max_length=50,
+        unique=True,
+        validators=[
+            RegexValidator(
+                regex=r'^custom_[a-z0-9_]+$',
+                message=_('Slug must start with "custom_" and contain only lowercase letters, numbers, and underscores.'),
+            ),
+        ],
+        help_text=_('Auto-prefixed with "custom_". Used as tile_type/marker_type value.'),
+    )
+    color = models.CharField(
+        verbose_name=_('color'),
+        max_length=7,
+        default='#ff5733',
+        validators=[
+            RegexValidator(
+                regex=r'^#[0-9a-fA-F]{6}$',
+                message=_('Enter a valid hex color (e.g. #ff5733).'),
+            ),
+        ],
+        help_text=_('Hex color code (e.g. #ff5733)'),
+    )
+    icon = models.CharField(
+        verbose_name=_('icon'),
+        max_length=100,
+        default='mdi-shape',
+        help_text=_('MDI icon class (e.g. mdi-server-network)'),
+    )
+    description = models.CharField(
+        verbose_name=_('description'),
+        max_length=200,
+        blank=True,
+    )
+
+    clone_fields = ('color', 'icon')
+
+    class Meta:
+        ordering = ('name',)
+        verbose_name = _('custom marker type')
+        verbose_name_plural = _('custom marker types')
+
+    def __str__(self):
+        return self.name
+
+    def get_absolute_url(self):
+        return reverse('plugins:netbox_map:custommarkertype', args=[self.pk])
+
+    def clean(self):
+        super().clean()
+        if self.slug and not self.slug.startswith('custom_'):
+            self.slug = f'custom_{self.slug}'
+        if self.slug in BUILTIN_TYPE_SLUGS:
+            raise ValidationError({'slug': _('This slug conflicts with a built-in type.')})
+
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            self.slug = f'custom_{slugify(self.name).replace("-", "_")}'
+        if not self.slug.startswith('custom_'):
+            self.slug = f'custom_{self.slug}'
+        super().save(*args, **kwargs)
 
 
 class FloorPlan(NetBoxModel):
@@ -145,7 +221,6 @@ class FloorPlanTile(NetBoxModel):
     tile_type = models.CharField(
         verbose_name=_('tile type'),
         max_length=50,
-        choices=FloorPlanTileTypeChoices,
         default=FloorPlanTileTypeChoices.TYPE_RACK
     )
     status = models.CharField(
@@ -217,6 +292,15 @@ class FloorPlanTile(NetBoxModel):
 
     def get_absolute_url(self):
         return reverse('plugins:netbox_map:floorplantile', args=[self.pk])
+
+    def get_tile_type_display(self):
+        return get_tile_type_display(self.tile_type)
+
+    def clean(self):
+        super().clean()
+        if self.tile_type and self.tile_type not in BUILTIN_TYPE_SLUGS:
+            if not CustomMarkerType.objects.filter(slug=self.tile_type).exists():
+                raise ValidationError({'tile_type': _(f'Unknown tile type: {self.tile_type}')})
 
     @property
     def display_label(self):
@@ -321,7 +405,6 @@ class MapMarker(NetBoxModel):
     marker_type = models.CharField(
         verbose_name=_('marker type'),
         max_length=50,
-        choices=FloorPlanTileTypeChoices,
         default=FloorPlanTileTypeChoices.TYPE_CAMERA
     )
     status = models.CharField(
@@ -394,6 +477,15 @@ class MapMarker(NetBoxModel):
         indexes = [
             models.Index(fields=['assigned_object_type', 'assigned_object_id']),
         ]
+
+    def get_marker_type_display(self):
+        return get_tile_type_display(self.marker_type)
+
+    def clean(self):
+        super().clean()
+        if self.marker_type and self.marker_type not in BUILTIN_TYPE_SLUGS:
+            if not CustomMarkerType.objects.filter(slug=self.marker_type).exists():
+                raise ValidationError({'marker_type': _(f'Unknown marker type: {self.marker_type}')})
 
     def __str__(self):
         return self.label or f'{self.get_marker_type_display()} ({self.latitude}, {self.longitude})'

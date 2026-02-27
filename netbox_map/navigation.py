@@ -58,6 +58,20 @@ menu = PluginMenu(
         )),
         (_('Configuration'), (
             PluginMenuItem(
+                link='plugins:netbox_map:custommarkertype_list',
+                link_text=_('Custom Marker Types'),
+                permissions=['netbox_map.view_custommarkertype'],
+                buttons=(
+                    PluginMenuButton(
+                        link='plugins:netbox_map:custommarkertype_add',
+                        title=_('Add'),
+                        icon_class='mdi mdi-plus-thick',
+                        color=ButtonColorChoices.GREEN,
+                        permissions=['netbox_map.add_custommarkertype'],
+                    ),
+                )
+            ),
+            PluginMenuItem(
                 link='plugins:netbox_map:settings',
                 link_text=_('Settings'),
             ),
