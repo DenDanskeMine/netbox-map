@@ -51,8 +51,24 @@
     let selectedTile = null;
     let bgImg = null;
 
+    // ===== Type configuration from server (dynamic, includes custom types) =====
+    var TYPE_CONFIGS = [];
+    try {
+        TYPE_CONFIGS = JSON.parse(container.dataset.typeConfigs || '[]');
+    } catch (e) {
+        console.error('Failed to parse type configs:', e);
+    }
+    // Build lookup maps from TYPE_CONFIGS
+    var TYPE_COLOR_MAP = {};
+    var TYPE_NAME_MAP = {};
+    var ALL_TYPES = [];
+    TYPE_CONFIGS.forEach(function(tc) {
+        ALL_TYPES.push(tc.slug);
+        TYPE_COLOR_MAP[tc.slug] = tc.color;
+        TYPE_NAME_MAP[tc.slug] = tc.name;
+    });
+
     // ===== Visible Types (toggle filtering) =====
-    var ALL_TYPES = ['rack', 'aisle', 'wall', 'column', 'door', 'cooling', 'power', 'empty', 'reserved', 'ap', 'camera', 'printer', 'floorplan_link'];
     var visibleTypes = new Set(ALL_TYPES);
     var showFOV = true;
 
@@ -135,21 +151,7 @@
      * Get color for non-rack tile types.
      */
     function getTileTypeColor(tileType) {
-        var colors = {
-            'aisle':          '#3a3a50',
-            'wall':           '#5c5c6e',
-            'column':         '#6e6e80',
-            'door':           '#1a8a7a',
-            'cooling':        '#1890b0',
-            'power':          '#c89a20',
-            'empty':          '#2a2a3e',
-            'reserved':       '#b06820',
-            'ap':             '#7b42c8',
-            'camera':         '#c42020',
-            'printer':        '#e67e22',
-            'floorplan_link': '#4a50c8'
-        };
-        return colors[tileType] || '#6b6b80';
+        return TYPE_COLOR_MAP[tileType] || '#6b6b80';
     }
 
     /**
@@ -1360,15 +1362,9 @@
         pdf.setFontSize(6);
         pdf.setTextColor(120, 120, 120);
         var legendItems = [];
-        var typeNames = {
-            'rack': 'Rack', 'ap': 'AP', 'cooling': 'Cooling', 'power': 'Power',
-            'aisle': 'Aisle', 'wall': 'Wall', 'door': 'Door', 'column': 'Column',
-            'empty': 'Empty', 'reserved': 'Reserved', 'camera': 'Camera', 'printer': 'Printer',
-            'floorplan_link': 'Floor Plan Link'
-        };
         for (var ti = 0; ti < ALL_TYPES.length; ti++) {
             if (visibleTypes.has(ALL_TYPES[ti])) {
-                legendItems.push(typeNames[ALL_TYPES[ti]] || ALL_TYPES[ti]);
+                legendItems.push(TYPE_NAME_MAP[ALL_TYPES[ti]] || ALL_TYPES[ti]);
             }
         }
         pdf.text('Visible: ' + legendItems.join(', '), margin, legendY + 3);
@@ -1464,12 +1460,7 @@
     var tileSearchInput = document.getElementById('tile-search-input');
     var tileCountEl = document.getElementById('tile-count');
 
-    var TYPE_COLORS = {
-        'rack': '#6b6b80', 'aisle': '#3a3a50', 'wall': '#5c5c6e', 'column': '#6e6e80',
-        'door': '#1a8a7a', 'cooling': '#1890b0', 'power': '#c89a20', 'empty': '#2a2a3e',
-        'reserved': '#b06820', 'ap': '#7b42c8', 'camera': '#c42020', 'printer': '#e67e22',
-        'floorplan_link': '#4a50c8'
-    };
+    // Reuse the dynamic TYPE_COLOR_MAP built from data-type-configs
 
     // ===== Rack Device Expansion =====
 
@@ -1665,7 +1656,7 @@
         var html = '';
         for (var i = 0; i < filtered.length; i++) {
             var t = filtered[i];
-            var color = t.type === 'rack' ? getUtilizationColor(t.utilization) : (TYPE_COLORS[t.type] || '#6b6b80');
+            var color = t.type === 'rack' ? getUtilizationColor(t.utilization) : (TYPE_COLOR_MAP[t.type] || '#6b6b80');
             var isActive = selectedTile && selectedTile.id === t.id;
             var rackDevices = (t.object_type_model === 'rack' && t.object_id) ? (rackDevicesMap[t.object_id] || []) : [];
             var hasDevices = rackDevices.length > 0;

@@ -1,8 +1,9 @@
 import django_tables2 as tables
+from django.utils.safestring import mark_safe
 from django.utils.translation import gettext_lazy as _
 
 from netbox.tables import NetBoxTable, columns
-from .models import FloorPlanTile, FloorPlan, MapMarker
+from .models import FloorPlanTile, FloorPlan, CustomMarkerType, MapMarker
 
 
 class FloorPlanTable(NetBoxTable):
@@ -202,3 +203,47 @@ class MapMarkerTable(NetBoxTable):
 
     def value_status(self, value, record):
         return record.status
+
+
+class CustomMarkerTypeTable(NetBoxTable):
+    name = tables.Column(
+        linkify=True,
+        verbose_name=_('Name')
+    )
+    slug = tables.Column(
+        verbose_name=_('Slug')
+    )
+    color = tables.Column(
+        verbose_name=_('Color'),
+        orderable=False,
+    )
+    icon = tables.Column(
+        verbose_name=_('Icon'),
+        orderable=False,
+    )
+    tags = columns.TagColumn()
+
+    class Meta(NetBoxTable.Meta):
+        model = CustomMarkerType
+        fields = (
+            'pk', 'id', 'name', 'slug', 'color', 'icon', 'description', 'tags', 'actions',
+        )
+        default_columns = (
+            'pk', 'name', 'slug', 'color', 'icon',
+        )
+
+    def render_color(self, value):
+        return mark_safe(
+            f'<span style="display:inline-block;width:16px;height:16px;'
+            f'border-radius:3px;background:{value};border:1px solid #ccc;"'
+            f' title="{value}"></span> {value}'
+        )
+
+    def value_color(self, value):
+        return value
+
+    def render_icon(self, value):
+        return mark_safe(f'<i class="mdi {value}"></i> {value}')
+
+    def value_icon(self, value):
+        return value

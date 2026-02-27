@@ -1,10 +1,16 @@
 from netbox.api.viewsets import NetBoxModelViewSet
 from .. import filtersets
-from ..models import FloorPlan, FloorPlanTile, LocationCoordinates, MapMarker
+from ..models import FloorPlan, FloorPlanTile, CustomMarkerType, LocationCoordinates, MapMarker
 from .serializers import (
-    FloorPlanSerializer, FloorPlanTileSerializer, LocationCoordinatesSerializer,
-    MapMarkerSerializer,
+    FloorPlanSerializer, FloorPlanTileSerializer, CustomMarkerTypeSerializer,
+    LocationCoordinatesSerializer, MapMarkerSerializer,
 )
+
+
+class CustomMarkerTypeViewSet(NetBoxModelViewSet):
+    queryset = CustomMarkerType.objects.all()
+    serializer_class = CustomMarkerTypeSerializer
+    filterset_class = filtersets.CustomMarkerTypeFilterSet
 
 
 class FloorPlanViewSet(NetBoxModelViewSet):

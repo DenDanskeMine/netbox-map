@@ -54,19 +54,9 @@
   <div class="edit-toolbar mb-3 d-flex gap-2 align-items-center flex-wrap">
     <strong>{% trans "Edit Mode" %}:</strong>
     <select id="tile-type-select" class="form-select form-select-sm no-ts" style="width: auto;">
-      <option value="rack">{% trans "Rack" %}</option>
-      <option value="aisle">{% trans "Aisle" %}</option>
-      <option value="wall">{% trans "Wall" %}</option>
-      <option value="column">{% trans "Column" %}</option>
-      <option value="door">{% trans "Door" %}</option>
-      <option value="cooling">{% trans "Cooling" %}</option>
-      <option value="power">{% trans "Power" %}</option>
-      <option value="empty">{% trans "Empty" %}</option>
-      <option value="reserved">{% trans "Reserved" %}</option>
-      <option value="ap">{% trans "Access Point" %}</option>
-      <option value="camera">{% trans "Camera" %}</option>
-      <option value="printer">{% trans "Printer" %}</option>
-      <option value="floorplan_link">{% trans "Floor Plan Link" %}</option>
+      {% for tc in type_configs %}
+      <option value="{{ tc.slug }}">{{ tc.name }}</option>
+      {% endfor %}
     </select>
     <input type="text" id="tile-label-input" class="form-control form-control-sm"
            placeholder="{% trans 'Label' %}" style="width: 150px;">
@@ -109,6 +99,7 @@
              data-floorplan-id="{{ object.pk }}"
              data-site-id="{{ site_id }}"
              data-popover-fields='{{ popover_fields_json }}'
+             data-type-configs='{{ type_configs_json }}'
              data-detail-base-url="/plugins/map/marker-detail/"
              data-csrf-token="{{ csrf_token }}"
              {% if object.background_image %}
@@ -147,19 +138,9 @@
                  placeholder="{% trans 'Search tiles...' %}">
         </div>
         <div class="sidebar-toggles" id="type-toggles">
-          <button class="type-toggle active" data-type="rack"><span class="toggle-dot" style="background:#4a7eff"></span>{% trans "Rack" %}</button>
-          <button class="type-toggle active" data-type="ap"><span class="toggle-dot" style="background:#7b42c8"></span>{% trans "AP" %}</button>
-          <button class="type-toggle active" data-type="cooling"><span class="toggle-dot" style="background:#1890b0"></span>{% trans "Cooling" %}</button>
-          <button class="type-toggle active" data-type="power"><span class="toggle-dot" style="background:#c89a20"></span>{% trans "Power" %}</button>
-          <button class="type-toggle active" data-type="aisle"><span class="toggle-dot" style="background:#3a3a50"></span>{% trans "Aisle" %}</button>
-          <button class="type-toggle active" data-type="wall"><span class="toggle-dot" style="background:#5c5c6e"></span>{% trans "Wall" %}</button>
-          <button class="type-toggle active" data-type="door"><span class="toggle-dot" style="background:#1a8a7a"></span>{% trans "Door" %}</button>
-          <button class="type-toggle active" data-type="column"><span class="toggle-dot" style="background:#6e6e80"></span>{% trans "Column" %}</button>
-          <button class="type-toggle active" data-type="empty"><span class="toggle-dot" style="background:#2a2a3e"></span>{% trans "Empty" %}</button>
-          <button class="type-toggle active" data-type="reserved"><span class="toggle-dot" style="background:#b06820"></span>{% trans "Reserved" %}</button>
-          <button class="type-toggle active" data-type="camera"><span class="toggle-dot" style="background:#c42020"></span>{% trans "Camera" %}</button>
-          <button class="type-toggle active" data-type="printer"><span class="toggle-dot" style="background:#e67e22"></span>{% trans "Printer" %}</button>
-          <button class="type-toggle active" data-type="floorplan_link"><span class="toggle-dot" style="background:#4a50c8"></span>{% trans "FP Link" %}</button>
+          {% for tc in type_configs %}
+          <button class="type-toggle active" data-type="{{ tc.slug }}"><span class="toggle-dot" style="background:{{ tc.color }}"></span>{{ tc.name }}</button>
+          {% endfor %}
           <button class="type-toggle active" id="fov-toggle"><span class="toggle-dot" style="background:#ff4444; opacity:0.5"></span>{% trans "FOV" %}</button>
         </div>
         <div class="sidebar-filter-row">

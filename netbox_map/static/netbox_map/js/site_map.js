@@ -57,22 +57,17 @@
     var placementMode = null;   // null | 'site' | 'location' | 'tile' | 'marker'
     var placementItem = null;
 
-    /* ── Tile type configuration ──────────────────────────────────── */
-    var TILE_CONFIG = {
-        camera:  { color: '#c42020', icon: 'mdi-cctv',                   label: 'Camera' },
-        ap:      { color: '#7b42c8', icon: 'mdi-access-point',           label: 'AP' },
-        printer: { color: '#e67e22', icon: 'mdi-printer',                label: 'Printer' },
-        rack:    { color: '#3a7afe', icon: 'mdi-server',                 label: 'Rack' },
-        power:   { color: '#c89a20', icon: 'mdi-lightning-bolt',         label: 'Power' },
-        cooling: { color: '#1890b0', icon: 'mdi-snowflake',              label: 'Cooling' },
-        door:    { color: '#1a8a7a', icon: 'mdi-door',                   label: 'Door' },
-        wall:    { color: '#5c5c6e', icon: 'mdi-wall',                   label: 'Wall' },
-        column:  { color: '#6e6e80', icon: 'mdi-pillar',                 label: 'Column' },
-        aisle:   { color: '#3a3a50', icon: 'mdi-walk',                   label: 'Aisle' },
-        empty:   { color: '#2a2a3e', icon: 'mdi-checkbox-blank-outline', label: 'Empty' },
-        reserved:{ color: '#b06820', icon: 'mdi-lock-outline',           label: 'Reserved' },
-        floorplan_link: { color: '#4a50c8', icon: 'mdi-floor-plan',      label: 'Floor Plan Link' }
-    };
+    /* ── Tile type configuration (dynamic, loaded from server) ────── */
+    var TYPE_CONFIGS_RAW = [];
+    try {
+        TYPE_CONFIGS_RAW = JSON.parse(container.getAttribute('data-type-configs') || '[]');
+    } catch (e) {
+        console.error('Failed to parse type configs:', e);
+    }
+    var TILE_CONFIG = {};
+    TYPE_CONFIGS_RAW.forEach(function(tc) {
+        TILE_CONFIG[tc.slug] = { color: tc.color, icon: tc.icon, label: tc.name };
+    });
 
     /* ── Tracking all sidebar items and their Leaflet objects ─────── */
     // Each entry: { kind, data, marker(L.marker), fov(L.polygon|null), sidebarEl(DOM) }
@@ -1224,7 +1219,7 @@
             enterPlacementMode('marker', {
                 marker_type: mType,
                 label: mLabel,
-                name: mLabel || TILE_CONFIG[mType].label
+                name: mLabel || (TILE_CONFIG[mType] ? TILE_CONFIG[mType].label : mType)
             });
         });
     }

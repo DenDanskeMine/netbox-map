@@ -12,8 +12,11 @@ from utilities.forms.fields import (
     CommentField,
 )
 from utilities.forms.rendering import FieldSet
-from .models import FloorPlan, FloorPlanTile, MapMarker, MapSettings, ASSIGNABLE_MODELS
-from .choices import FloorPlanTileTypeChoices, FloorPlanTileStatusChoices
+from .models import FloorPlan, FloorPlanTile, CustomMarkerType, MapMarker, MapSettings, ASSIGNABLE_MODELS
+from .choices import (
+    FloorPlanTileTypeChoices, FloorPlanTileStatusChoices,
+    get_all_tile_type_choices, get_all_type_configs,
+)
 
 
 def get_assignable_content_types():
@@ -170,6 +173,75 @@ class FloorPlanImportForm(NetBoxModelImportForm):
 
 
 #
+# CustomMarkerType forms
+#
+
+class CustomMarkerTypeForm(NetBoxModelForm):
+    fieldsets = (
+        FieldSet(
+            'name', 'slug', 'color', 'icon', 'description', 'tags',
+            name=_('Custom Marker Type')
+        ),
+    )
+
+    class Meta:
+        model = CustomMarkerType
+        fields = ['name', 'slug', 'color', 'icon', 'description', 'tags']
+        widgets = {
+            'color': forms.TextInput(attrs={'type': 'color'}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if not self.instance.pk:
+            self.fields['slug'].required = False
+            self.fields['slug'].help_text = _('Leave blank to auto-generate from name. Will be prefixed with "custom_".')
+
+
+class CustomMarkerTypeImportForm(NetBoxModelImportForm):
+    class Meta:
+        model = CustomMarkerType
+        fields = ('name', 'slug', 'color', 'icon', 'description')
+
+    _SKIP_HEADERS = {'id', 'pk', ''}
+
+    def __init__(self, data=None, *args, headers=None, **kwargs):
+        if headers:
+            headers = self._normalize_headers(headers)
+        if data and isinstance(data, dict):
+            data = self._normalize_row(data)
+        super().__init__(data=data, *args, headers=headers, **kwargs)
+
+    @classmethod
+    def _normalize_headers(cls, headers):
+        new_headers = {}
+        for header, to_field in headers.items():
+            k = header.strip().lower().replace(' ', '_')
+            if k in cls._SKIP_HEADERS:
+                continue
+            new_headers[k] = to_field
+        return new_headers
+
+    @staticmethod
+    def _normalize_row(row):
+        normalized = {}
+        for key, value in row.items():
+            k = key.strip().lower().replace(' ', '_')
+            if k in ('id', 'pk', ''):
+                continue
+            normalized[k] = str(value).strip() if value is not None else ''
+        return normalized
+
+
+class CustomMarkerTypeFilterForm(NetBoxModelFilterSetForm):
+    model = CustomMarkerType
+
+    fieldsets = (
+        FieldSet('q'),
+    )
+
+
+#
 # FloorPlanTile forms
 #
 
@@ -252,6 +324,9 @@ class FloorPlanTileForm(NetBoxModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
+        # Dynamic tile_type choices (built-in + custom)
+        self.fields['tile_type'].choices = get_all_tile_type_choices()
+
         # Pre-populate the object selector if editing an existing tile
         if self.instance.pk and self.instance.assigned_object_type:
             model_name = self.instance.assigned_object_type.model
@@ -299,7 +374,7 @@ class FloorPlanTileFilterForm(NetBoxModelFilterSetForm):
         label=_('Object Type')
     )
     tile_type = forms.MultipleChoiceField(
-        choices=FloorPlanTileTypeChoices,
+        choices=[],
         required=False,
         label=_('Tile Type')
     )
@@ -313,6 +388,10 @@ class FloorPlanTileFilterForm(NetBoxModelFilterSetForm):
         FieldSet('floorplan_id', 'assigned_object_type', 'tile_type', 'status'),
     )
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['tile_type'].choices = get_all_tile_type_choices()
+
 
 class FloorPlanTileImportForm(NetBoxModelImportForm):
     floorplan = CSVModelChoiceField(
@@ -321,7 +400,7 @@ class FloorPlanTileImportForm(NetBoxModelImportForm):
         help_text=_('Floor plan name'),
     )
     tile_type = CSVChoiceField(
-        choices=FloorPlanTileTypeChoices,
+        choices=[],
         help_text=_('Tile type (key or display name, e.g. "ap" or "Access Point")'),
     )
     status = CSVChoiceField(
@@ -359,6 +438,7 @@ class FloorPlanTileImportForm(NetBoxModelImportForm):
         if data and isinstance(data, dict):
             data = self._normalize_row(data)
         super().__init__(data=data, *args, headers=headers, **kwargs)
+        self.fields['tile_type'].choices = get_all_tile_type_choices()
 
     @classmethod
     def _normalize_headers(cls, headers):
@@ -476,6 +556,9 @@ class MapMarkerForm(NetBoxModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        # Dynamic marker_type choices (built-in + custom)
+        self.fields['marker_type'].choices = get_all_tile_type_choices()
+
         if self.instance.pk and self.instance.assigned_object_type:
             model_name = self.instance.assigned_object_type.model
             if model_name in ('rack', 'device', 'powerpanel', 'powerfeed'):
@@ -512,7 +595,7 @@ class MapMarkerImportForm(NetBoxModelImportForm):
         help_text=_('Site name'),
     )
     marker_type = CSVChoiceField(
-        choices=FloorPlanTileTypeChoices,
+        choices=[],
         help_text=_('Marker type (key or display name, e.g. "camera" or "Camera")'),
     )
     status = CSVChoiceField(
@@ -541,6 +624,7 @@ class MapMarkerImportForm(NetBoxModelImportForm):
         if data and isinstance(data, dict):
             data = self._normalize_row(data)
         super().__init__(data=data, *args, headers=headers, **kwargs)
+        self.fields['marker_type'].choices = get_all_tile_type_choices()
 
     @classmethod
     def _normalize_headers(cls, headers):
@@ -653,21 +737,9 @@ POPOVER_FIELD_CHOICES = [
     ('orientation', _('Orientation')),
 ]
 
-TILE_TYPE_INFO = [
-    ('rack', _('Rack')),
-    ('aisle', _('Aisle')),
-    ('wall', _('Wall')),
-    ('column', _('Column')),
-    ('door', _('Door')),
-    ('cooling', _('Cooling')),
-    ('power', _('Power')),
-    ('empty', _('Empty')),
-    ('reserved', _('Reserved')),
-    ('ap', _('Access Point')),
-    ('camera', _('Camera')),
-    ('printer', _('Printer')),
-    ('floorplan_link', _('Floor Plan Link')),
-]
+def _get_tile_type_info():
+    """Return [(slug, label), ...] for all types (built-in + custom)."""
+    return [(tc['slug'], tc['name']) for tc in get_all_type_configs()]
 
 
 class MapSettingsForm(forms.ModelForm):
@@ -748,7 +820,8 @@ class MapSettingsForm(forms.ModelForm):
         if self.instance and self.instance.pk:
             config = self.instance.tile_popover_config or {}
 
-        for type_key, type_label in TILE_TYPE_INFO:
+        self._tile_type_info = _get_tile_type_info()
+        for type_key, type_label in self._tile_type_info:
             field_name = f'{type_key}_popover_fields'
             self.fields[field_name] = forms.MultipleChoiceField(
                 choices=extended_choices,
@@ -764,7 +837,7 @@ class MapSettingsForm(forms.ModelForm):
 
         # Reconstruct tile_popover_config dict from per-type form fields
         config = {}
-        for type_key, _ in TILE_TYPE_INFO:
+        for type_key, _ in self._tile_type_info:
             field_name = f'{type_key}_popover_fields'
             config[type_key] = self.cleaned_data.get(field_name, [])
         instance.tile_popover_config = config
@@ -782,7 +855,7 @@ class MapMarkerFilterForm(NetBoxModelFilterSetForm):
         label=_('Site')
     )
     marker_type = forms.MultipleChoiceField(
-        choices=FloorPlanTileTypeChoices,
+        choices=[],
         required=False,
         label=_('Marker Type')
     )
@@ -795,3 +868,7 @@ class MapMarkerFilterForm(NetBoxModelFilterSetForm):
     fieldsets = (
         FieldSet('site_id', 'marker_type', 'status'),
     )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['marker_type'].choices = get_all_tile_type_choices()

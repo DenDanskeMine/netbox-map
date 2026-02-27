@@ -49,19 +49,9 @@
     <div class="site-map-toolbar-group">
       <label class="toolbar-label">{% trans "New Marker" %}</label>
       <select id="new-marker-type" class="form-select form-select-sm">
-        <option value="camera">{% trans "Camera" %}</option>
-        <option value="ap">{% trans "Access Point" %}</option>
-        <option value="printer">{% trans "Printer" %}</option>
-        <option value="rack">{% trans "Rack" %}</option>
-        <option value="power">{% trans "Power" %}</option>
-        <option value="cooling">{% trans "Cooling" %}</option>
-        <option value="door">{% trans "Door" %}</option>
-        <option value="wall">{% trans "Wall" %}</option>
-        <option value="column">{% trans "Column" %}</option>
-        <option value="aisle">{% trans "Aisle" %}</option>
-        <option value="empty">{% trans "Empty" %}</option>
-        <option value="reserved">{% trans "Reserved" %}</option>
-        <option value="floorplan_link">{% trans "Floor Plan Link" %}</option>
+        {% for tc in type_configs %}
+        <option value="{{ tc.slug }}">{{ tc.name }}</option>
+        {% endfor %}
       </select>
       <input type="text" id="new-marker-label" class="form-control form-control-sm" placeholder="{% trans 'Label...' %}">
       <button class="btn btn-sm btn-success" id="add-marker-btn">
@@ -86,6 +76,7 @@
        data-tiles='{{ tiles_json }}'
        data-unplaced-tiles='{{ unplaced_tiles_json }}'
        data-markers='{{ markers_json }}'
+       data-type-configs='{{ type_configs_json }}'
        data-csrf-token="{{ csrf_token }}"
        data-can-edit="{{ can_edit|yesno:'true,false' }}"
        data-site-api-url="/api/dcim/sites/"

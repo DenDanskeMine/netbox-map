@@ -2,6 +2,7 @@ from netbox.api.routers import NetBoxRouter
 from . import views
 
 router = NetBoxRouter()
+router.register('custom-marker-types', views.CustomMarkerTypeViewSet)
 router.register('floorplans', views.FloorPlanViewSet)
 router.register('floorplan-tiles', views.FloorPlanTileViewSet)
 router.register('location-coordinates', views.LocationCoordinatesViewSet)
