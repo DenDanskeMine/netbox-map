@@ -10,6 +10,7 @@ urlpatterns = (
     path('custom-marker-types/', views.CustomMarkerTypeListView.as_view(), name='custommarkertype_list'),
     path('custom-marker-types/add/', views.CustomMarkerTypeEditView.as_view(), name='custommarkertype_add'),
     path('custom-marker-types/import/', views.CustomMarkerTypeBulkImportView.as_view(), name='custommarkertype_bulk_import'),
+    path('custom-marker-types/edit/', views.CustomMarkerTypeBulkEditView.as_view(), name='custommarkertype_bulk_edit'),
     path('custom-marker-types/delete/', views.CustomMarkerTypeBulkDeleteView.as_view(), name='custommarkertype_bulk_delete'),
     path('custom-marker-types/<int:pk>/', views.CustomMarkerTypeView.as_view(), name='custommarkertype'),
     path('custom-marker-types/<int:pk>/edit/', views.CustomMarkerTypeEditView.as_view(), name='custommarkertype_edit'),

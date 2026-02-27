@@ -45,6 +45,13 @@ class CustomMarkerTypeDeleteView(generic.ObjectDeleteView):
     queryset = CustomMarkerType.objects.all()
 
 
+class CustomMarkerTypeBulkEditView(generic.BulkEditView):
+    queryset = CustomMarkerType.objects.all()
+    filterset = filtersets.CustomMarkerTypeFilterSet
+    table = tables.CustomMarkerTypeTable
+    form = forms.CustomMarkerTypeBulkEditForm
+
+
 class CustomMarkerTypeBulkImportView(generic.BulkImportView):
     queryset = CustomMarkerType.objects.all()
     model_form = forms.CustomMarkerTypeImportForm

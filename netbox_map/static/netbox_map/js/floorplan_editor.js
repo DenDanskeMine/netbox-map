@@ -107,6 +107,8 @@
             var t = viewer.tiles[i];
             if (gridX < t.x + t.w && gridX + newWidth > t.x &&
                 gridY < t.y + t.h && gridY + newHeight > t.y) {
+                // Only block if this tile is actually known and visible
+                if (viewer.visibleTypes && !viewer.visibleTypes.has(t.type)) continue;
                 return true;
             }
         }
@@ -281,6 +283,7 @@
             if (t.id === excludeId) continue;
             if (gridX < t.x + t.w && gridX + newWidth > t.x &&
                 gridY < t.y + t.h && gridY + newHeight > t.y) {
+                if (viewer.visibleTypes && !viewer.visibleTypes.has(t.type)) continue;
                 return true;
             }
         }

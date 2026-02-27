@@ -1821,6 +1821,7 @@
         gridHeight: gridHeight,
         buildSidebar: buildSidebar,
         updateDetailPanel: updateDetailPanel,
+        visibleTypes: visibleTypes,
         getSelectedTile: function() { return selectedTile; }
     };
 })();

@@ -198,6 +198,15 @@ class CustomMarkerTypeForm(NetBoxModelForm):
             self.fields['slug'].help_text = _('Leave blank to auto-generate from name. Will be prefixed with "custom_".')
 
 
+class CustomMarkerTypeBulkEditForm(NetBoxModelBulkEditForm):
+    color = forms.CharField(max_length=7, required=False)
+    icon = forms.CharField(max_length=100, required=False)
+    description = forms.CharField(max_length=200, required=False)
+
+    model = CustomMarkerType
+    nullable_fields = ('description',)
+
+
 class CustomMarkerTypeImportForm(NetBoxModelImportForm):
     class Meta:
         model = CustomMarkerType
