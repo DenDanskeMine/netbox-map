@@ -29,8 +29,11 @@ A comprehensive mapping and floor plan visualization plugin for NetBox. Build in
 | **Interactive Floor Plans** | Canvas-based editor with drag-and-drop tile placement, pan/zoom, and configurable grids |
 | **Global Site Map** | Leaflet.js geographic map showing sites, locations, tiles, and standalone markers |
 | **Rack Utilization Heatmap** | Color-coded gradient (green → red) showing rack fill percentage directly on tiles |
+| **Cable Tracing** | Full cable trace visualization for devices, rear ports, and front ports — see the complete path through patch panels |
+| **Show on Map** | Devices in cable traces that exist on the floor plan get a map-marker button to zoom directly to them |
 | **Nested Rack Devices** | Expand any rack in the sidebar to see all devices inside it, sorted by U-position |
 | **Searchable Sidebar** | Real-time search across tile labels, device names, and IP addresses — finds devices inside racks |
+| **Resizable Sidebar** | Draggable divider between the tile list and detail panel — adjust the split to your preference |
 | **Rack Elevation View** | Select a rack tile to see its full front/rear elevation SVG in the sidebar |
 | **Camera FOV Visualization** | Configure and display camera field-of-view cones with live preview |
 | **GPS Sync** | Automatically updates device latitude/longitude when placed on a map |
@@ -50,6 +53,7 @@ A comprehensive mapping and floor plan visualization plugin for NetBox. Build in
   - [Tile Types](#tile-types)
   - [Object Linking](#object-linking)
   - [Rack Utilization](#rack-utilization)
+  - [Cable Tracing](#cable-tracing)
   - [Nested Rack Devices](#nested-rack-devices)
   - [Rack Elevation](#rack-elevation)
   - [Camera FOV](#camera-fov)
@@ -194,9 +198,10 @@ Each tile supports:
 Tiles can be linked to NetBox objects:
 
 - **Racks** — shows utilization, elevation, and nested devices
-- **Devices** — shows primary IP, MAC address, and detail fields
+- **Devices** — shows primary IP, MAC address, detail fields, and cable traces
 - **Power Panels** — shows site and location info
 - **Power Feeds** — shows status, voltage, amperage
+- **Rear Ports / Front Ports** — shows unified cable trace through the patch panel
 
 **To link an object:**
 
@@ -204,6 +209,17 @@ Tiles can be linked to NetBox objects:
 2. In the **Link Object** panel, choose an object type
 3. Select the specific object from the dropdown (filtered by site)
 4. Click **Link**
+
+### Cable Tracing
+
+Select a device, rear port, or front port tile to see its full cable trace in the sidebar:
+
+- **Device tiles** — shows all cabled interfaces with a collapsible trace for each port
+- **Rear/front port tiles** — shows a single unified trace through the patch panel (e.g., Server:eth0 → Cable → FrontPort → RearPort → Cable → Switch:Gig1/0/3)
+- Each trace renders with **device cards** (color-coded source/middle/endpoint), **port rows**, and **cable lines** with status
+- **Show on map** — if a device in a trace has a tile on the current floor plan, a small map-marker icon appears on its card; clicking it zooms directly to that tile
+- **Rack device traces** — expand a rack in the sidebar, then click the cable icon on any device to see its full trace inline (same rich UI as the detail panel)
+- Devices with no cabled ports show a plain server icon instead of the cable toggle
 
 ### Rack Utilization
 
@@ -221,6 +237,7 @@ Every rack tile in the sidebar shows an **expand arrow** (&#9656;) when it conta
 - Click the arrow to expand and see all devices in that rack
 - Devices are sorted by **U-position** (highest first)
 - Each device shows its **name** (linked to NetBox), **IP address**, and **U-position**
+- Click the **cable icon** on a device to expand its full cable trace inline
 - A device count badge (e.g., "12d") appears on each rack item
 - **Searching works across devices** — type a device name or IP in the search box and the parent rack auto-expands to reveal matching devices
 - Device data is fetched once via a single API call and cached for the session
@@ -411,6 +428,9 @@ All endpoints support filtering, pagination, and brief mode.
 | Filter by type | Click type toggle buttons |
 | Zoom to tile | Click sidebar item |
 | Expand rack devices | Click the arrow (&#9656;) on a rack item |
+| Show device cable traces | Click cable icon on a rack device |
+| Resize sidebar sections | Drag the divider between tile list and detail panel |
+| Show on map (in trace) | Click the map-marker icon on a device card |
 
 ---
 
