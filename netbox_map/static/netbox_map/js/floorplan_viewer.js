@@ -1625,7 +1625,7 @@
         var filtered = tiles.filter(function(t) {
             if (!visibleTypes.has(t.type)) return false;
             if (query) {
-                var text = (t.label || '').toLowerCase() + ' ' + (t.type || '').toLowerCase();
+                var text = (t.label || '').toLowerCase() + ' ' + (t.type || '').toLowerCase() + ' ' + (t.object_name || '').toLowerCase();
                 if (text.indexOf(query) !== -1) return true;
                 // Also match devices inside rack
                 if (t.object_type_model === 'rack' && t.object_id && rackDevicesMap[t.object_id]) {
@@ -1676,7 +1676,12 @@
                     (isExpanded ? '&#9662;' : '&#9656;') + '</span>';
             }
             html += '<div class="sidebar-tile-dot" style="background:' + color + '"></div>';
+            html += '<div class="sidebar-tile-names">';
             html += '<span class="sidebar-tile-label" title="' + (t.label || t.type) + '">' + (t.label || '<em>' + t.type + '</em>') + '</span>';
+            if (t.object_name && t.object_name !== t.label) {
+                html += '<span class="sidebar-tile-object" title="' + t.object_name + '">' + t.object_name + '</span>';
+            }
+            html += '</div>';
             if (hasDevices) {
                 html += '<span class="rack-device-count">' + rackDevices.length + 'd</span>';
             }
@@ -1780,6 +1785,9 @@
             for (var i = 0; i < tiles.length; i++) {
                 if (tiles[i].id === tileId) {
                     zoomToTile(tiles[i]);
+                    // Hide the "Select a tile" placeholder directly
+                    var placeholder = document.getElementById('sidebar-no-selection');
+                    if (placeholder) placeholder.style.display = 'none';
                     return;
                 }
             }

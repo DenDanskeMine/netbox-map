@@ -282,12 +282,27 @@
     flex-shrink: 0;
 }
 
-.sidebar-tile-label {
+.sidebar-tile-names {
     flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.sidebar-tile-label {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
     font-weight: 500;
+}
+
+.sidebar-tile-object {
+    font-size: 10px;
+    color: var(--fp-text-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .sidebar-tile-ip {
@@ -419,6 +434,43 @@
     display: flex;
     flex-direction: column;
     gap: 6px;
+}
+
+/* Tom Select dropdown inside sidebar: open upward, theme-aware */
+.sidebar-link-controls .ts-dropdown {
+    z-index: 1050;
+    top: auto !important;
+    bottom: 100%;
+    background: var(--fp-bg-deep);
+    color: var(--fp-text);
+    border: 1px solid var(--fp-border);
+    border-radius: 4px;
+    box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.15);
+}
+.sidebar-link-controls .ts-dropdown .ts-dropdown-content {
+    max-height: 250px;
+    overflow-y: auto;
+}
+.sidebar-link-controls .ts-dropdown .option,
+.sidebar-link-controls .ts-dropdown .ts-dropdown-content > * {
+    color: var(--fp-text);
+}
+.sidebar-link-controls .ts-dropdown .option:hover,
+.sidebar-link-controls .ts-dropdown .option.active {
+    background: var(--fp-active);
+    color: var(--fp-text);
+}
+.sidebar-link-controls .ts-control {
+    background: var(--fp-input-bg) !important;
+    color: var(--fp-input-text) !important;
+    border-color: var(--fp-input-border) !important;
+}
+.sidebar-link-controls .ts-control input {
+    color: var(--fp-input-text) !important;
+}
+.sidebar-link-controls .ts-control input::placeholder {
+    color: var(--fp-text-muted) !important;
+    opacity: 1;
 }
 
 /* Rack elevation (inline in sidebar) */

@@ -344,7 +344,7 @@
   {% if edit_mode %}
     <script src="{% static 'netbox_map/js/floorplan_editor.js' %}"></script>
     <script>
-    // Object linking logic
+    // Object linking logic — uses NetBox's built-in api-select / DynamicTomSelect
     (function() {
       var container = document.getElementById('floorplan-container');
       if (!container) return;
@@ -373,6 +373,11 @@
         return;
       }
 
+      // Enable link button when object selected (native change event works with Tom Select)
+      linkObjectSelect.addEventListener('change', function() {
+        linkBtn.disabled = !this.value;
+      });
+
       // Show/hide link panel on tile selection
       document.getElementById('floorplan-canvas').addEventListener('click', function() {
         setTimeout(function() {
@@ -394,51 +399,70 @@
         }, 60);
       });
 
-      // Fetch objects when type changes
+      // When type changes, configure as NetBox api-select and trigger init
       linkTypeSelect.addEventListener('change', function() {
         var objectType = this.value;
-        linkObjectSelect.innerHTML = '<option value="">-- Loading... --</option>';
-        linkObjectSelect.disabled = true;
+
+        // Destroy existing Tom Select instance if any
+        if (linkObjectSelect.tomselect) {
+          linkObjectSelect.tomselect.destroy();
+        }
+
         linkBtn.disabled = true;
 
         if (!objectType) {
+          // Reset to plain disabled select
           linkObjectSelect.innerHTML = '<option value="">-- Select object type first --</option>';
+          linkObjectSelect.disabled = true;
+          linkObjectSelect.classList.remove('api-select');
+          linkObjectSelect.classList.add('no-ts');
+          linkObjectSelect.removeAttribute('data-url');
+          linkObjectSelect.removeAttribute('data-static-params');
           return;
         }
 
         var endpoint = API_ENDPOINTS[objectType];
         if (!endpoint) return;
 
-        var url = endpoint + '?limit=500&brief=true';
+        // Configure select as a NetBox api-select with the right endpoint
+        var typeName = objectType.split('.')[1];
+        var typeLabel = typeName.charAt(0).toUpperCase() + typeName.slice(1);
+        linkObjectSelect.innerHTML = '<option value=""></option>';
+        linkObjectSelect.disabled = false;
+        linkObjectSelect.setAttribute('data-url', endpoint);
+        linkObjectSelect.setAttribute('placeholder', 'Search and select a ' + typeLabel + '...');
+
+        // Add site_id filter for all types except power feed
         if (objectType !== 'dcim.powerfeed') {
-          url += '&site_id=' + siteId;
+          linkObjectSelect.setAttribute('data-static-params',
+            JSON.stringify([{queryParam: 'site_id', queryValue: [String(siteId)]}]));
+        } else {
+          linkObjectSelect.removeAttribute('data-static-params');
         }
 
-        fetch(url, {
-          headers: { 'Accept': 'application/json' },
-          credentials: 'same-origin'
-        })
-        .then(function(r) { return r.json(); })
-        .then(function(data) {
-          var results = data.results || [];
-          var typeName = objectType.split('.')[1];
-          linkObjectSelect.innerHTML = '<option value="">-- Select ' + typeName + ' (' + results.length + ') --</option>';
-          results.forEach(function(obj) {
-            var opt = document.createElement('option');
-            opt.value = obj.id;
-            opt.textContent = obj.display || obj.name || ('ID: ' + obj.id);
-            linkObjectSelect.appendChild(opt);
-          });
-          linkObjectSelect.disabled = false;
-        })
-        .catch(function(err) {
-          linkObjectSelect.innerHTML = '<option value="">-- Error: ' + err.message + ' --</option>';
-        });
-      });
+        // Switch classes: remove no-ts, add api-select, ensure not marked as initialized
+        linkObjectSelect.classList.remove('no-ts');
+        linkObjectSelect.classList.remove('tomselected');
+        linkObjectSelect.classList.add('api-select');
 
-      // Enable link button when object selected
-      linkObjectSelect.addEventListener('change', function() {
-        linkBtn.disabled = !this.value;
+        // Trigger NetBox's auto-initialization for api-select elements
+        // NetBox listens for htmx:afterSettle to re-run initSelects()
+        document.dispatchEvent(new Event('htmx:afterSettle'));
+
+        // Fix dropdown clipping: toggle overflow on parent containers when dropdown opens/closes
+        var ts = linkObjectSelect.tomselect;
+        if (ts) {
+          var contextSection = document.querySelector('.sidebar-context-section');
+          var sidebar = document.querySelector('.floorplan-sidebar');
+          ts.on('dropdown_open', function() {
+            if (contextSection) contextSection.style.overflow = 'visible';
+            if (sidebar) sidebar.style.overflow = 'visible';
+          });
+          ts.on('dropdown_close', function() {
+            if (contextSection) contextSection.style.overflow = '';
+            if (sidebar) sidebar.style.overflow = '';
+          });
+        }
       });
 
       // Link button
@@ -468,14 +492,20 @@
           linkStatus.className = 'small text-success ms-1';
           var viewer = window.floorplanViewer;
           if (viewer) {
-            var selectedText = linkObjectSelect.options[linkObjectSelect.selectedIndex].textContent;
+            // Get selected text from Tom Select instance or fallback
+            var selectedText = '';
+            var ts = linkObjectSelect.tomselect;
+            if (ts) {
+              var opt = ts.options[String(objectId)];
+              selectedText = opt ? (opt.display || '') : '';
+            }
             var assignedObj = updated.assigned_object || {};
             for (var i = 0; i < viewer.tiles.length; i++) {
               if (viewer.tiles[i].id === parseInt(tileId)) {
                 viewer.tiles[i].object_type = objectType.split('.')[1];
                 viewer.tiles[i].object_type_model = objectType.split('.')[1];
                 viewer.tiles[i].object_name = assignedObj.display || selectedText;
-                viewer.tiles[i].object_id = parseInt(linkObjectSelect.value, 10);
+                viewer.tiles[i].object_id = objectId;
                 viewer.tiles[i].object_url = assignedObj.url || assignedObj.display_url || null;
                 viewer.tiles[i].utilization = updated.utilization;
                 // Extract primary IP for device objects
@@ -490,7 +520,7 @@
                 } else {
                   viewer.tiles[i].primary_ip = null;
                 }
-                if (!viewer.tiles[i].label) viewer.tiles[i].label = selectedText;
+                if (!viewer.tiles[i].label) viewer.tiles[i].label = assignedObj.display || selectedText;
                 break;
               }
             }
@@ -733,11 +763,15 @@
     var detailPanel = document.getElementById('tile-detail-panel');
     if (!placeholder || !detailPanel) return;
 
-    var observer = new MutationObserver(function() {
-      var isHidden = detailPanel.classList.contains('d-none');
-      placeholder.style.display = isHidden ? '' : 'none';
-    });
+    function sync() {
+      placeholder.style.display = detailPanel.classList.contains('d-none') ? '' : 'none';
+    }
+
+    var observer = new MutationObserver(sync);
     observer.observe(detailPanel, { attributes: true, attributeFilter: ['class'] });
+
+    // Check initial state (handles ?tile= deep link case)
+    sync();
   })();
   </script>
 {% endblock %}
