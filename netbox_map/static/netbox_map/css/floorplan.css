@@ -659,7 +659,7 @@
     position: absolute;
     z-index: 20;
     pointer-events: none;
-    max-width: 280px;
+    max-width: 340px;
     padding: 8px 12px;
     border-radius: 6px;
     font-size: 12px;
@@ -669,11 +669,8 @@
     border: 1px solid var(--fp-border);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
     backdrop-filter: blur(8px);
-    white-space: nowrap;
-}
-.tile-popover.popover-has-trace {
-    max-width: 340px;
     white-space: normal;
+    word-break: break-word;
 }
 
 .tile-popover strong {
