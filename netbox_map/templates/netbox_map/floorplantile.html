@@ -39,6 +39,18 @@
               {% endif %}
             </td>
           </tr>
+          {% if object.tile_type == 'drop' %}
+          <tr>
+            <th scope="row">{% trans "Assigned Ports" %}</th>
+            <td>
+              {% for pa in object.port_assignments.all %}
+                {{ pa.port }}<br>
+              {% empty %}
+                <span class="text-muted">&mdash;</span>
+              {% endfor %}
+            </td>
+          </tr>
+          {% endif %}
           <tr>
             <th scope="row">{% trans "Label" %}</th>
             <td>{{ object.label|placeholder }}</td>

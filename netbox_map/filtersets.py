@@ -4,7 +4,7 @@ from django.utils.translation import gettext_lazy as _
 
 from dcim.models import Site, Location
 from netbox.filtersets import NetBoxModelFilterSet
-from .models import FloorPlan, FloorPlanTile, CustomMarkerType, MapMarker
+from .models import FloorPlan, FloorPlanTile, CustomMarkerType, MapMarker, TilePortAssignment
 from .choices import FloorPlanTileStatusChoices, get_all_tile_type_choices
 
 
@@ -73,6 +73,20 @@ class CustomMarkerTypeFilterSet(NetBoxModelFilterSet):
 
     def search(self, queryset, name, value):
         return queryset.filter(name__icontains=value)
+
+
+class TilePortAssignmentFilterSet(NetBoxModelFilterSet):
+    tile_id = django_filters.ModelMultipleChoiceFilter(
+        queryset=FloorPlanTile.objects.all(),
+        label=_('Tile (ID)'),
+    )
+
+    class Meta:
+        model = TilePortAssignment
+        fields = ['id', 'tile_id']
+
+    def search(self, queryset, name, value):
+        return queryset
 
 
 class MapMarkerFilterSet(NetBoxModelFilterSet):

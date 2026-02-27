@@ -358,6 +358,14 @@ class FloorPlanTileForm(NetBoxModelForm):
     def clean(self):
         super().clean()
 
+        tile_type = self.cleaned_data.get('tile_type')
+
+        # Drop tiles use port_assignments, not the single generic FK
+        if tile_type == 'drop':
+            self.cleaned_data['assigned_object_type'] = None
+            self.cleaned_data['assigned_object_id'] = None
+            return self.cleaned_data
+
         assigned_object_type = self.cleaned_data.get('assigned_object_type')
 
         if assigned_object_type:

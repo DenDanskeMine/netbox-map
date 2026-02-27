@@ -345,6 +345,28 @@
             <div id="link-current" class="small text-muted"></div>
           </div>
         </div>
+
+        {# Drop Ports panel (edit mode, for drop tiles) #}
+        <div id="drop-ports-panel" class="d-none">
+          <div class="sidebar-section-title">{% trans "Drop Ports" %}</div>
+          <div class="sidebar-link-controls">
+            <select id="drop-port-type" class="form-select form-select-sm sidebar-input no-ts">
+              <option value="">-- {% trans "Select Port Type" %} --</option>
+              <option value="dcim.frontport">{% trans "Front Port" %}</option>
+              <option value="dcim.rearport">{% trans "Rear Port" %}</option>
+            </select>
+            <select id="drop-port-select" class="form-select form-select-sm sidebar-input no-ts" disabled>
+              <option value="">-- {% trans "Select port type first" %} --</option>
+            </select>
+            <div class="d-flex gap-1 align-items-center">
+              <button id="add-drop-port-btn" class="btn btn-sm btn-primary" disabled>
+                <i class="mdi mdi-plus"></i> {% trans "Add Port" %}
+              </button>
+              <span id="drop-port-status" class="small text-muted ms-1"></span>
+            </div>
+            <div id="drop-port-list" class="mt-2"></div>
+          </div>
+        </div>
         {% endif %}
       </div>
     </div>
@@ -391,13 +413,13 @@
         linkBtn.disabled = !this.value;
       });
 
-      // Show/hide link panel on tile selection
+      // Show/hide link panel on tile selection (hide for drop tiles)
       document.getElementById('floorplan-canvas').addEventListener('click', function() {
         setTimeout(function() {
           var viewer = window.floorplanViewer;
           if (!viewer) return;
           var tile = viewer.getSelectedTile();
-          if (!tile) {
+          if (!tile || tile.type === 'drop') {
             if (linkPanel) linkPanel.classList.add('d-none');
             return;
           }
@@ -595,6 +617,209 @@
         })
         .catch(function(err) { alert('Network error: ' + err.message); });
       });
+    })();
+
+    // Drop port management logic (for drop tiles)
+    (function() {
+      var container = document.getElementById('floorplan-container');
+      if (!container) return;
+
+      var siteId = container.dataset.siteId;
+      var csrfToken = container.dataset.csrfToken;
+
+      var DROP_API_ENDPOINTS = {
+        'dcim.frontport': '/api/dcim/front-ports/',
+        'dcim.rearport': '/api/dcim/rear-ports/'
+      };
+      var assignmentApiUrl = '/api/plugins/map/tile-port-assignments/';
+
+      var dropPanel = document.getElementById('drop-ports-panel');
+      var portTypeSelect = document.getElementById('drop-port-type');
+      var portSelect = document.getElementById('drop-port-select');
+      var addBtn = document.getElementById('add-drop-port-btn');
+      var statusEl = document.getElementById('drop-port-status');
+      var portListEl = document.getElementById('drop-port-list');
+
+      if (!dropPanel || !portTypeSelect || !portSelect) return;
+
+      // Enable add button when port is selected
+      portSelect.addEventListener('change', function() {
+        addBtn.disabled = !this.value;
+      });
+
+      // Show/hide panel on tile selection
+      document.getElementById('floorplan-canvas').addEventListener('click', function() {
+        setTimeout(function() {
+          var viewer = window.floorplanViewer;
+          if (!viewer) return;
+          var tile = viewer.getSelectedTile();
+          if (!tile || tile.type !== 'drop') {
+            dropPanel.classList.add('d-none');
+            return;
+          }
+          dropPanel.classList.remove('d-none');
+          loadAssignedPorts(tile.id);
+        }, 80);
+      });
+
+      // Port type change -> populate port selector with Tom Select
+      portTypeSelect.addEventListener('change', function() {
+        var portType = this.value;
+
+        // Destroy existing Tom Select instance if any
+        if (portSelect.tomselect) {
+          portSelect.tomselect.destroy();
+        }
+
+        addBtn.disabled = true;
+
+        if (!portType) {
+          portSelect.innerHTML = '<option value="">-- Select port type first --</option>';
+          portSelect.disabled = true;
+          portSelect.classList.remove('api-select');
+          portSelect.classList.add('no-ts');
+          portSelect.removeAttribute('data-url');
+          portSelect.removeAttribute('data-static-params');
+          return;
+        }
+
+        var endpoint = DROP_API_ENDPOINTS[portType];
+        if (!endpoint) return;
+
+        var typeName = portType.split('.')[1];
+        var typeLabel = typeName === 'frontport' ? 'Front Port' : 'Rear Port';
+        portSelect.innerHTML = '<option value=""></option>';
+        portSelect.disabled = false;
+        portSelect.setAttribute('data-url', endpoint);
+        portSelect.setAttribute('placeholder', 'Search and select a ' + typeLabel + '...');
+        portSelect.setAttribute('data-static-params',
+          JSON.stringify([{queryParam: 'site_id', queryValue: [String(siteId)]}]));
+
+        portSelect.classList.remove('no-ts');
+        portSelect.classList.remove('tomselected');
+        portSelect.classList.add('api-select');
+
+        document.dispatchEvent(new Event('htmx:afterSettle'));
+
+        var ts = portSelect.tomselect;
+        if (ts) {
+          var contextSection = document.querySelector('.sidebar-context-section');
+          var sidebar = document.querySelector('.floorplan-sidebar');
+          ts.on('dropdown_open', function() {
+            if (contextSection) contextSection.style.overflow = 'visible';
+            if (sidebar) sidebar.style.overflow = 'visible';
+            // Force dropdown to open upward
+            var dd = ts.dropdown;
+            dd.style.setProperty('top', 'auto', 'important');
+            dd.style.setProperty('bottom', '100%', 'important');
+          });
+          ts.on('dropdown_close', function() {
+            if (contextSection) contextSection.style.overflow = '';
+            if (sidebar) sidebar.style.overflow = '';
+          });
+        }
+      });
+
+      // Add port assignment
+      addBtn.addEventListener('click', function() {
+        var detailPanel = document.getElementById('tile-detail-panel');
+        var tileId = detailPanel ? detailPanel.dataset.selectedTileId : null;
+        if (!tileId) return;
+
+        var portType = portTypeSelect.value;
+        var portId = parseInt(portSelect.value, 10);
+        if (!portType || !portId) return;
+
+        statusEl.textContent = 'Adding...';
+        addBtn.disabled = true;
+
+        fetch(assignmentApiUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+          body: JSON.stringify({ tile: parseInt(tileId), port_type: portType, port_id: portId })
+        })
+        .then(function(r) {
+          if (r.ok) return r.json();
+          return r.json().then(function(e) { throw new Error(JSON.stringify(e)); });
+        })
+        .then(function() {
+          statusEl.textContent = 'Added!';
+          statusEl.className = 'small text-success ms-1';
+          addBtn.disabled = false;
+          // Update tile's port count in viewer
+          var viewer = window.floorplanViewer;
+          if (viewer) {
+            for (var i = 0; i < viewer.tiles.length; i++) {
+              if (viewer.tiles[i].id === parseInt(tileId)) {
+                viewer.tiles[i].drop_port_count = (viewer.tiles[i].drop_port_count || 0) + 1;
+                break;
+              }
+            }
+            viewer.render();
+          }
+          // Refresh port list after a brief delay to ensure DB commit
+          setTimeout(function() { loadAssignedPorts(tileId); }, 200);
+          setTimeout(function() { statusEl.textContent = ''; statusEl.className = 'small text-muted ms-1'; }, 2000);
+        })
+        .catch(function(err) {
+          statusEl.textContent = 'Error!';
+          statusEl.className = 'small text-danger ms-1';
+          addBtn.disabled = false;
+          console.error('Drop port add error:', err.message);
+          // Still try to reload ports - the add may have succeeded even if response parsing failed
+          setTimeout(function() { loadAssignedPorts(tileId); }, 500);
+          setTimeout(function() { statusEl.textContent = ''; statusEl.className = 'small text-muted ms-1'; }, 3000);
+        });
+      });
+
+      // Load and display assigned ports
+      function loadAssignedPorts(tileId) {
+        fetch(assignmentApiUrl + '?tile_id=' + tileId)
+          .then(function(r) { return r.json(); })
+          .then(function(data) {
+            var results = data.results || [];
+            var html = '';
+            for (var i = 0; i < results.length; i++) {
+              var a = results[i];
+              var portName = a.port ? (a.port.display || ('Port #' + a.port_id)) : ('Port #' + a.port_id);
+              var portTypeBadge = a.port_type === 'dcim.frontport'
+                ? '<span class="badge bg-primary text-white me-1">FP</span>'
+                : '<span class="badge bg-info text-white me-1">RP</span>';
+              html += '<div class="d-flex align-items-center gap-1 mb-1">';
+              html += portTypeBadge;
+              html += '<span class="small flex-grow-1">' + portName + '</span>';
+              html += '<button class="btn btn-sm btn-outline-danger px-1 remove-drop-port" data-id="' + a.id + '" title="Remove">';
+              html += '<i class="mdi mdi-close"></i></button></div>';
+            }
+            portListEl.innerHTML = html || '<span class="text-muted small">No ports assigned</span>';
+            // Attach remove handlers
+            var removeBtns = portListEl.querySelectorAll('.remove-drop-port');
+            for (var j = 0; j < removeBtns.length; j++) {
+              removeBtns[j].addEventListener('click', (function(btn) {
+                return function() {
+                  var assignId = btn.getAttribute('data-id');
+                  fetch(assignmentApiUrl + assignId + '/', {
+                    method: 'DELETE',
+                    headers: { 'X-CSRFToken': csrfToken }
+                  }).then(function() {
+                    loadAssignedPorts(tileId);
+                    // Update tile's port count in viewer
+                    var viewer = window.floorplanViewer;
+                    if (viewer) {
+                      for (var k = 0; k < viewer.tiles.length; k++) {
+                        if (viewer.tiles[k].id === parseInt(tileId)) {
+                          viewer.tiles[k].drop_port_count = Math.max(0, (viewer.tiles[k].drop_port_count || 1) - 1);
+                          break;
+                        }
+                      }
+                      viewer.render();
+                    }
+                  });
+                };
+              })(removeBtns[j]));
+            }
+          });
+      }
     })();
 
     // Floor Plan linking logic (for floorplan_link tiles)
