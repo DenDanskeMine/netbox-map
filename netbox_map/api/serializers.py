@@ -56,7 +56,7 @@ class FloorPlanTileSerializer(NetBoxModelSerializer):
     assigned_object_type = ContentTypeField(
         queryset=ContentType.objects.filter(
             app_label='dcim',
-            model__in=['device', 'rack', 'powerpanel', 'powerfeed'],
+            model__in=['device', 'rack', 'powerpanel', 'powerfeed', 'rearport', 'frontport'],
         ),
         required=False,
         allow_null=True,
@@ -115,7 +115,7 @@ class MapMarkerSerializer(NetBoxModelSerializer):
     assigned_object_type = ContentTypeField(
         queryset=ContentType.objects.filter(
             app_label='dcim',
-            model__in=['device', 'rack', 'powerpanel', 'powerfeed'],
+            model__in=['device', 'rack', 'powerpanel', 'powerfeed', 'rearport', 'frontport'],
         ),
         required=False,
         allow_null=True,

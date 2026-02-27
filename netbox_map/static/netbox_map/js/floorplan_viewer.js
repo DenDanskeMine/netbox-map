@@ -26,6 +26,14 @@
         console.error('Failed to parse tile data:', e);
     }
 
+    // Build device-to-tile lookup for "show on map" buttons in cable traces
+    var deviceTileMap = {};
+    for (var dti = 0; dti < tiles.length; dti++) {
+        if (tiles[dti].object_type_model === 'device' && tiles[dti].object_id) {
+            deviceTileMap[tiles[dti].object_id] = tiles[dti];
+        }
+    }
+
     // Parse popover field configuration (supports dict per tile type or flat array for backward compat)
     var defaultPopoverFields = ['label', 'object_info', 'primary_ip', 'utilization', 'position', 'size'];
     var popoverConfig = {};
@@ -454,6 +462,8 @@
             if (deleteBtn) deleteBtn.disabled = true;
             var enrichedEl = document.getElementById('fp-enriched-detail');
             if (enrichedEl) enrichedEl.innerHTML = '';
+            var ctp = document.getElementById('cable-trace-panel');
+            if (ctp) ctp.classList.add('d-none');
             return;
         }
 
@@ -571,12 +581,17 @@
                             html += '</div>';
                         }
                         enrichedEl.innerHTML = html;
+                        // Render cable traces if available
+                        renderCableTracePanel(detail.interfaces, tile);
                     })
                     .catch(function() {
                         if (selectedTile === tile) enrichedEl.innerHTML = '';
                     });
             } else {
                 enrichedEl.innerHTML = '';
+                // Hide cable trace panel when no applicable object
+                var ctp = document.getElementById('cable-trace-panel');
+                if (ctp) ctp.classList.add('d-none');
             }
         }
 
@@ -608,6 +623,276 @@
 
         var deleteBtn = document.getElementById('delete-tile-btn');
         if (deleteBtn) deleteBtn.disabled = false;
+    }
+
+    // ===== Cable Trace Panel =====
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    /**
+     * Build a flat path array from trace hops for NetBox-style rendering.
+     * Converts hop data into ordered sequence of: device, port, cable, port, device, ...
+     */
+    function buildTracePath(trace) {
+        var path = [];
+        // Track last device to avoid duplicates on passthrough
+        var lastDeviceKey = null;
+
+        for (var j = 0; j < trace.length; j++) {
+            var hop = trace[j];
+
+            // Near-end device + port (skip on first hop — the origin is shown by the header)
+            if (hop.near_end) {
+                var nearDev = hop.near_end.device || '';
+                var nearDevKey = nearDev + '|' + (hop.near_end.device_url || '');
+                if (j === 0) {
+                    // First hop: show source device card
+                    if (nearDev) {
+                        path.push({kind: 'device', data: hop.near_end, role: 'source'});
+                        lastDeviceKey = nearDevKey;
+                    }
+                } else if (nearDevKey !== lastDeviceKey && nearDev) {
+                    // Intermediate device (patch panel) — near_end is a new device
+                    path.push({kind: 'device', data: hop.near_end, role: 'middle'});
+                    lastDeviceKey = nearDevKey;
+                }
+                path.push({kind: 'port', data: hop.near_end});
+            }
+
+            // Cable
+            if (hop.cable) {
+                path.push({kind: 'cable', data: hop.cable});
+            }
+
+            // Far-end port + device
+            if (hop.far_end) {
+                path.push({kind: 'port', data: hop.far_end});
+                var farDev = hop.far_end.device || '';
+                var farDevKey = farDev + '|' + (hop.far_end.device_url || '');
+                if (farDevKey !== lastDeviceKey && farDev) {
+                    var isLast = (j === trace.length - 1);
+                    path.push({kind: 'device', data: hop.far_end, role: isLast ? 'endpoint' : 'middle'});
+                    lastDeviceKey = farDevKey;
+                }
+            }
+        }
+        return path;
+    }
+
+    /**
+     * Render a port type label for display.
+     */
+    function portTypeLabel(type) {
+        switch (type) {
+            case 'Interface': return 'Interface';
+            case 'RearPort':
+            case 'Rear Port':  return 'Rear Port';
+            case 'FrontPort':
+            case 'Front Port': return 'Front Port';
+            case 'ConsolePort': return 'Console Port';
+            case 'ConsoleServerPort': return 'Console Server Port';
+            case 'PowerPort':  return 'Power Port';
+            case 'PowerOutlet': return 'Power Outlet';
+            default: return type || 'Port';
+        }
+    }
+
+    function portTypeIcon(type) {
+        switch (type) {
+            case 'Interface':   return 'mdi-ethernet';
+            case 'RearPort':
+            case 'Rear Port':   return 'mdi-arrow-collapse-left';
+            case 'FrontPort':
+            case 'Front Port':  return 'mdi-arrow-collapse-right';
+            default:            return 'mdi-connection';
+        }
+    }
+
+    /**
+     * Generate cable trace HTML for a list of interfaces.
+     * Reusable by both the main sidebar panel and rack device inline traces.
+     * @param {Array} interfaces - interface trace data from the API
+     * @param {string} idPrefix - unique prefix for element IDs (e.g. 'main', 'rdt-42')
+     * @returns {string} HTML string
+     */
+    function generateTraceHTML(interfaces, idPrefix) {
+        if (!interfaces || interfaces.length === 0) return '';
+        var html = '';
+        for (var i = 0; i < interfaces.length; i++) {
+            var iface = interfaces[i];
+            html += '<div class="ct-interface" data-ct-idx="' + i + '">';
+            html += '<div class="ct-interface-header" data-ct-toggle="' + idPrefix + '-' + i + '">';
+            html += '<i class="mdi ' + portTypeIcon(iface.type) + ' ct-iface-icon"></i>';
+            html += '<span class="ct-iface-name">' + escapeHtml(iface.name) + '</span>';
+            html += '<span class="ct-iface-type">' + escapeHtml(iface.type) + '</span>';
+            html += '<i class="mdi mdi-chevron-down ct-chevron"></i>';
+            html += '</div>';
+
+            if (iface.trace && iface.trace.length > 0) {
+                var path = buildTracePath(iface.trace);
+                html += '<div class="ct-trace-body" id="ct-body-' + idPrefix + '-' + i + '">';
+
+                for (var p = 0; p < path.length; p++) {
+                    var node = path[p];
+
+                    if (node.kind === 'device') {
+                        var roleClass = 'ct-dev-' + node.role;
+                        html += '<div class="ct-device ' + roleClass + '">';
+                        html += '<div class="ct-dev-name">';
+                        if (node.data.device_url) {
+                            html += '<a href="' + escapeHtml(node.data.device_url) + '">' + escapeHtml(node.data.device) + '</a>';
+                        } else {
+                            html += escapeHtml(node.data.device || node.data.name);
+                        }
+                        // "Show on map" button if device has a tile on this floorplan
+                        if (node.data.device_id && deviceTileMap[node.data.device_id]) {
+                            html += '<span class="ct-dev-map-btn" data-tile-id="' + deviceTileMap[node.data.device_id].id + '" title="Show on map">';
+                            html += '<i class="mdi mdi-map-marker"></i>';
+                            html += '</span>';
+                        }
+                        html += '</div>';
+                        var meta = [];
+                        if (node.data.device_role) meta.push(escapeHtml(node.data.device_role));
+                        if (node.data.device_type) meta.push(escapeHtml(node.data.device_type));
+                        if (node.data.device_rack) {
+                            if (node.data.device_rack_url) {
+                                meta.push('<a href="' + escapeHtml(node.data.device_rack_url) + '">' + escapeHtml(node.data.device_rack) + '</a>');
+                            } else {
+                                meta.push(escapeHtml(node.data.device_rack));
+                            }
+                        }
+                        if (node.data.device_site) meta.push(escapeHtml(node.data.device_site));
+                        if (meta.length) {
+                            html += '<div class="ct-dev-meta">' + meta.join(' · ') + '</div>';
+                        }
+                        html += '</div>';
+
+                    } else if (node.kind === 'port') {
+                        html += '<div class="ct-port">';
+                        html += '<i class="mdi ' + portTypeIcon(node.data.type) + ' ct-port-icon"></i>';
+                        if (node.data.url) {
+                            html += '<a href="' + escapeHtml(node.data.url) + '" class="ct-port-name">' + escapeHtml(node.data.name) + '</a>';
+                        } else {
+                            html += '<span class="ct-port-name">' + escapeHtml(node.data.name) + '</span>';
+                        }
+                        html += '<span class="ct-port-type">' + portTypeLabel(node.data.type) + '</span>';
+                        html += '</div>';
+
+                    } else if (node.kind === 'cable') {
+                        html += '<div class="ct-cable">';
+                        html += '<div class="ct-cable-line"></div>';
+                        html += '<div class="ct-cable-label">';
+                        html += '<a href="' + escapeHtml(node.data.url) + '">';
+                        html += '<i class="mdi mdi-cable-data"></i> ' + escapeHtml(node.data.label);
+                        html += '</a>';
+                        if (node.data.status) {
+                            var sColor = node.data.status_color || '';
+                            var sStyle = sColor ? ' style="color:' + escapeHtml(sColor) + '"' : '';
+                            html += ' <span class="ct-cable-status"' + sStyle + '>' + escapeHtml(node.data.status) + '</span>';
+                        }
+                        html += '</div>';
+                        html += '<div class="ct-cable-line"></div>';
+                        html += '</div>';
+                    }
+                }
+
+                html += '</div>'; // ct-trace-body
+            }
+
+            html += '</div>'; // ct-interface
+        }
+        return html;
+    }
+
+    /**
+     * Attach expand/collapse click listeners to .ct-interface-header elements
+     * within a container, using the prefixed IDs.
+     * @param {Element} container - DOM element containing the trace HTML
+     * @param {string} idPrefix - same prefix used in generateTraceHTML
+     * @param {boolean} startCollapsed - if true, auto-collapse all bodies
+     */
+    function attachTraceToggleListeners(container, idPrefix, startCollapsed) {
+        var headers = container.querySelectorAll('.ct-interface-header');
+        for (var h = 0; h < headers.length; h++) {
+            headers[h].addEventListener('click', (function(hdr) {
+                return function() {
+                    var toggleId = hdr.getAttribute('data-ct-toggle');
+                    var body = document.getElementById('ct-body-' + toggleId);
+                    var ifaceEl = hdr.closest('.ct-interface');
+                    if (body) {
+                        var collapsed = body.classList.toggle('ct-collapsed');
+                        ifaceEl.querySelector('.ct-chevron').classList.toggle('ct-chevron-collapsed', collapsed);
+                    }
+                };
+            })(headers[h]));
+        }
+        if (startCollapsed) {
+            for (var c = 0; c < headers.length; c++) {
+                var toggleId = headers[c].getAttribute('data-ct-toggle');
+                var b = document.getElementById('ct-body-' + toggleId);
+                if (b) {
+                    b.classList.add('ct-collapsed');
+                    var ifaceEl = headers[c].closest('.ct-interface');
+                    if (ifaceEl) {
+                        var chevIcon = ifaceEl.querySelector('.ct-chevron');
+                        if (chevIcon) chevIcon.classList.add('ct-chevron-collapsed');
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Attach click handlers for "show on map" buttons within a container.
+     */
+    function attachMapButtonListeners(containerEl) {
+        var btns = containerEl.querySelectorAll('.ct-dev-map-btn');
+        for (var i = 0; i < btns.length; i++) {
+            btns[i].addEventListener('click', (function(btn) {
+                return function(e) {
+                    e.stopPropagation();
+                    var tileId = parseInt(btn.dataset.tileId);
+                    for (var k = 0; k < tiles.length; k++) {
+                        if (tiles[k].id === tileId) {
+                            zoomToTile(tiles[k]);
+                            break;
+                        }
+                    }
+                };
+            })(btns[i]));
+        }
+    }
+
+    function renderCableTracePanel(interfaces, tile) {
+        var panel = document.getElementById('cable-trace-panel');
+        var content = document.getElementById('cable-trace-content');
+        var title = document.getElementById('cable-trace-title');
+        if (!panel || !content) return;
+
+        if (!interfaces || interfaces.length === 0) {
+            panel.classList.add('d-none');
+            return;
+        }
+
+        panel.classList.remove('d-none');
+        if (title) {
+            var model = tile.object_type_model;
+            if (model === 'rearport' || model === 'frontport') {
+                title.textContent = 'Cable Trace';
+            } else {
+                title.textContent = 'Ports (' + interfaces.length + ')';
+            }
+        }
+
+        content.innerHTML = generateTraceHTML(interfaces, 'main');
+
+        // Attach collapse/expand and auto-collapse in the main sidebar panel
+        attachTraceToggleListeners(content, 'main', true);
+        // Attach "show on map" buttons
+        attachMapButtonListeners(content);
     }
 
     // ===== Camera FOV Live Preview + Save =====
@@ -969,6 +1254,90 @@
      */
     var popoverEl = document.getElementById('tile-popover');
     var popoverVisible = false;
+    var hoverTile = null;
+
+    /**
+     * Build compact HTML for cable trace in the popover (simple mode).
+     * Shows port name → final endpoint device, max 5 lines.
+     */
+    function renderPopoverTrace(interfaces) {
+        if (!interfaces || interfaces.length === 0) return '';
+        var traceLines = [];
+        var limit = Math.min(interfaces.length, 5);
+        for (var i = 0; i < limit; i++) {
+            var iface = interfaces[i];
+            var endpoint = '';
+            var endpointRack = '';
+            if (iface.trace && iface.trace.length > 0) {
+                var lastHop = iface.trace[iface.trace.length - 1];
+                if (lastHop.far_end && lastHop.far_end.device) {
+                    endpoint = lastHop.far_end.device;
+                    endpointRack = lastHop.far_end.device_rack || '';
+                }
+            }
+            if (endpoint) {
+                var rackSuffix = endpointRack ? ' <span class="popover-dim">(' + escapeHtml(endpointRack) + ')</span>' : '';
+                traceLines.push('<span class="popover-dim">' + escapeHtml(iface.name) + '</span> &rarr; ' + escapeHtml(endpoint) + rackSuffix);
+            } else {
+                traceLines.push('<span class="popover-dim">' + escapeHtml(iface.name) + '</span> &rarr; <em>?</em>');
+            }
+        }
+        if (interfaces.length > 5) {
+            traceLines.push('<span class="popover-dim">... and ' + (interfaces.length - 5) + ' more</span>');
+        }
+        return traceLines.join('<br>');
+    }
+
+    /**
+     * Build full NetBox-style HTML for cable trace in the popover.
+     * Uses a clean vertical layout: device → port → cable → port → device.
+     * Max 3 interfaces shown.
+     */
+    function renderPopoverTraceFull(interfaces) {
+        if (!interfaces || interfaces.length === 0) return '';
+        var html = '<div class="pt-section">';
+        var limit = Math.min(interfaces.length, 3);
+        for (var i = 0; i < limit; i++) {
+            var iface = interfaces[i];
+            html += '<div class="pt-iface">';
+            html += '<div class="pt-iface-header"><i class="mdi ' + portTypeIcon(iface.type) + '"></i> ' + escapeHtml(iface.name) + '</div>';
+            if (iface.trace && iface.trace.length > 0) {
+                var path = buildTracePath(iface.trace);
+                html += '<div class="pt-path">';
+                for (var p = 0; p < path.length; p++) {
+                    var node = path[p];
+                    if (node.kind === 'device') {
+                        var roleClass = 'pt-dev-' + node.role;
+                        html += '<div class="pt-device ' + roleClass + '">';
+                        html += '<i class="mdi mdi-server"></i> ' + escapeHtml(node.data.device || node.data.name);
+                        if (node.data.device_rack) {
+                            html += ' <span class="popover-dim">(' + escapeHtml(node.data.device_rack) + ')</span>';
+                        }
+                        html += '</div>';
+                    } else if (node.kind === 'port') {
+                        html += '<div class="pt-port">';
+                        html += '<i class="mdi ' + portTypeIcon(node.data.type) + '"></i>';
+                        html += escapeHtml(node.data.name);
+                        html += '</div>';
+                    } else if (node.kind === 'cable') {
+                        html += '<div class="pt-cable">';
+                        html += '<i class="mdi mdi-cable-data"></i> ' + escapeHtml(node.data.label);
+                        html += '</div>';
+                    }
+                }
+                html += '</div>'; // pt-path
+            } else {
+                html += '<div class="popover-dim">No trace</div>';
+            }
+            html += '</div>'; // pt-iface
+            if (i < limit - 1) html += '<hr class="pt-separator">';
+        }
+        if (interfaces.length > 3) {
+            html += '<div class="pt-overflow">... and ' + (interfaces.length - 3) + ' more</div>';
+        }
+        html += '</div>'; // pt-section
+        return html;
+    }
 
     function showPopover(tile, mouseX, mouseY) {
         if (!popoverEl) return;
@@ -1034,6 +1403,43 @@
                         lines.push('<span class="popover-dim">Orientation:</span> ' + tile.orientation + '&deg;');
                     }
                     break;
+                case 'cable_trace':
+                case 'cable_trace_full':
+                    // Only for device/rearport/frontport tiles with an object_id
+                    var traceModel = tile.object_type_model;
+                    if (traceModel && (traceModel === 'device' || traceModel === 'rearport' || traceModel === 'frontport') && tile.object_id) {
+                        if (tile._cachedTrace) {
+                            var renderer = (fieldKey === 'cable_trace_full') ? renderPopoverTraceFull : renderPopoverTrace;
+                            var traceHtml = renderer(tile._cachedTrace);
+                            if (traceHtml) lines.push(traceHtml);
+                        } else if (!tile._traceLoading) {
+                            tile._traceLoading = true;
+                            lines.push('<span class="popover-dim">Cable trace:</span> Loading...');
+                            // AJAX fetch cable trace data
+                            (function(fetchTile, fetchModel) {
+                                var url = detailBaseUrl + fetchModel + '/' + fetchTile.object_id + '/';
+                                fetch(url, { credentials: 'same-origin' })
+                                .then(function(r) { return r.ok ? r.json() : null; })
+                                .then(function(data) {
+                                    fetchTile._traceLoading = false;
+                                    if (data && data.interfaces) {
+                                        fetchTile._cachedTrace = data.interfaces;
+                                    } else {
+                                        fetchTile._cachedTrace = [];
+                                    }
+                                    // Re-render popover if still hovering the same tile
+                                    if (hoverTile === fetchTile && popoverVisible) {
+                                        showPopover(fetchTile, mouseX, mouseY);
+                                    }
+                                })
+                                .catch(function() {
+                                    fetchTile._traceLoading = false;
+                                    fetchTile._cachedTrace = [];
+                                });
+                            })(tile, traceModel);
+                        }
+                    }
+                    break;
             }
         }
 
@@ -1042,7 +1448,12 @@
             lines.push('<strong>' + (tile.label || tile.type) + '</strong>');
         }
 
-        popoverEl.innerHTML = lines.join('<br>');
+        // Check if full trace content is present (contains pt-section markup)
+        var joinedHtml = lines.join('<br>');
+        var hasFullTrace = joinedHtml.indexOf('pt-section') !== -1;
+        popoverEl.classList.toggle('popover-has-trace', hasFullTrace);
+
+        popoverEl.innerHTML = joinedHtml;
         popoverEl.style.display = 'block';
 
         // Position with edge-flip to stay within container
@@ -1073,8 +1484,10 @@
     function hidePopover() {
         if (popoverEl) {
             popoverEl.style.display = 'none';
+            popoverEl.classList.remove('popover-has-trace');
         }
         popoverVisible = false;
+        hoverTile = null;
     }
 
     canvas.addEventListener('mousemove', function(e) {
@@ -1091,6 +1504,7 @@
         canvas.title = '';
 
         if (tile) {
+            hoverTile = tile;
             showPopover(tile, pos.x, pos.y);
         } else {
             hidePopover();
@@ -1468,6 +1882,40 @@
     var rackDevicesLoaded = false;
     var expandedRacks = new Set();
 
+    // ===== Device Trace Expansion (inside racks) =====
+    var expandedDeviceTraces = new Set();  // device IDs with trace open
+    var deviceTraceCache = {};              // deviceId → interfaces array
+    var deviceTracePending = {};            // deviceId → true while fetching
+
+    function fetchDeviceTraces(deviceId) {
+        if (deviceTraceCache[deviceId] || deviceTracePending[deviceId]) return;
+        deviceTracePending[deviceId] = true;
+        fetch(detailBaseUrl + 'device/' + deviceId + '/', {
+            credentials: 'same-origin',
+            headers: { 'Accept': 'application/json' }
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            deviceTraceCache[deviceId] = data.interfaces || [];
+            delete deviceTracePending[deviceId];
+            buildSidebar();
+        })
+        .catch(function(err) {
+            console.error('Failed to load device traces:', err);
+            deviceTraceCache[deviceId] = [];
+            delete deviceTracePending[deviceId];
+            buildSidebar();
+        });
+    }
+
+    function renderDeviceTraceSummary(interfaces, deviceId) {
+        if (!interfaces || interfaces.length === 0) {
+            return '<div class="rack-dev-trace-empty"><em>No cabled ports</em></div>';
+        }
+        // Use the full trace UI (same style as main sidebar panel)
+        return generateTraceHTML(interfaces, 'rdt-' + deviceId);
+    }
+
     function loadAllRackDevices(callback) {
         if (rackDevicesLoaded) { callback(); return; }
 
@@ -1703,8 +2151,18 @@
                                        (dev.ip || '').toLowerCase().indexOf(query) !== -1;
                         if (!devMatch) continue;
                     }
+                    var devTraceOpen = expandedDeviceTraces.has(dev.id);
+                    var hasNoTraces = deviceTraceCache[dev.id] && deviceTraceCache[dev.id].length === 0;
+                    html += '<div class="rack-device-wrapper">';
                     html += '<div class="rack-device-item' + (query ? ' search-match' : '') + '">';
-                    html += '<i class="mdi mdi-server rack-device-icon"></i>';
+                    if (hasNoTraces) {
+                        // No cabled ports — show plain icon, not clickable
+                        html += '<span class="rack-device-icon"><i class="mdi mdi-server"></i></span>';
+                    } else {
+                        html += '<span class="rack-dev-trace-toggle" data-device-id="' + dev.id + '" title="Show cable traces">';
+                        html += '<i class="mdi ' + (devTraceOpen ? 'mdi-chevron-down' : 'mdi-cable-data') + '"></i>';
+                        html += '</span>';
+                    }
                     html += '<span class="rack-device-name">';
                     if (dev.url) {
                         html += '<a href="' + dev.url + '" title="' + dev.name + '">' + dev.name + '</a>';
@@ -1714,6 +2172,16 @@
                     html += '</span>';
                     if (dev.ip) html += '<span class="rack-device-ip">' + dev.ip + '</span>';
                     if (dev.position) html += '<span class="rack-device-pos">U' + dev.position + '</span>';
+                    html += '</div>';
+                    if (devTraceOpen && !hasNoTraces) {
+                        html += '<div class="rack-dev-traces">';
+                        if (deviceTracePending[dev.id]) {
+                            html += '<div class="rack-dev-trace-loading"><i class="mdi mdi-loading mdi-spin"></i> Loading&hellip;</div>';
+                        } else if (deviceTraceCache[dev.id]) {
+                            html += renderDeviceTraceSummary(deviceTraceCache[dev.id], dev.id);
+                        }
+                        html += '</div>';
+                    }
                     html += '</div>';
                 }
                 html += '</div>';
@@ -1727,7 +2195,7 @@
         for (var j = 0; j < items.length; j++) {
             items[j].addEventListener('click', (function(item) {
                 return function(e) {
-                    if (e.target.closest('.rack-expand-toggle')) return;
+                    if (e.target.closest('.rack-expand-toggle') || e.target.closest('.rack-dev-trace-toggle')) return;
                     var id = parseInt(item.dataset.tileId);
                     for (var k = 0; k < tiles.length; k++) {
                         if (tiles[k].id === id) {
@@ -1754,6 +2222,57 @@
                     buildSidebar();
                 };
             })(toggles[ti]));
+        }
+
+        // Click handlers for device trace toggles
+        var devTraceToggles = tileListEl.querySelectorAll('.rack-dev-trace-toggle');
+        for (var dti = 0; dti < devTraceToggles.length; dti++) {
+            devTraceToggles[dti].addEventListener('click', (function(toggle) {
+                return function(e) {
+                    e.stopPropagation();
+                    var deviceId = parseInt(toggle.dataset.deviceId);
+                    if (expandedDeviceTraces.has(deviceId)) {
+                        expandedDeviceTraces.delete(deviceId);
+                        buildSidebar();
+                    } else {
+                        expandedDeviceTraces.add(deviceId);
+                        if (deviceTraceCache[deviceId]) {
+                            buildSidebar();
+                        } else {
+                            buildSidebar();
+                            fetchDeviceTraces(deviceId);
+                        }
+                    }
+                };
+            })(devTraceToggles[dti]));
+        }
+
+        // Attach expand/collapse listeners for inline rack device traces
+        // (these use the full trace UI with prefixed IDs)
+        var rackTraceContainers = tileListEl.querySelectorAll('.rack-dev-traces');
+        for (var rtc = 0; rtc < rackTraceContainers.length; rtc++) {
+            var rackTraceEl = rackTraceContainers[rtc];
+            // Find the device ID from the sibling rack-device-item
+            var wrapperEl = rackTraceEl.closest('.rack-device-wrapper');
+            if (wrapperEl) {
+                var traceHeaders = rackTraceEl.querySelectorAll('.ct-interface-header');
+                for (var rth = 0; rth < traceHeaders.length; rth++) {
+                    traceHeaders[rth].addEventListener('click', (function(hdr) {
+                        return function(e) {
+                            e.stopPropagation();
+                            var toggleId = hdr.getAttribute('data-ct-toggle');
+                            var body = document.getElementById('ct-body-' + toggleId);
+                            var ifaceEl = hdr.closest('.ct-interface');
+                            if (body) {
+                                var collapsed = body.classList.toggle('ct-collapsed');
+                                ifaceEl.querySelector('.ct-chevron').classList.toggle('ct-chevron-collapsed', collapsed);
+                            }
+                        };
+                    })(traceHeaders[rth]));
+                }
+            }
+            // Attach "show on map" buttons in rack device traces
+            attachMapButtonListeners(rackTraceEl);
         }
     }
 
