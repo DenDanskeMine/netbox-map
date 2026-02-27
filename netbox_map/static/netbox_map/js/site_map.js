@@ -31,7 +31,7 @@
 
     /* ── Toolbar elements ─────────────────────────────────────────── */
     var editModeBtn     = document.getElementById('edit-mode-btn');
-    var toolbarEl       = document.getElementById('site-map-toolbar');
+    var toolbarEl       = document.getElementById('site-map-toolbar-controls');
     var sitesSelect     = document.getElementById('unplaced-sites-select');
     var locationsSelect = document.getElementById('unplaced-locations-select');
     var tilesSelect     = document.getElementById('unplaced-tiles-select');
@@ -924,9 +924,17 @@
                 ).addTo(map);
             }
 
-            if (dirInput) dirInput.addEventListener('input', updateFovPreview);
-            if (angleInput) angleInput.addEventListener('input', updateFovPreview);
-            if (distInput) distInput.addEventListener('input', updateFovPreview);
+            // Bidirectional slider ↔ number sync
+            function syncPair(sliderId, numberId) {
+                var slider = document.getElementById(sliderId);
+                var number = document.getElementById(numberId);
+                if (!slider || !number) return;
+                slider.addEventListener('input', function() { number.value = slider.value; updateFovPreview(); });
+                number.addEventListener('input', function() { slider.value = number.value; updateFovPreview(); });
+            }
+            syncPair('fov-dir-slider', 'fov-dir');
+            syncPair('fov-angle-slider', 'fov-angle');
+            syncPair('fov-dist-slider', 'fov-dist');
 
             if (saveBtn) {
                 saveBtn.addEventListener('click', function () {
@@ -1021,13 +1029,13 @@
     }
 
     function fovField(label, id, value, min, max, suffix) {
-        return '<label style="font-size:11px;color:var(--fp-text-muted);white-space:nowrap">' +
-               label +
-               '<input id="' + id + '" type="number" class="form-control form-control-sm sidebar-input" ' +
-               'value="' + value + '" min="' + min + '" max="' + max + '" ' +
-               'style="width:70px;display:inline-block;margin-left:4px">' +
-               (suffix ? '<span style="font-size:11px;color:var(--fp-text-muted)">' + suffix + '</span>' : '') +
-               '</label>';
+        return '<div class="fov-slider-group">' +
+               '<label>' + label + '</label>' +
+               '<input type="range" id="' + id + '-slider" min="' + min + '" max="' + max + '" value="' + value + '" step="5">' +
+               '<input type="number" id="' + id + '" class="form-control form-control-sm fov-number" ' +
+               'value="' + value + '" min="' + min + '" max="' + max + '">' +
+               (suffix ? '<span class="fov-unit">' + suffix + '</span>' : '') +
+               '</div>';
     }
 
     /* ── AJAX enriched detail ─────────────────────────────────────── */
