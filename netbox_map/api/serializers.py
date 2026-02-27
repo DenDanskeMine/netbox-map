@@ -7,7 +7,7 @@ from netbox.api.fields import ContentTypeField
 from netbox.api.serializers import NetBoxModelSerializer
 from utilities.api import get_serializer_for_model
 from ..choices import BUILTIN_TYPE_SLUGS
-from ..models import FloorPlan, FloorPlanTile, CustomMarkerType, LocationCoordinates, MapMarker
+from ..models import FloorPlan, FloorPlanTile, CustomMarkerType, LocationCoordinates, MapMarker, TilePortAssignment
 
 
 class CustomMarkerTypeSerializer(NetBoxModelSerializer):
@@ -95,6 +95,30 @@ class FloorPlanTileSerializer(NetBoxModelSerializer):
 
     def validate_tile_type(self, value):
         return _validate_type_slug(value)
+
+
+class TilePortAssignmentSerializer(NetBoxModelSerializer):
+    port_type = ContentTypeField(
+        queryset=ContentType.objects.filter(
+            app_label='dcim',
+            model__in=['frontport', 'rearport'],
+        ),
+    )
+    port = serializers.SerializerMethodField(read_only=True)
+
+    class Meta:
+        model = TilePortAssignment
+        fields = [
+            'id', 'display',
+            'tile', 'port_type', 'port_id', 'port',
+            'tags', 'custom_fields', 'created', 'last_updated',
+        ]
+        brief_fields = ('id', 'display', 'port_type', 'port_id')
+
+    def get_port(self, obj):
+        if obj.port is not None:
+            return {'display': str(obj.port)}
+        return None
 
 
 class LocationCoordinatesSerializer(NetBoxModelSerializer):

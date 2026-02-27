@@ -1,9 +1,11 @@
+from django.contrib.contenttypes.prefetch import GenericPrefetch
+from dcim.models import FrontPort, RearPort
 from netbox.api.viewsets import NetBoxModelViewSet
 from .. import filtersets
-from ..models import FloorPlan, FloorPlanTile, CustomMarkerType, LocationCoordinates, MapMarker
+from ..models import FloorPlan, FloorPlanTile, CustomMarkerType, LocationCoordinates, MapMarker, TilePortAssignment
 from .serializers import (
     FloorPlanSerializer, FloorPlanTileSerializer, CustomMarkerTypeSerializer,
-    LocationCoordinatesSerializer, MapMarkerSerializer,
+    LocationCoordinatesSerializer, MapMarkerSerializer, TilePortAssignmentSerializer,
 )
 
 
@@ -28,6 +30,14 @@ class FloorPlanTileViewSet(NetBoxModelViewSet):
 class LocationCoordinatesViewSet(NetBoxModelViewSet):
     queryset = LocationCoordinates.objects.select_related('location__site')
     serializer_class = LocationCoordinatesSerializer
+
+
+class TilePortAssignmentViewSet(NetBoxModelViewSet):
+    queryset = TilePortAssignment.objects.select_related('tile', 'port_type').prefetch_related(
+        GenericPrefetch('port', [FrontPort.objects.all(), RearPort.objects.all()])
+    )
+    serializer_class = TilePortAssignmentSerializer
+    filterset_class = filtersets.TilePortAssignmentFilterSet
 
 
 class MapMarkerViewSet(NetBoxModelViewSet):

@@ -352,6 +352,49 @@ class FloorPlanTile(NetBoxModel):
         return None
 
 
+class TilePortAssignment(NetBoxModel):
+    """Maps a FloorPlanTile (drop tile) to a FrontPort or RearPort."""
+    tile = models.ForeignKey(
+        to='netbox_map.FloorPlanTile',
+        on_delete=models.CASCADE,
+        related_name='port_assignments',
+    )
+    port_type = models.ForeignKey(
+        to=ContentType,
+        on_delete=models.CASCADE,
+        limit_choices_to={'app_label': 'dcim', 'model__in': ['frontport', 'rearport']},
+    )
+    port_id = models.PositiveBigIntegerField()
+    port = GenericForeignKey(ct_field='port_type', fk_field='port_id')
+
+    class Meta:
+        ordering = ('tile', 'port_type', 'port_id')
+        verbose_name = _('tile port assignment')
+        verbose_name_plural = _('tile port assignments')
+        constraints = (
+            models.UniqueConstraint(
+                fields=('tile', 'port_type', 'port_id'),
+                name='%(app_label)s_%(class)s_unique_tile_port'
+            ),
+        )
+        indexes = [
+            models.Index(fields=['port_type', 'port_id']),
+        ]
+
+    def __str__(self):
+        return f'{self.port} on {self.tile}'
+
+    def get_absolute_url(self):
+        return self.tile.get_absolute_url()
+
+    def clean(self):
+        super().clean()
+        if self.tile_id and self.tile.tile_type != 'drop':
+            raise ValidationError(
+                _('Port assignments can only be added to drop tiles.')
+            )
+
+
 class LocationCoordinates(NetBoxModel):
     """Stores geographic coordinates for a dcim.Location (which lacks lat/lng in core)."""
     location = models.OneToOneField(
@@ -584,5 +627,6 @@ class MapSettings(models.Model):
                     'ap', 'camera', 'printer', 'floorplan_link',
                 ]
             }
+            obj.tile_popover_config['drop'] = ['label', 'cable_trace']
             obj.save()
         return obj

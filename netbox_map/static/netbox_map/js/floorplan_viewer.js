@@ -303,6 +303,20 @@
             ctx.globalAlpha = 1.0;
         }
 
+        // Draw port count on drop tiles
+        if (tile.type === 'drop' && tile.drop_port_count && h > tileSize * 0.8) {
+            var dropFont = tileSize / 4.5;
+            ctx.font = dropFont + 'px -apple-system, "Segoe UI", sans-serif';
+            ctx.globalAlpha = 0.7;
+            ctx.save();
+            ctx.beginPath();
+            ctx.rect(x + gap, y + gap, w - gap * 2, h - gap * 2);
+            ctx.clip();
+            ctx.fillText(tile.drop_port_count + ' port' + (tile.drop_port_count !== 1 ? 's' : ''), centerX, centerY + fontSize * 0.6);
+            ctx.restore();
+            ctx.globalAlpha = 1.0;
+        }
+
         // Draw direction arrow on camera tiles
         if (tile.type === 'camera') {
             var arrowLen = Math.min(w, h) * 0.2;
@@ -545,7 +559,23 @@
         // Fetch enriched detail via AJAX
         var enrichedEl = document.getElementById('fp-enriched-detail');
         if (enrichedEl) {
-            if (tile.object_type_model && tile.object_id) {
+            if (tile.type === 'drop' && tile.id) {
+                // Drop tiles: fetch traces for all assigned ports
+                enrichedEl.innerHTML = '<div class="sidebar-detail-loading">Loading port traces\u2026</div>';
+                fetch(detailBaseUrl + 'drop/' + tile.id + '/')
+                    .then(function(r) {
+                        if (!r.ok) throw new Error('HTTP ' + r.status);
+                        return r.json();
+                    })
+                    .then(function(detail) {
+                        if (selectedTile !== tile) return;
+                        enrichedEl.innerHTML = '';
+                        renderCableTracePanel(detail.interfaces, tile);
+                    })
+                    .catch(function() {
+                        if (selectedTile === tile) enrichedEl.innerHTML = '';
+                    });
+            } else if (tile.object_type_model && tile.object_id) {
                 enrichedEl.innerHTML = '<div class="sidebar-detail-loading">Loading details\u2026</div>';
                 fetch(detailBaseUrl + tile.object_type_model + '/' + tile.object_id + '/')
                     .then(function(r) {
@@ -880,7 +910,9 @@
         panel.classList.remove('d-none');
         if (title) {
             var model = tile.object_type_model;
-            if (model === 'rearport' || model === 'frontport') {
+            if (tile.type === 'drop') {
+                title.textContent = 'Drop Ports (' + interfaces.length + ')';
+            } else if (model === 'rearport' || model === 'frontport') {
                 title.textContent = 'Cable Trace';
             } else {
                 title.textContent = 'Ports (' + interfaces.length + ')';
@@ -1405,9 +1437,10 @@
                     break;
                 case 'cable_trace':
                 case 'cable_trace_full':
-                    // Only for device/rearport/frontport tiles with an object_id
+                    // For device/rearport/frontport tiles with an object_id, or drop tiles
                     var traceModel = tile.object_type_model;
-                    if (traceModel && (traceModel === 'device' || traceModel === 'rearport' || traceModel === 'frontport') && tile.object_id) {
+                    var hasTraceSource = (traceModel && (traceModel === 'device' || traceModel === 'rearport' || traceModel === 'frontport') && tile.object_id) || tile.type === 'drop';
+                    if (hasTraceSource) {
                         if (tile._cachedTrace) {
                             var renderer = (fieldKey === 'cable_trace_full') ? renderPopoverTraceFull : renderPopoverTrace;
                             var traceHtml = renderer(tile._cachedTrace);
@@ -1417,7 +1450,9 @@
                             lines.push('<span class="popover-dim">Cable trace:</span> Loading...');
                             // AJAX fetch cable trace data
                             (function(fetchTile, fetchModel) {
-                                var url = detailBaseUrl + fetchModel + '/' + fetchTile.object_id + '/';
+                                var url = fetchTile.type === 'drop'
+                                    ? detailBaseUrl + 'drop/' + fetchTile.id + '/'
+                                    : detailBaseUrl + fetchModel + '/' + fetchTile.object_id + '/';
                                 fetch(url, { credentials: 'same-origin' })
                                 .then(function(r) { return r.ok ? r.json() : null; })
                                 .then(function(data) {

@@ -15,7 +15,7 @@ from utilities.views import ViewTab, register_model_view
 
 from . import filtersets, forms, tables
 from .choices import get_all_type_configs
-from .models import FloorPlan, FloorPlanTile, CustomMarkerType, LocationCoordinates, MapMarker, MapSettings
+from .models import FloorPlan, FloorPlanTile, CustomMarkerType, LocationCoordinates, MapMarker, MapSettings, TilePortAssignment
 
 
 #
@@ -303,7 +303,7 @@ def _serialize_tile(tile):
         except Exception:
             pass
 
-    return {
+    result = {
         'id': tile.pk,
         'x': tile.x_position,
         'y': tile.y_position,
@@ -333,6 +333,11 @@ def _serialize_tile(tile):
         ),
     }
 
+    if tile.tile_type == 'drop':
+        result['drop_port_count'] = getattr(tile, '_port_count', None) or tile.port_assignments.count()
+
+    return result
+
 
 #
 # FloorPlan views
@@ -352,7 +357,9 @@ class FloorPlanView(generic.ObjectView):
     queryset = FloorPlan.objects.all()
 
     def get_extra_context(self, request, instance):
-        tiles = instance.tiles.select_related('assigned_object_type', 'linked_floorplan').all()
+        tiles = instance.tiles.select_related(
+            'assigned_object_type', 'linked_floorplan'
+        ).annotate(_port_count=Count('port_assignments')).all()
         tile_data = [_serialize_tile(tile) for tile in tiles]
         return {
             'tile_data_json': json.dumps(tile_data),
@@ -402,7 +409,9 @@ class FloorPlanVisualizationView(generic.ObjectView):
     )
 
     def get_extra_context(self, request, instance):
-        tiles = instance.tiles.select_related('assigned_object_type', 'linked_floorplan').all()
+        tiles = instance.tiles.select_related(
+            'assigned_object_type', 'linked_floorplan'
+        ).annotate(_port_count=Count('port_assignments')).all()
         tile_data = [_serialize_tile(tile) for tile in tiles]
 
         site_floorplans = list(FloorPlan.objects.filter(
@@ -849,6 +858,45 @@ class MarkerDetailView(LoginRequiredMixin, View):
         except Exception:
             pass
         return result
+
+
+#
+# AJAX Drop Detail endpoint
+#
+
+class DropDetailView(LoginRequiredMixin, View):
+    """AJAX endpoint returning cable traces for all ports assigned to a drop tile."""
+
+    def get(self, request, tile_id):
+        try:
+            tile = FloorPlanTile.objects.get(pk=tile_id, tile_type='drop')
+        except FloorPlanTile.DoesNotExist:
+            return JsonResponse({'error': 'Drop tile not found'}, status=404)
+
+        assignments = tile.port_assignments.select_related('port_type').all()
+
+        # Reuse MarkerDetailView's trace methods
+        marker_view = MarkerDetailView()
+
+        interfaces = []
+        for assignment in assignments:
+            port = assignment.port
+            if port is None:
+                continue
+            port_type = assignment.port_type.model  # 'frontport' or 'rearport'
+            try:
+                traces = marker_view._get_cable_traces(port, port_type)
+                for trace in traces:
+                    interfaces.append(trace)
+            except Exception:
+                pass
+
+        return JsonResponse({
+            'standard_fields': [],
+            'mac_address': None,
+            'custom_fields': [],
+            'interfaces': interfaces,
+        })
 
 
 #

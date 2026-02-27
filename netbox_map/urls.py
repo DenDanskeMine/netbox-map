@@ -21,6 +21,7 @@ urlpatterns = (
     path('sitemap/', views.SiteMapView.as_view(), name='sitemap'),
 
     # AJAX marker detail
+    path('marker-detail/drop/<int:tile_id>/', views.DropDetailView.as_view(), name='drop_detail'),
     path('marker-detail/<str:object_type>/<int:object_id>/', views.MarkerDetailView.as_view(), name='marker_detail'),
 
     # FloorPlan

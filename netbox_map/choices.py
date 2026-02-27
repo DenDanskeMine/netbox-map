@@ -16,6 +16,7 @@ class FloorPlanTileTypeChoices(ChoiceSet):
     TYPE_CAMERA = 'camera'
     TYPE_PRINTER = 'printer'
     TYPE_FLOORPLAN_LINK = 'floorplan_link'
+    TYPE_DROP = 'drop'
 
     CHOICES = [
         (TYPE_RACK, _('Rack'), 'blue'),
@@ -31,6 +32,7 @@ class FloorPlanTileTypeChoices(ChoiceSet):
         (TYPE_CAMERA, _('Camera'), 'red'),
         (TYPE_PRINTER, _('Printer'), 'orange'),
         (TYPE_FLOORPLAN_LINK, _('Floor Plan Link'), 'indigo'),
+        (TYPE_DROP, _('Drop'), 'green'),
     ]
 
 
@@ -62,6 +64,7 @@ BUILTIN_TYPE_CONFIG = {
     'camera':         {'name': 'Camera',          'color': '#c42020', 'icon': 'mdi-cctv'},
     'printer':        {'name': 'Printer',         'color': '#e67e22', 'icon': 'mdi-printer'},
     'floorplan_link': {'name': 'Floor Plan Link', 'color': '#4a50c8', 'icon': 'mdi-floor-plan'},
+    'drop':           {'name': 'Drop',            'color': '#2ecc71', 'icon': 'mdi-ethernet'},
 }
 
 # Set of all built-in slugs for quick lookup
