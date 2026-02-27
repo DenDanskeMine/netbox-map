@@ -413,6 +413,18 @@ class FloorPlanTileFilterForm(NetBoxModelFilterSetForm):
         self.fields['tile_type'].choices = get_all_tile_type_choices()
 
 
+class FloorPlanTileBulkEditForm(NetBoxModelBulkEditForm):
+    tile_type = forms.ChoiceField(choices=[], required=False, label=_('Tile Type'))
+    status = forms.ChoiceField(choices=FloorPlanTileStatusChoices, required=False, label=_('Status'))
+
+    model = FloorPlanTile
+    nullable_fields = ()
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['tile_type'].choices = [('', '---------')] + list(get_all_tile_type_choices())
+
+
 class FloorPlanTileImportForm(NetBoxModelImportForm):
     floorplan = CSVModelChoiceField(
         queryset=FloorPlan.objects.all(),
@@ -616,6 +628,19 @@ class MapMarkerForm(NetBoxModelForm):
     def save(self, *args, **kwargs):
         self.instance.assigned_object_type = self.cleaned_data.get('assigned_object_type')
         return super().save(*args, **kwargs)
+
+
+class MapMarkerBulkEditForm(NetBoxModelBulkEditForm):
+    marker_type = forms.ChoiceField(choices=[], required=False, label=_('Marker Type'))
+    status = forms.ChoiceField(choices=FloorPlanTileStatusChoices, required=False, label=_('Status'))
+    description = forms.CharField(max_length=200, required=False, label=_('Description'))
+
+    model = MapMarker
+    nullable_fields = ('description',)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['marker_type'].choices = [('', '---------')] + list(get_all_tile_type_choices())
 
 
 class MapMarkerImportForm(NetBoxModelImportForm):
