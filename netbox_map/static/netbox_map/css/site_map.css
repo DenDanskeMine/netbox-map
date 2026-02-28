@@ -482,25 +482,43 @@
     border: none !important;
     box-shadow: none !important;
     overflow: visible !important;
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
 }
 
 .cable-path-label-text {
-    display: inline-block;
+    display: block;
     white-space: nowrap;
     font: 600 11px/1 -apple-system, "Segoe UI", sans-serif;
-    color: #fff;
+    color: #1a1a2e;
     text-shadow:
-        -1px -1px 0 rgba(0,0,0,0.6),
-         1px -1px 0 rgba(0,0,0,0.6),
-        -1px  1px 0 rgba(0,0,0,0.6),
-         1px  1px 0 rgba(0,0,0,0.6),
-         0   -1.5px 0 rgba(0,0,0,0.5),
-         0    1.5px 0 rgba(0,0,0,0.5),
-        -1.5px 0   0 rgba(0,0,0,0.5),
-         1.5px 0   0 rgba(0,0,0,0.5);
+        -1px -1px 0 rgba(255,255,255,0.9),
+         1px -1px 0 rgba(255,255,255,0.9),
+        -1px  1px 0 rgba(255,255,255,0.9),
+         1px  1px 0 rgba(255,255,255,0.9),
+         0   -1.5px 0 rgba(255,255,255,0.8),
+         0    1.5px 0 rgba(255,255,255,0.8),
+        -1.5px 0   0 rgba(255,255,255,0.8),
+         1.5px 0   0 rgba(255,255,255,0.8);
     pointer-events: none;
     user-select: none;
     transform-origin: center center;
+    text-align: center;
+    letter-spacing: 0.5px;
+}
+
+[data-bs-theme="dark"] .cable-path-label-text {
+    color: #e0e0e0;
+    text-shadow:
+        -1px -1px 0 rgba(0,0,0,0.8),
+         1px -1px 0 rgba(0,0,0,0.8),
+        -1px  1px 0 rgba(0,0,0,0.8),
+         1px  1px 0 rgba(0,0,0,0.8),
+         0   -1.5px 0 rgba(0,0,0,0.7),
+         0    1.5px 0 rgba(0,0,0,0.7),
+        -1.5px 0   0 rgba(0,0,0,0.7),
+         1.5px 0   0 rgba(0,0,0,0.7);
 }
 
 /* ── Cable color picker in sidebar ───────────────────────────── */

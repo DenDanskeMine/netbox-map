@@ -807,9 +807,6 @@
             extendBounds(ll.lat, ll.lng);
         });
 
-        // Add street-name-style label along the path
-        addCableLabel(cableItem);
-
         return cableItem;
     }
 
@@ -823,71 +820,88 @@
      * - Always right-side-up
      */
 
-    var MAX_LABELS_PER_CABLE = 12;
+    var MAX_LABELS_PER_CABLE = 40;
 
     function addCableLabel(cableItem) {
         var cp = cableItem.data;
         if (!cp.label) return;
 
-        cableItem.displayLabel = cp.label + ' \u00b7 ' + cp.fiber_count + 'F';
+        cableItem.displayLabel = cp.label + (cp.fiber_count ? ' \u00b7 ' + cp.fiber_count + 'F' : '');
         cableItem.labelMarkers = [];
-        cableItem._labelCount = 0;
 
         updateCableLabelPositions(cableItem);
     }
 
+    /**
+     * Compute geographic positions along a path for evenly-spaced labels.
+     * Uses geographic distance for placement, pixel space only for angle + count.
+     */
     function computePathLabels(coords, displayLabel) {
         if (!coords || coords.length < 2) return [];
 
-        // Build pixel-space segments
-        var pts = [];
-        for (var i = 0; i < coords.length; i++) {
-            pts.push(map.latLngToContainerPoint(L.latLng(coords[i][0], coords[i][1])));
+        // Build geographic segments with cumulative distance
+        var geoSegs = [];
+        var totalGeo = 0;
+        for (var i = 1; i < coords.length; i++) {
+            var a = L.latLng(coords[i - 1][0], coords[i - 1][1]);
+            var b = L.latLng(coords[i][0], coords[i][1]);
+            var d = a.distanceTo(b); // meters
+            geoSegs.push({ len: d, cumStart: totalGeo });
+            totalGeo += d;
+        }
+        if (totalGeo < 1) return [];
+
+        // Use pixel space to decide how many labels fit at current zoom
+        var p0 = map.latLngToLayerPoint(L.latLng(coords[0][0], coords[0][1]));
+        var pN = map.latLngToLayerPoint(L.latLng(coords[coords.length - 1][0], coords[coords.length - 1][1]));
+        var approxPxLen = Math.sqrt(Math.pow(pN.x - p0.x, 2) + Math.pow(pN.y - p0.y, 2));
+
+        // Quick sum of all segment pixel lengths for better accuracy
+        var totalPx = 0;
+        for (var j = 1; j < coords.length; j++) {
+            var pa = map.latLngToLayerPoint(L.latLng(coords[j - 1][0], coords[j - 1][1]));
+            var pb = map.latLngToLayerPoint(L.latLng(coords[j][0], coords[j][1]));
+            totalPx += Math.sqrt(Math.pow(pb.x - pa.x, 2) + Math.pow(pb.y - pa.y, 2));
         }
 
-        var segLens = [];
-        var totalLen = 0;
-        for (var s = 1; s < pts.length; s++) {
-            var dx = pts[s].x - pts[s - 1].x;
-            var dy = pts[s].y - pts[s - 1].y;
-            var len = Math.sqrt(dx * dx + dy * dy);
-            segLens.push({ len: len, cumStart: totalLen });
-            totalLen += len;
-        }
+        if (totalPx < 60) return []; // too short on screen
 
-        if (totalLen < 40) return []; // too short to label
-
-        // How many labels fit?
-        var labelPx = displayLabel.length * 7;
-        var spacing = labelPx + 120;
-        var count = Math.max(1, Math.floor(totalLen / spacing));
+        // Tighter spacing at higher zoom — like Google Maps street names
+        var zoom = map.getZoom();
+        var labelW = displayLabel.length * 7;
+        // At zoom 10: ~250px apart.  At zoom 18+: ~120px apart.
+        var baseSpacing = Math.max(250 - (zoom - 10) * 16, 120);
+        var spacing = Math.max(labelW + 40, baseSpacing);
+        var count = Math.max(1, Math.floor(totalPx / spacing));
         count = Math.min(count, MAX_LABELS_PER_CABLE);
 
-        // Label positions along the path
+        // Place labels evenly along geographic path
+        var step = totalGeo / (count + 1);
         var placements = [];
-        var step = totalLen / (count + 1);
+
         for (var k = 1; k <= count; k++) {
             var dist = step * k;
 
-            // Find segment
+            // Find which segment contains this distance
             var seg = 0;
-            for (var si = 0; si < segLens.length; si++) {
-                if (segLens[si].cumStart + segLens[si].len >= dist) {
+            for (var si = 0; si < geoSegs.length; si++) {
+                if (geoSegs[si].cumStart + geoSegs[si].len >= dist) {
                     seg = si;
                     break;
                 }
             }
 
-            var t = segLens[seg].len > 0 ? (dist - segLens[seg].cumStart) / segLens[seg].len : 0;
+            var t = geoSegs[seg].len > 0
+                ? (dist - geoSegs[seg].cumStart) / geoSegs[seg].len
+                : 0;
 
-            // Interpolate lat/lng
             var lat = coords[seg][0] + t * (coords[seg + 1][0] - coords[seg][0]);
             var lng = coords[seg][1] + t * (coords[seg + 1][1] - coords[seg][1]);
 
-            // Angle from pixel coords (for rotation)
-            var adx = pts[seg + 1].x - pts[seg].x;
-            var ady = pts[seg + 1].y - pts[seg].y;
-            var angle = Math.atan2(ady, adx) * 180 / Math.PI;
+            // Angle: use layer points of this segment's endpoints
+            var ptA = map.latLngToLayerPoint(L.latLng(coords[seg][0], coords[seg][1]));
+            var ptB = map.latLngToLayerPoint(L.latLng(coords[seg + 1][0], coords[seg + 1][1]));
+            var angle = Math.atan2(ptB.y - ptA.y, ptB.x - ptA.x) * 180 / Math.PI;
 
             // Keep right-side-up
             if (angle > 90) angle -= 180;
@@ -905,44 +919,43 @@
         var coords = cableItem.data.path_coordinates;
         var placements = computePathLabels(coords, cableItem.displayLabel);
         var label = cableItem.displayLabel;
+        var markers = cableItem.labelMarkers;
 
-        // Reuse existing markers or create new ones
-        for (var i = 0; i < Math.max(placements.length, cableItem.labelMarkers.length); i++) {
+        // Estimated label width for centering the icon anchor
+        var estW = label.length * 7;
+        var estH = 14;
+
+        for (var i = 0; i < Math.max(placements.length, markers.length); i++) {
             if (i < placements.length) {
                 var p = placements[i];
                 var latlng = L.latLng(p.lat, p.lng);
-                var html = '<span class="cable-path-label-text" style="transform:rotate(' + p.angle.toFixed(1) + 'deg)">' +
-                    escHtml(label) + '</span>';
+                var html = '<span class="cable-path-label-text" style="transform:rotate(' +
+                    p.angle.toFixed(1) + 'deg)">' + escHtml(label) + '</span>';
+                var icon = L.divIcon({
+                    className: 'cable-path-label-wrap',
+                    html: html,
+                    iconSize: [estW, estH],
+                    iconAnchor: [estW / 2, estH / 2]
+                });
 
-                if (i < cableItem.labelMarkers.length) {
-                    // Reuse: update position and icon
-                    cableItem.labelMarkers[i].setLatLng(latlng);
-                    cableItem.labelMarkers[i].setIcon(L.divIcon({
-                        className: 'cable-path-label-wrap',
-                        html: html,
-                        iconSize: [0, 0]
-                    }));
+                if (i < markers.length) {
+                    markers[i].setLatLng(latlng);
+                    markers[i].setIcon(icon);
                 } else {
-                    // Create new marker
                     var m = L.marker(latlng, {
-                        icon: L.divIcon({
-                            className: 'cable-path-label-wrap',
-                            html: html,
-                            iconSize: [0, 0]
-                        }),
+                        icon: icon,
                         interactive: false,
                         zIndexOffset: -1000
                     }).addTo(map);
-                    cableItem.labelMarkers.push(m);
+                    markers.push(m);
                 }
-            } else if (i < cableItem.labelMarkers.length) {
-                // Extra marker — remove
-                map.removeLayer(cableItem.labelMarkers[i]);
+            } else if (i < markers.length) {
+                map.removeLayer(markers[i]);
             }
         }
-        // Trim array
-        if (cableItem.labelMarkers.length > placements.length) {
-            cableItem.labelMarkers.length = placements.length;
+        // Trim excess
+        if (markers.length > placements.length) {
+            markers.length = placements.length;
         }
     }
 
@@ -956,8 +969,8 @@
         cableItem.displayLabel = null;
     }
 
-    // Recalculate label count + positions on zoom/pan
-    map.on('zoomend', function () {
+    // Recalculate labels on zoom and pan (angles change on zoom, visibility on pan)
+    map.on('zoomend moveend', function () {
         allCableItems.forEach(function (ci) {
             if (ci.displayLabel) updateCableLabelPositions(ci);
         });
@@ -1100,6 +1113,7 @@
             };
 
             var newItem = createCablePolyline(cpData);
+            if (newItem) addCableLabel(newItem);
             cancelCableDrawing();
             buildCableSidebar();
             setTimeout(updateAllJunctionRings, 50);
@@ -1674,6 +1688,11 @@
     } else {
         map.setView([20, 0], 2);
     }
+
+    // Initialize cable path labels now that map view is set
+    allCableItems.forEach(function (ci) {
+        addCableLabel(ci);
+    });
 
     /* ══════════════════════════════════════════════════════════════════
        SIDEBAR — Build type toggles, list, search, detail
@@ -2581,8 +2600,10 @@
             if (idx !== -1) allCableItems.splice(idx, 1);
 
             // Create two new cables
-            createCablePolyline(result.cable_a);
-            createCablePolyline(result.cable_b);
+            var splitA = createCablePolyline(result.cable_a);
+            var splitB = createCablePolyline(result.cable_b);
+            if (splitA) addCableLabel(splitA);
+            if (splitB) addCableLabel(splitB);
 
             buildCableSidebar();
             setTimeout(updateAllJunctionRings, 50);
