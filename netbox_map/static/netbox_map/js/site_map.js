@@ -790,9 +790,9 @@
             hitArea: hitArea,
             vertexMarkers: [],
             sidebarEl: null,
-            labelEl: null,
+            labelEls: null,
             revPathEl: null,
-            textPathEl: null
+            displayLabel: null
         };
         allCableItems.push(cableItem);
 
@@ -815,9 +815,35 @@
     }
 
     /* ── Cable path labels (street-name style via SVG textPath) ───── */
+    /*
+     * Repeats the label along the path like Google Maps street names:
+     * - Multiple labels spaced evenly based on path pixel length
+     * - Recalculated on zoom so density stays readable
+     * - Auto-flips so text is never upside down
+     * - Sits right on the line with a halo for contrast
+     */
 
     var SVG_NS = 'http://www.w3.org/2000/svg';
     var XLINK_NS = 'http://www.w3.org/1999/xlink';
+    var MAX_LABELS_PER_CABLE = 12;
+
+    function createLabelTextEl() {
+        var text = document.createElementNS(SVG_NS, 'text');
+        text.setAttribute('class', 'cable-path-label');
+        text.setAttribute('text-anchor', 'middle');
+        text.setAttribute('font-size', '11');
+        text.setAttribute('font-weight', '600');
+        text.setAttribute('font-family', '-apple-system, "Segoe UI", sans-serif');
+        text.setAttribute('fill', '#fff');
+        text.setAttribute('paint-order', 'stroke');
+        text.setAttribute('stroke', 'rgba(0,0,0,0.55)');
+        text.setAttribute('stroke-width', '3');
+        text.setAttribute('stroke-linecap', 'round');
+        text.setAttribute('stroke-linejoin', 'round');
+        text.setAttribute('pointer-events', 'none');
+        text.setAttribute('dy', '-3');
+        return text;
+    }
 
     function addCableLabel(cableItem) {
         var cp = cableItem.data;
@@ -828,7 +854,7 @@
         var pathEl = polyline._path;
         if (!pathEl) return;
 
-        var displayLabel = label + ' (' + cp.fiber_count + 'F)';
+        var displayLabel = label + '  \u00b7  ' + cp.fiber_count + 'F';
         var pathId = 'cable-path-' + cp.id;
         var revPathId = 'cable-path-rev-' + cp.id;
 
@@ -841,41 +867,31 @@
         revPath.setAttribute('stroke', 'none');
         pathEl.parentNode.appendChild(revPath);
 
-        // Text element with halo stroke for readability
-        var text = document.createElementNS(SVG_NS, 'text');
-        text.setAttribute('class', 'cable-path-label');
-        text.setAttribute('text-anchor', 'middle');
-        text.setAttribute('font-size', '12');
-        text.setAttribute('font-weight', 'bold');
-        text.setAttribute('font-family', '-apple-system, "Segoe UI", sans-serif');
-        text.setAttribute('fill', '#fff');
-        text.setAttribute('paint-order', 'stroke');
-        text.setAttribute('stroke', 'rgba(0,0,0,0.6)');
-        text.setAttribute('stroke-width', '3.5');
-        text.setAttribute('stroke-linecap', 'round');
-        text.setAttribute('stroke-linejoin', 'round');
-        text.setAttribute('pointer-events', 'none');
-        text.setAttribute('dy', '-6');
+        // Pre-allocate label text elements (hidden until needed)
+        var labelEls = [];
+        var parent = pathEl.parentNode;
+        for (var i = 0; i < MAX_LABELS_PER_CABLE; i++) {
+            var text = createLabelTextEl();
+            var textPath = document.createElementNS(SVG_NS, 'textPath');
+            textPath.setAttribute('startOffset', '50%');
+            textPath.textContent = displayLabel;
+            text.appendChild(textPath);
+            text.style.display = 'none';
+            parent.appendChild(text);
+            labelEls.push({ text: text, textPath: textPath });
+        }
 
-        var textPath = document.createElementNS(SVG_NS, 'textPath');
-        textPath.setAttribute('startOffset', '50%');
-        textPath.textContent = displayLabel;
-
-        text.appendChild(textPath);
-        pathEl.parentNode.appendChild(text);
-
-        cableItem.labelEl = text;
-        cableItem.textPathEl = textPath;
         cableItem.revPathEl = revPath;
         cableItem.pathId = pathId;
         cableItem.revPathId = revPathId;
+        cableItem.displayLabel = displayLabel;
+        cableItem.labelEls = labelEls;
 
-        // Initial direction check
-        updateCableLabelDirection(cableItem);
+        // Initial positioning
+        updateCableLabelPositions(cableItem);
     }
 
     function reversePathD(d) {
-        // Reverse an SVG path "M x1,y1 L x2,y2 L x3,y3..." to read left-to-right
         var points = [];
         var re = /[ML]\s*([\d.\-e]+)[,\s]+([\d.\-e]+)/gi;
         var m;
@@ -891,45 +907,75 @@
         return result;
     }
 
-    function updateCableLabelDirection(cableItem) {
-        if (!cableItem.textPathEl || !cableItem.polyline._path) return;
+    function updateCableLabelPositions(cableItem) {
+        if (!cableItem.labelEls || !cableItem.polyline._path) return;
 
         var pathEl = cableItem.polyline._path;
         var d = pathEl.getAttribute('d');
         if (!d) return;
 
-        // Update reversed path with current geometry
+        // Update reversed path geometry
         cableItem.revPathEl.setAttribute('d', reversePathD(d));
 
-        // Check screen direction: if path goes right-to-left, use reversed path
+        // Check screen direction: flip if path goes right-to-left
         var latlngs = cableItem.polyline.getLatLngs();
         if (latlngs.length < 2) return;
-
         var firstPt = map.latLngToContainerPoint(latlngs[0]);
         var lastPt = map.latLngToContainerPoint(latlngs[latlngs.length - 1]);
         var useReversed = firstPt.x > lastPt.x;
         var href = '#' + (useReversed ? cableItem.revPathId : cableItem.pathId);
 
-        cableItem.textPathEl.setAttributeNS(XLINK_NS, 'xlink:href', href);
-        cableItem.textPathEl.setAttribute('href', href);
+        // Calculate how many labels fit along the path
+        var totalLen = pathEl.getTotalLength();
+        var labelPx = cableItem.displayLabel.length * 6.5;
+        var spacing = labelPx + 100; // label width + gap
+        var count = Math.max(1, Math.floor(totalLen / spacing));
+        count = Math.min(count, MAX_LABELS_PER_CABLE);
+
+        // Distribute offsets evenly (avoid crowding the endpoints)
+        var offsets = [];
+        if (count === 1) {
+            offsets.push(50);
+        } else {
+            var step = 100 / (count + 1);
+            for (var i = 1; i <= count; i++) {
+                offsets.push(step * i);
+            }
+        }
+
+        // Apply to pre-allocated elements: show needed, hide rest
+        for (var j = 0; j < cableItem.labelEls.length; j++) {
+            var el = cableItem.labelEls[j];
+            if (j < offsets.length) {
+                el.text.style.display = '';
+                el.textPath.setAttribute('startOffset', offsets[j] + '%');
+                el.textPath.setAttributeNS(XLINK_NS, 'xlink:href', href);
+                el.textPath.setAttribute('href', href);
+            } else {
+                el.text.style.display = 'none';
+            }
+        }
     }
 
     function removeCableLabel(cableItem) {
-        if (cableItem.labelEl && cableItem.labelEl.parentNode) {
-            cableItem.labelEl.parentNode.removeChild(cableItem.labelEl);
+        if (cableItem.labelEls) {
+            for (var i = 0; i < cableItem.labelEls.length; i++) {
+                var el = cableItem.labelEls[i].text;
+                if (el.parentNode) el.parentNode.removeChild(el);
+            }
         }
         if (cableItem.revPathEl && cableItem.revPathEl.parentNode) {
             cableItem.revPathEl.parentNode.removeChild(cableItem.revPathEl);
         }
-        cableItem.labelEl = null;
+        cableItem.labelEls = null;
         cableItem.revPathEl = null;
-        cableItem.textPathEl = null;
+        cableItem.displayLabel = null;
     }
 
-    // Update label directions on zoom/pan (path geometry changes)
+    // Recalculate label count + direction on zoom/pan
     map.on('zoomend moveend', function () {
         allCableItems.forEach(function (ci) {
-            if (ci.textPathEl) updateCableLabelDirection(ci);
+            if (ci.labelEls) updateCableLabelPositions(ci);
         });
     });
 
