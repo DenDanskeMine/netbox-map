@@ -789,7 +789,10 @@
             polyline: polyline,
             hitArea: hitArea,
             vertexMarkers: [],
-            sidebarEl: null
+            sidebarEl: null,
+            labelEl: null,
+            revPathEl: null,
+            textPathEl: null
         };
         allCableItems.push(cableItem);
 
@@ -805,8 +808,130 @@
             extendBounds(ll.lat, ll.lng);
         });
 
+        // Add street-name-style label along the path
+        addCableLabel(cableItem);
+
         return cableItem;
     }
+
+    /* ── Cable path labels (street-name style via SVG textPath) ───── */
+
+    var SVG_NS = 'http://www.w3.org/2000/svg';
+    var XLINK_NS = 'http://www.w3.org/1999/xlink';
+
+    function addCableLabel(cableItem) {
+        var cp = cableItem.data;
+        var label = cp.label;
+        if (!label) return;
+
+        var polyline = cableItem.polyline;
+        var pathEl = polyline._path;
+        if (!pathEl) return;
+
+        var displayLabel = label + ' (' + cp.fiber_count + 'F)';
+        var pathId = 'cable-path-' + cp.id;
+        var revPathId = 'cable-path-rev-' + cp.id;
+
+        pathEl.setAttribute('id', pathId);
+
+        // Hidden reversed path for right-to-left direction handling
+        var revPath = document.createElementNS(SVG_NS, 'path');
+        revPath.setAttribute('id', revPathId);
+        revPath.setAttribute('fill', 'none');
+        revPath.setAttribute('stroke', 'none');
+        pathEl.parentNode.appendChild(revPath);
+
+        // Text element with halo stroke for readability
+        var text = document.createElementNS(SVG_NS, 'text');
+        text.setAttribute('class', 'cable-path-label');
+        text.setAttribute('text-anchor', 'middle');
+        text.setAttribute('font-size', '12');
+        text.setAttribute('font-weight', 'bold');
+        text.setAttribute('font-family', '-apple-system, "Segoe UI", sans-serif');
+        text.setAttribute('fill', '#fff');
+        text.setAttribute('paint-order', 'stroke');
+        text.setAttribute('stroke', 'rgba(0,0,0,0.6)');
+        text.setAttribute('stroke-width', '3.5');
+        text.setAttribute('stroke-linecap', 'round');
+        text.setAttribute('stroke-linejoin', 'round');
+        text.setAttribute('pointer-events', 'none');
+        text.setAttribute('dy', '-6');
+
+        var textPath = document.createElementNS(SVG_NS, 'textPath');
+        textPath.setAttribute('startOffset', '50%');
+        textPath.textContent = displayLabel;
+
+        text.appendChild(textPath);
+        pathEl.parentNode.appendChild(text);
+
+        cableItem.labelEl = text;
+        cableItem.textPathEl = textPath;
+        cableItem.revPathEl = revPath;
+        cableItem.pathId = pathId;
+        cableItem.revPathId = revPathId;
+
+        // Initial direction check
+        updateCableLabelDirection(cableItem);
+    }
+
+    function reversePathD(d) {
+        // Reverse an SVG path "M x1,y1 L x2,y2 L x3,y3..." to read left-to-right
+        var points = [];
+        var re = /[ML]\s*([\d.\-e]+)[,\s]+([\d.\-e]+)/gi;
+        var m;
+        while ((m = re.exec(d)) !== null) {
+            points.push(m[1] + ',' + m[2]);
+        }
+        if (points.length === 0) return d;
+        points.reverse();
+        var result = 'M' + points[0];
+        for (var i = 1; i < points.length; i++) {
+            result += 'L' + points[i];
+        }
+        return result;
+    }
+
+    function updateCableLabelDirection(cableItem) {
+        if (!cableItem.textPathEl || !cableItem.polyline._path) return;
+
+        var pathEl = cableItem.polyline._path;
+        var d = pathEl.getAttribute('d');
+        if (!d) return;
+
+        // Update reversed path with current geometry
+        cableItem.revPathEl.setAttribute('d', reversePathD(d));
+
+        // Check screen direction: if path goes right-to-left, use reversed path
+        var latlngs = cableItem.polyline.getLatLngs();
+        if (latlngs.length < 2) return;
+
+        var firstPt = map.latLngToContainerPoint(latlngs[0]);
+        var lastPt = map.latLngToContainerPoint(latlngs[latlngs.length - 1]);
+        var useReversed = firstPt.x > lastPt.x;
+        var href = '#' + (useReversed ? cableItem.revPathId : cableItem.pathId);
+
+        cableItem.textPathEl.setAttributeNS(XLINK_NS, 'xlink:href', href);
+        cableItem.textPathEl.setAttribute('href', href);
+    }
+
+    function removeCableLabel(cableItem) {
+        if (cableItem.labelEl && cableItem.labelEl.parentNode) {
+            cableItem.labelEl.parentNode.removeChild(cableItem.labelEl);
+        }
+        if (cableItem.revPathEl && cableItem.revPathEl.parentNode) {
+            cableItem.revPathEl.parentNode.removeChild(cableItem.revPathEl);
+        }
+        cableItem.labelEl = null;
+        cableItem.revPathEl = null;
+        cableItem.textPathEl = null;
+    }
+
+    // Update label directions on zoom/pan (path geometry changes)
+    map.on('zoomend moveend', function () {
+        allCableItems.forEach(function (ci) {
+            if (ci.textPathEl) updateCableLabelDirection(ci);
+        });
+    });
 
     // Render all existing cable paths
     cablePaths.forEach(function (cp) {
@@ -1147,6 +1272,9 @@
                             cableItem.polyline.unbindTooltip();
                             cableItem.polyline.bindTooltip(tooltip, { sticky: true });
                         }
+                        // Update path label
+                        removeCableLabel(cableItem);
+                        addCableLabel(cableItem);
                         saveBtn.innerHTML = '<i class="mdi mdi-check"></i> Saved!';
                         setTimeout(function () {
                             saveBtn.innerHTML = '<i class="mdi mdi-content-save"></i> Save';
@@ -1166,6 +1294,7 @@
 
                     apiRequest(cableApiUrl + d.id + '/', 'DELETE').then(function () {
                         clearVertexEditing(cableItem);
+                        removeCableLabel(cableItem);
                         if (cableItem.polyline) map.removeLayer(cableItem.polyline);
                         if (cableItem.hitArea) map.removeLayer(cableItem.hitArea);
                         var idx = allCableItems.indexOf(cableItem);
@@ -2413,8 +2542,9 @@
         return apiRequest(cableSplitBaseUrl + cableItem.data.id + '/split/', 'POST', {
             marker_id: markerId
         }).then(function (result) {
-            // Remove the old polyline and hit area
+            // Remove the old polyline, hit area, and label
             clearVertexEditing(cableItem);
+            removeCableLabel(cableItem);
             if (cableItem.polyline) map.removeLayer(cableItem.polyline);
             if (cableItem.hitArea) map.removeLayer(cableItem.hitArea);
             var idx = allCableItems.indexOf(cableItem);
