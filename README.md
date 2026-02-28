@@ -4,6 +4,7 @@
 ![NetBox](https://img.shields.io/badge/netbox-4.5%2B-blue.svg)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![PyPI](https://img.shields.io/pypi/v/netbox-map.svg)](https://pypi.org/project/netbox-map/)
+[![PyPI Downloads](https://static.pepy.tech/personalized-badge/netbox-map?period=total&units=INTERNATIONAL_SYSTEM&left_color=BLACK&right_color=GREEN&left_text=downloads)](https://pepy.tech/projects/netbox-map)
 
 A comprehensive mapping and floor plan visualization plugin for NetBox. Build interactive data center floor plans, place assets on a global geographic map, visualize rack utilization, explore devices nested inside racks, and configure everything from a web-based settings page — no restart required.
 
