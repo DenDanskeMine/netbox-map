@@ -96,7 +96,8 @@
   </div>
 
   <div class="site-map-sidebar" id="site-map-sidebar">
-    <div class="sidebar-tiles-section">
+    {# ── Panel 1: List view (default) ── #}
+    <div class="sidebar-panel sidebar-panel--list" id="sidebar-panel-list">
       <div class="sidebar-header">
         <div class="sidebar-search-wrap">
           <i class="mdi mdi-magnify"></i>
@@ -109,11 +110,14 @@
       </div>
       <div class="sidebar-tile-list" id="sidebar-list"></div>
     </div>
-    <div class="sidebar-context-section" id="sidebar-detail">
-      <div class="sidebar-empty-state">
-        <i class="mdi mdi-cursor-default-click-outline"></i>
-        <span>{% trans "Click a marker to see details" %}</span>
+    {# ── Panel 2: Detail view (on click) ── #}
+    <div class="sidebar-panel sidebar-panel--detail d-none" id="sidebar-panel-detail">
+      <div class="sidebar-detail-header" id="sidebar-detail-back">
+        <i class="mdi mdi-arrow-left"></i>
+        <span>{% trans "Back" %}</span>
+        <span class="sidebar-detail-esc">Esc</span>
       </div>
+      <div class="sidebar-detail-content" id="sidebar-detail"></div>
     </div>
   </div>
 </div>

@@ -58,6 +58,9 @@
     var sidebarCount    = document.getElementById('sidebar-count');
     var sidebarList     = document.getElementById('sidebar-list');
     var sidebarDetail   = document.getElementById('sidebar-detail');
+    var panelList       = document.getElementById('sidebar-panel-list');
+    var panelDetail     = document.getElementById('sidebar-panel-detail');
+    var detailBackBtn   = document.getElementById('sidebar-detail-back');
 
     /* ── Placement state ──────────────────────────────────────────── */
     var placementMode = null;   // null | 'site' | 'location' | 'tile' | 'marker'
@@ -1178,10 +1181,10 @@
         }
         if (cableItem.sidebarEl) {
             cableItem.sidebarEl.classList.add('active');
-            cableItem.sidebarEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
         }
 
         showCableDetail(cableItem);
+        showDetailPanel();
     }
 
     function showCableDetail(cableItem) {
@@ -1345,7 +1348,7 @@
                         if (idx !== -1) allCableItems.splice(idx, 1);
                         selectedCable = null;
                         buildCableSidebar();
-                        showDetail(null);
+                        showListPanel();
                     }).catch(function (err) {
                         console.error('Failed to delete cable:', err);
                         alert('Error: ' + err.message);
@@ -1549,15 +1552,15 @@
 
     /* ── Cable sidebar section ───────────────────────────────────── */
     function buildCableSidebar() {
-        // Find or create the cables section in sidebar
+        // Find or create the cables section in the list panel
         var cablesSection = document.getElementById('sidebar-cables-section');
         if (!cablesSection) {
             cablesSection = document.createElement('div');
             cablesSection.id = 'sidebar-cables-section';
             cablesSection.className = 'sidebar-cables-section';
-            // Insert before the detail panel
-            if (sidebarDetail && sidebarDetail.parentNode) {
-                sidebarDetail.parentNode.insertBefore(cablesSection, sidebarDetail);
+            // Append at the end of the list panel
+            if (panelList) {
+                panelList.appendChild(cablesSection);
             }
         }
 
@@ -1566,9 +1569,9 @@
             return;
         }
 
-        var html = '<div class="sidebar-section-title" style="padding:6px 12px;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;color:var(--fp-text-muted,#6c757d);opacity:0.7;border-top:1px solid var(--fp-border-light,rgba(0,0,0,0.06));margin-top:4px">' +
+        var html = '<div class="sidebar-cables-title">' +
             '<i class="mdi mdi-vector-polyline"></i> Cables (' + allCableItems.length + ')</div>';
-        html += '<div class="sidebar-cable-list" style="max-height:150px;overflow-y:auto">';
+        html += '<div class="sidebar-cable-list">';
 
         allCableItems.forEach(function (item, idx) {
             var d = item.data;
@@ -1695,8 +1698,47 @@
     });
 
     /* ══════════════════════════════════════════════════════════════════
-       SIDEBAR — Build type toggles, list, search, detail
+       SIDEBAR — Panel switching, toggles, list, search, detail
        ══════════════════════════════════════════════════════════════════ */
+
+    function showListPanel() {
+        if (panelList)   panelList.classList.remove('d-none');
+        if (panelDetail) panelDetail.classList.add('d-none');
+
+        // Deselect current item/cable
+        if (selectedItem && selectedItem.sidebarEl) {
+            selectedItem.sidebarEl.classList.remove('active');
+        }
+        selectedItem = null;
+        if (selectedCable) {
+            clearVertexEditing(selectedCable);
+            if (selectedCable.polyline) {
+                selectedCable.polyline.setStyle({
+                    weight: getCableDisplayWeight(selectedCable.data),
+                    color: getCableDisplayColor(selectedCable.data)
+                });
+            }
+            if (selectedCable.sidebarEl) selectedCable.sidebarEl.classList.remove('active');
+            selectedCable = null;
+        }
+    }
+
+    function showDetailPanel() {
+        if (panelList)   panelList.classList.add('d-none');
+        if (panelDetail) panelDetail.classList.remove('d-none');
+    }
+
+    // Back button
+    if (detailBackBtn) {
+        detailBackBtn.addEventListener('click', showListPanel);
+    }
+
+    // Esc key returns to list
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && panelDetail && !panelDetail.classList.contains('d-none')) {
+            showListPanel();
+        }
+    });
 
     // Collect unique types
     function getUniqueTypes() {
@@ -1844,24 +1886,30 @@
         if (selectedItem && selectedItem.sidebarEl) {
             selectedItem.sidebarEl.classList.remove('active');
         }
+        // Deselect cable
+        if (selectedCable) {
+            if (selectedCable.polyline) {
+                selectedCable.polyline.setStyle({
+                    weight: getCableDisplayWeight(selectedCable.data),
+                    color: getCableDisplayColor(selectedCable.data)
+                });
+            }
+            if (selectedCable.sidebarEl) selectedCable.sidebarEl.classList.remove('active');
+            selectedCable = null;
+        }
         selectedItem = item;
         if (item.sidebarEl) {
             item.sidebarEl.classList.add('active');
-            // Scroll into view
-            item.sidebarEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
         }
         showDetail(item);
+        showDetailPanel();
     }
 
     function showDetail(item) {
         if (!sidebarDetail) return;
 
         if (!item) {
-            sidebarDetail.innerHTML =
-                '<div class="sidebar-empty-state">' +
-                    '<i class="mdi mdi-cursor-default-click-outline"></i>' +
-                    '<span>Click a marker to see details</span>' +
-                '</div>';
+            sidebarDetail.innerHTML = '';
             return;
         }
 
@@ -2084,7 +2132,7 @@
                     selectedItem = null;
                     buildToggleButtons();
                     buildSidebarList();
-                    showDetail(null);
+                    showListPanel();
                 }).catch(function (err) {
                     console.error('Failed to delete marker:', err);
                     alert('Failed to delete: ' + err.message);
@@ -2155,7 +2203,7 @@
                     selectedItem = null;
                     buildToggleButtons();
                     buildSidebarList();
-                    showDetail(null);
+                    showListPanel();
                 }).catch(function (err) {
                     console.error('Failed to remove tile from map:', err);
                     alert('Failed to remove: ' + err.message);
