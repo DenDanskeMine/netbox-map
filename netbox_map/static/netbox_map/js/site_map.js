@@ -790,8 +790,7 @@
             hitArea: hitArea,
             vertexMarkers: [],
             sidebarEl: null,
-            labelEls: null,
-            revPathEl: null,
+            labelMarkers: null,
             displayLabel: null
         };
         allCableItems.push(cableItem);
@@ -814,173 +813,153 @@
         return cableItem;
     }
 
-    /* ── Cable path labels (street-name style via SVG textPath) ───── */
+    /* ── Cable path labels (street-name style, repeated along path) ── */
     /*
-     * Repeats the label along the path like Google Maps street names:
+     * Uses Leaflet DivIcon markers positioned along the polyline path.
+     * Works with any renderer (Canvas or SVG).
      * - Multiple labels spaced evenly based on path pixel length
      * - Recalculated on zoom so density stays readable
-     * - Auto-flips so text is never upside down
-     * - Sits right on the line with a halo for contrast
+     * - Rotated to follow the path direction
+     * - Always right-side-up
      */
 
-    var SVG_NS = 'http://www.w3.org/2000/svg';
-    var XLINK_NS = 'http://www.w3.org/1999/xlink';
     var MAX_LABELS_PER_CABLE = 12;
-
-    function createLabelTextEl() {
-        var text = document.createElementNS(SVG_NS, 'text');
-        text.setAttribute('class', 'cable-path-label');
-        text.setAttribute('text-anchor', 'middle');
-        text.setAttribute('font-size', '11');
-        text.setAttribute('font-weight', '600');
-        text.setAttribute('font-family', '-apple-system, "Segoe UI", sans-serif');
-        text.setAttribute('fill', '#fff');
-        text.setAttribute('paint-order', 'stroke');
-        text.setAttribute('stroke', 'rgba(0,0,0,0.55)');
-        text.setAttribute('stroke-width', '3');
-        text.setAttribute('stroke-linecap', 'round');
-        text.setAttribute('stroke-linejoin', 'round');
-        text.setAttribute('pointer-events', 'none');
-        text.setAttribute('dy', '-3');
-        return text;
-    }
 
     function addCableLabel(cableItem) {
         var cp = cableItem.data;
-        var label = cp.label;
-        if (!label) return;
+        if (!cp.label) return;
 
-        var polyline = cableItem.polyline;
-        var pathEl = polyline._path;
-        if (!pathEl) return;
+        cableItem.displayLabel = cp.label + ' \u00b7 ' + cp.fiber_count + 'F';
+        cableItem.labelMarkers = [];
+        cableItem._labelCount = 0;
 
-        var displayLabel = label + '  \u00b7  ' + cp.fiber_count + 'F';
-        var pathId = 'cable-path-' + cp.id;
-        var revPathId = 'cable-path-rev-' + cp.id;
-
-        pathEl.setAttribute('id', pathId);
-
-        // Hidden reversed path for right-to-left direction handling
-        var revPath = document.createElementNS(SVG_NS, 'path');
-        revPath.setAttribute('id', revPathId);
-        revPath.setAttribute('fill', 'none');
-        revPath.setAttribute('stroke', 'none');
-        pathEl.parentNode.appendChild(revPath);
-
-        // Pre-allocate label text elements
-        var labelEls = [];
-        var parent = pathEl.parentNode;
-        for (var i = 0; i < MAX_LABELS_PER_CABLE; i++) {
-            var text = createLabelTextEl();
-            var textPath = document.createElementNS(SVG_NS, 'textPath');
-            textPath.setAttributeNS(XLINK_NS, 'xlink:href', '#' + pathId);
-            textPath.setAttribute('href', '#' + pathId);
-            textPath.setAttribute('startOffset', '50%');
-            textPath.textContent = displayLabel;
-            text.appendChild(textPath);
-            // First label visible immediately, rest hidden until zoom recalculates
-            if (i > 0) text.style.display = 'none';
-            parent.appendChild(text);
-            labelEls.push({ text: text, textPath: textPath });
-        }
-
-        cableItem.revPathEl = revPath;
-        cableItem.pathId = pathId;
-        cableItem.revPathId = revPathId;
-        cableItem.displayLabel = displayLabel;
-        cableItem.labelEls = labelEls;
-
-        // Defer full positioning — SVG path needs a render frame for getTotalLength()
-        setTimeout(function () {
-            updateCableLabelPositions(cableItem);
-        }, 0);
+        updateCableLabelPositions(cableItem);
     }
 
-    function reversePathD(d) {
-        var points = [];
-        var re = /[ML]\s*([\d.\-e]+)[,\s]+([\d.\-e]+)/gi;
-        var m;
-        while ((m = re.exec(d)) !== null) {
-            points.push(m[1] + ',' + m[2]);
+    function computePathLabels(coords, displayLabel) {
+        if (!coords || coords.length < 2) return [];
+
+        // Build pixel-space segments
+        var pts = [];
+        for (var i = 0; i < coords.length; i++) {
+            pts.push(map.latLngToContainerPoint(L.latLng(coords[i][0], coords[i][1])));
         }
-        if (points.length === 0) return d;
-        points.reverse();
-        var result = 'M' + points[0];
-        for (var i = 1; i < points.length; i++) {
-            result += 'L' + points[i];
+
+        var segLens = [];
+        var totalLen = 0;
+        for (var s = 1; s < pts.length; s++) {
+            var dx = pts[s].x - pts[s - 1].x;
+            var dy = pts[s].y - pts[s - 1].y;
+            var len = Math.sqrt(dx * dx + dy * dy);
+            segLens.push({ len: len, cumStart: totalLen });
+            totalLen += len;
         }
-        return result;
-    }
 
-    function updateCableLabelPositions(cableItem) {
-        if (!cableItem.labelEls || !cableItem.polyline._path) return;
+        if (totalLen < 40) return []; // too short to label
 
-        var pathEl = cableItem.polyline._path;
-        var d = pathEl.getAttribute('d');
-        if (!d) return;
-
-        // Update reversed path geometry
-        cableItem.revPathEl.setAttribute('d', reversePathD(d));
-
-        // Check screen direction: flip if path goes right-to-left
-        var latlngs = cableItem.polyline.getLatLngs();
-        if (latlngs.length < 2) return;
-        var firstPt = map.latLngToContainerPoint(latlngs[0]);
-        var lastPt = map.latLngToContainerPoint(latlngs[latlngs.length - 1]);
-        var useReversed = firstPt.x > lastPt.x;
-        var href = '#' + (useReversed ? cableItem.revPathId : cableItem.pathId);
-
-        // Calculate how many labels fit along the path
-        var totalLen = pathEl.getTotalLength();
-        var labelPx = cableItem.displayLabel.length * 6.5;
-        var spacing = labelPx + 100; // label width + gap
+        // How many labels fit?
+        var labelPx = displayLabel.length * 7;
+        var spacing = labelPx + 120;
         var count = Math.max(1, Math.floor(totalLen / spacing));
         count = Math.min(count, MAX_LABELS_PER_CABLE);
 
-        // Distribute offsets evenly (avoid crowding the endpoints)
-        var offsets = [];
-        if (count === 1) {
-            offsets.push(50);
-        } else {
-            var step = 100 / (count + 1);
-            for (var i = 1; i <= count; i++) {
-                offsets.push(step * i);
+        // Label positions along the path
+        var placements = [];
+        var step = totalLen / (count + 1);
+        for (var k = 1; k <= count; k++) {
+            var dist = step * k;
+
+            // Find segment
+            var seg = 0;
+            for (var si = 0; si < segLens.length; si++) {
+                if (segLens[si].cumStart + segLens[si].len >= dist) {
+                    seg = si;
+                    break;
+                }
             }
+
+            var t = segLens[seg].len > 0 ? (dist - segLens[seg].cumStart) / segLens[seg].len : 0;
+
+            // Interpolate lat/lng
+            var lat = coords[seg][0] + t * (coords[seg + 1][0] - coords[seg][0]);
+            var lng = coords[seg][1] + t * (coords[seg + 1][1] - coords[seg][1]);
+
+            // Angle from pixel coords (for rotation)
+            var adx = pts[seg + 1].x - pts[seg].x;
+            var ady = pts[seg + 1].y - pts[seg].y;
+            var angle = Math.atan2(ady, adx) * 180 / Math.PI;
+
+            // Keep right-side-up
+            if (angle > 90) angle -= 180;
+            if (angle < -90) angle += 180;
+
+            placements.push({ lat: lat, lng: lng, angle: angle });
         }
 
-        // Apply to pre-allocated elements: show needed, hide rest
-        for (var j = 0; j < cableItem.labelEls.length; j++) {
-            var el = cableItem.labelEls[j];
-            if (j < offsets.length) {
-                el.text.style.display = '';
-                el.textPath.setAttribute('startOffset', offsets[j] + '%');
-                el.textPath.setAttributeNS(XLINK_NS, 'xlink:href', href);
-                el.textPath.setAttribute('href', href);
-            } else {
-                el.text.style.display = 'none';
+        return placements;
+    }
+
+    function updateCableLabelPositions(cableItem) {
+        if (!cableItem.displayLabel) return;
+
+        var coords = cableItem.data.path_coordinates;
+        var placements = computePathLabels(coords, cableItem.displayLabel);
+        var label = cableItem.displayLabel;
+
+        // Reuse existing markers or create new ones
+        for (var i = 0; i < Math.max(placements.length, cableItem.labelMarkers.length); i++) {
+            if (i < placements.length) {
+                var p = placements[i];
+                var latlng = L.latLng(p.lat, p.lng);
+                var html = '<span class="cable-path-label-text" style="transform:rotate(' + p.angle.toFixed(1) + 'deg)">' +
+                    escHtml(label) + '</span>';
+
+                if (i < cableItem.labelMarkers.length) {
+                    // Reuse: update position and icon
+                    cableItem.labelMarkers[i].setLatLng(latlng);
+                    cableItem.labelMarkers[i].setIcon(L.divIcon({
+                        className: 'cable-path-label-wrap',
+                        html: html,
+                        iconSize: [0, 0]
+                    }));
+                } else {
+                    // Create new marker
+                    var m = L.marker(latlng, {
+                        icon: L.divIcon({
+                            className: 'cable-path-label-wrap',
+                            html: html,
+                            iconSize: [0, 0]
+                        }),
+                        interactive: false,
+                        zIndexOffset: -1000
+                    }).addTo(map);
+                    cableItem.labelMarkers.push(m);
+                }
+            } else if (i < cableItem.labelMarkers.length) {
+                // Extra marker — remove
+                map.removeLayer(cableItem.labelMarkers[i]);
             }
+        }
+        // Trim array
+        if (cableItem.labelMarkers.length > placements.length) {
+            cableItem.labelMarkers.length = placements.length;
         }
     }
 
     function removeCableLabel(cableItem) {
-        if (cableItem.labelEls) {
-            for (var i = 0; i < cableItem.labelEls.length; i++) {
-                var el = cableItem.labelEls[i].text;
-                if (el.parentNode) el.parentNode.removeChild(el);
+        if (cableItem.labelMarkers) {
+            for (var i = 0; i < cableItem.labelMarkers.length; i++) {
+                map.removeLayer(cableItem.labelMarkers[i]);
             }
         }
-        if (cableItem.revPathEl && cableItem.revPathEl.parentNode) {
-            cableItem.revPathEl.parentNode.removeChild(cableItem.revPathEl);
-        }
-        cableItem.labelEls = null;
-        cableItem.revPathEl = null;
+        cableItem.labelMarkers = null;
         cableItem.displayLabel = null;
     }
 
-    // Recalculate label count + direction on zoom/pan
-    map.on('zoomend moveend', function () {
+    // Recalculate label count + positions on zoom/pan
+    map.on('zoomend', function () {
         allCableItems.forEach(function (ci) {
-            if (ci.labelEls) updateCableLabelPositions(ci);
+            if (ci.displayLabel) updateCableLabelPositions(ci);
         });
     });
 
