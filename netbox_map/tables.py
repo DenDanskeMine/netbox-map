@@ -3,7 +3,7 @@ from django.utils.safestring import mark_safe
 from django.utils.translation import gettext_lazy as _
 
 from netbox.tables import NetBoxTable, columns
-from .models import FloorPlanTile, FloorPlan, CustomMarkerType, MapMarker
+from .models import FloorPlanTile, FloorPlan, CustomMarkerType, MapMarker, CablePath
 
 
 class FloorPlanTable(NetBoxTable):
@@ -200,6 +200,42 @@ class MapMarkerTable(NetBoxTable):
     # value_* methods control CSV export output (raw importable values)
     def value_marker_type(self, value, record):
         return record.marker_type
+
+    def value_status(self, value, record):
+        return record.status
+
+
+class CablePathTable(NetBoxTable):
+    label = tables.Column(
+        linkify=True,
+        verbose_name=_('Label')
+    )
+    status = tables.Column(
+        verbose_name=_('Status')
+    )
+    fiber_count = tables.Column(
+        verbose_name=_('Fiber Count')
+    )
+    start_marker = tables.Column(
+        linkify=True,
+        verbose_name=_('Start Marker')
+    )
+    end_marker = tables.Column(
+        linkify=True,
+        verbose_name=_('End Marker')
+    )
+    tags = columns.TagColumn()
+
+    class Meta(NetBoxTable.Meta):
+        model = CablePath
+        fields = (
+            'pk', 'id', 'label', 'status', 'fiber_count',
+            'start_marker', 'end_marker',
+            'tags', 'actions',
+        )
+        default_columns = (
+            'pk', 'label', 'status', 'fiber_count', 'start_marker', 'end_marker',
+        )
 
     def value_status(self, value, record):
         return record.status

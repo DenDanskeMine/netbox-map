@@ -47,6 +47,18 @@ urlpatterns = (
     path('tiles/<int:pk>/delete/', views.FloorPlanTileDeleteView.as_view(), name='floorplantile_delete'),
     path('tiles/<int:pk>/changelog/', ObjectChangeLogView.as_view(), name='floorplantile_changelog', kwargs={'model': models.FloorPlanTile}),
 
+    # CablePath
+    path('cable-paths/', views.CablePathListView.as_view(), name='cablepath_list'),
+    path('cable-paths/add/', views.CablePathEditView.as_view(), name='cablepath_add'),
+    path('cable-paths/import/', views.CablePathBulkImportView.as_view(), name='cablepath_bulk_import'),
+    path('cable-paths/edit/', views.CablePathBulkEditView.as_view(), name='cablepath_bulk_edit'),
+    path('cable-paths/delete/', views.CablePathBulkDeleteView.as_view(), name='cablepath_bulk_delete'),
+    path('cable-paths/<int:pk>/', views.CablePathView.as_view(), name='cablepath'),
+    path('cable-paths/<int:pk>/edit/', views.CablePathEditView.as_view(), name='cablepath_edit'),
+    path('cable-paths/<int:pk>/delete/', views.CablePathDeleteView.as_view(), name='cablepath_delete'),
+    path('cable-paths/<int:pk>/split/', views.SplitCableView.as_view(), name='cablepath_split'),
+    path('cable-paths/<int:pk>/changelog/', ObjectChangeLogView.as_view(), name='cablepath_changelog', kwargs={'model': models.CablePath}),
+
     # MapMarker
     path('map-markers/', views.MapMarkerListView.as_view(), name='mapmarker_list'),
     path('map-markers/add/', views.MapMarkerEditView.as_view(), name='mapmarker_add'),

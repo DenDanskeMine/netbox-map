@@ -48,6 +48,20 @@ class FloorPlanTileStatusChoices(ChoiceSet):
     ]
 
 
+class CablePathStatusChoices(ChoiceSet):
+    STATUS_PLANNED = 'planned'
+    STATUS_IN_PROGRESS = 'in_progress'
+    STATUS_ACTIVE = 'active'
+    STATUS_INACTIVE = 'inactive'
+
+    CHOICES = [
+        (STATUS_PLANNED, _('Planned'), 'cyan'),
+        (STATUS_IN_PROGRESS, _('In Progress'), 'yellow'),
+        (STATUS_ACTIVE, _('Active'), 'green'),
+        (STATUS_INACTIVE, _('Inactive'), 'red'),
+    ]
+
+
 # ── Built-in type metadata (color + icon for JS/template rendering) ──
 
 BUILTIN_TYPE_CONFIG = {
@@ -65,6 +79,16 @@ BUILTIN_TYPE_CONFIG = {
     'printer':        {'name': 'Printer',         'color': '#e67e22', 'icon': 'mdi-printer'},
     'floorplan_link': {'name': 'Floor Plan Link', 'color': '#4a50c8', 'icon': 'mdi-floor-plan'},
     'drop':           {'name': 'Drop',            'color': '#2ecc71', 'icon': 'mdi-ethernet'},
+    # FTTH / Fiber types
+    'splice_closure': {'name': 'Splice Closure',  'color': '#e67e22', 'icon': 'mdi-connection'},
+    'olt':            {'name': 'OLT',             'color': '#2ecc71', 'icon': 'mdi-server-network'},
+    'ont':            {'name': 'ONT',             'color': '#3498db', 'icon': 'mdi-router-wireless'},
+    'splitter':       {'name': 'Splitter',        'color': '#9b59b6', 'icon': 'mdi-call-split'},
+    'fdt':            {'name': 'FDT',             'color': '#1abc9c', 'icon': 'mdi-package-variant-closed'},
+    'fat':            {'name': 'FAT',             'color': '#e74c3c', 'icon': 'mdi-access-point'},
+    'manhole':        {'name': 'Manhole',         'color': '#7f8c8d', 'icon': 'mdi-circle-outline'},
+    'pole':           {'name': 'Pole',            'color': '#f39c12', 'icon': 'mdi-transmission-tower'},
+    'handhole':       {'name': 'Handhole',        'color': '#95a5a6', 'icon': 'mdi-circle-half-full'},
 }
 
 # Set of all built-in slugs for quick lookup

@@ -12,9 +12,10 @@ from utilities.forms.fields import (
     CommentField,
 )
 from utilities.forms.rendering import FieldSet
-from .models import FloorPlan, FloorPlanTile, CustomMarkerType, MapMarker, MapSettings, ASSIGNABLE_MODELS
+from .models import FloorPlan, FloorPlanTile, CustomMarkerType, MapMarker, MapSettings, CablePath, ASSIGNABLE_MODELS
 from .choices import (
     FloorPlanTileTypeChoices, FloorPlanTileStatusChoices,
+    CablePathStatusChoices,
     get_all_tile_type_choices, get_all_type_configs,
 )
 
@@ -724,6 +725,105 @@ class MapMarkerImportForm(NetBoxModelImportForm):
                 normalized[k] = v
 
         return normalized
+
+
+#
+# CablePath forms
+#
+
+class CablePathForm(NetBoxModelForm):
+    start_marker = DynamicModelChoiceField(
+        label=_('Start Marker'),
+        queryset=MapMarker.objects.all(),
+        required=False,
+    )
+    end_marker = DynamicModelChoiceField(
+        label=_('End Marker'),
+        queryset=MapMarker.objects.all(),
+        required=False,
+    )
+
+    fieldsets = (
+        FieldSet(
+            'label', 'status', 'fiber_count', 'tags',
+            name=_('Cable Path')
+        ),
+        FieldSet(
+            'color', 'weight',
+            name=_('Appearance')
+        ),
+        FieldSet(
+            'start_marker', 'end_marker',
+            name=_('Connections')
+        ),
+    )
+
+    class Meta:
+        model = CablePath
+        fields = [
+            'label', 'status', 'fiber_count',
+            'color', 'weight',
+            'start_marker', 'end_marker',
+            'path_coordinates', 'tags',
+        ]
+        widgets = {
+            'path_coordinates': forms.HiddenInput(),
+            'color': forms.TextInput(attrs={'type': 'color'}),
+        }
+
+
+class CablePathFilterForm(NetBoxModelFilterSetForm):
+    model = CablePath
+    status = forms.MultipleChoiceField(
+        choices=CablePathStatusChoices,
+        required=False,
+        label=_('Status')
+    )
+
+    fieldsets = (
+        FieldSet('status'),
+    )
+
+
+class CablePathBulkEditForm(NetBoxModelBulkEditForm):
+    status = forms.ChoiceField(
+        choices=CablePathStatusChoices,
+        required=False,
+        label=_('Status'),
+    )
+    fiber_count = forms.IntegerField(required=False, label=_('Fiber Count'))
+
+    model = CablePath
+    nullable_fields = ('label',)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['status'].choices = [('', '---------')] + list(CablePathStatusChoices)
+
+
+class CablePathImportForm(NetBoxModelImportForm):
+    status = CSVChoiceField(
+        choices=CablePathStatusChoices,
+        help_text=_('Status'),
+    )
+    start_marker = CSVModelChoiceField(
+        queryset=MapMarker.objects.all(),
+        to_field_name='pk',
+        required=False,
+        help_text=_('Start marker ID'),
+    )
+    end_marker = CSVModelChoiceField(
+        queryset=MapMarker.objects.all(),
+        to_field_name='pk',
+        required=False,
+        help_text=_('End marker ID'),
+    )
+
+    class Meta:
+        model = CablePath
+        fields = (
+            'label', 'status', 'fiber_count', 'start_marker', 'end_marker',
+        )
 
 
 #

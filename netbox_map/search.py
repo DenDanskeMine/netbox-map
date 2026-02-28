@@ -1,5 +1,5 @@
 from netbox.search import SearchIndex, register_search
-from .models import FloorPlan, FloorPlanTile, CustomMarkerType, MapMarker
+from .models import FloorPlan, FloorPlanTile, CustomMarkerType, MapMarker, CablePath
 
 
 @register_search
@@ -27,6 +27,14 @@ class CustomMarkerTypeIndex(SearchIndex):
         ('name', 100),
         ('slug', 200),
         ('description', 500),
+    )
+
+
+@register_search
+class CablePathIndex(SearchIndex):
+    model = CablePath
+    fields = (
+        ('label', 100),
     )
 
 

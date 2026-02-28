@@ -15,16 +15,15 @@
 {% endblock %}
 
 {% block content %}
-{% if can_edit %}
-<div class="site-map-edit-toggle">
+{# Combined header bar: edit toggle + toolbar controls #}
+<div class="site-map-header mb-3">
+  {% if can_edit %}
   <button class="btn btn-sm btn-outline-warning" id="edit-mode-btn">
     <i class="mdi mdi-pencil-lock-outline"></i> {% trans "Edit Mode" %}
   </button>
-</div>
-
-<div class="site-map-toolbar d-none" id="site-map-toolbar">
-  <div class="site-map-toolbar-row">
-    <div class="site-map-toolbar-group">
+  <div class="toolbar-divider"></div>
+  <div id="site-map-toolbar-controls" class="d-none d-flex align-items-center gap-2 flex-wrap">
+    <div class="toolbar-group">
       <label class="toolbar-label">{% trans "Place Existing" %}</label>
       <select id="unplaced-sites-select" class="form-select form-select-sm">
         <option value="">{% trans "Site..." %}</option>
@@ -45,8 +44,14 @@
         <i class="mdi mdi-crosshairs-gps"></i> {% trans "Place" %}
       </button>
     </div>
-    <div class="site-map-toolbar-sep"></div>
-    <div class="site-map-toolbar-group">
+    <div class="toolbar-divider"></div>
+    <div class="toolbar-group">
+      <button class="btn btn-sm btn-outline-info" id="draw-cable-btn">
+        <i class="mdi mdi-vector-polyline"></i> {% trans "Draw Cable" %}
+      </button>
+    </div>
+    <div class="toolbar-divider"></div>
+    <div class="toolbar-group">
       <label class="toolbar-label">{% trans "New Marker" %}</label>
       <select id="new-marker-type" class="form-select form-select-sm">
         {% for tc in type_configs %}
@@ -58,13 +63,13 @@
         <i class="mdi mdi-plus"></i> {% trans "Add Marker" %}
       </button>
     </div>
-    <div class="site-map-toolbar-status">
+    <div class="site-map-toolbar-status ms-auto">
       <span id="placement-status" class="text-muted small"></span>
       <button id="cancel-placement-btn" class="btn btn-sm btn-outline-danger d-none">{% trans "Cancel" %}</button>
     </div>
   </div>
+  {% endif %}
 </div>
-{% endif %}
 
 <div class="site-map-layout">
   <div id="site-map-container"
@@ -76,6 +81,7 @@
        data-tiles='{{ tiles_json }}'
        data-unplaced-tiles='{{ unplaced_tiles_json }}'
        data-markers='{{ markers_json }}'
+       data-cable-paths='{{ cable_paths_json }}'
        data-type-configs='{{ type_configs_json }}'
        data-csrf-token="{{ csrf_token }}"
        data-can-edit="{{ can_edit|yesno:'true,false' }}"
@@ -83,6 +89,8 @@
        data-loc-coords-api-url="{% url 'plugins-api:netbox_map-api:locationcoordinates-list' %}"
        data-tile-api-url="{% url 'plugins-api:netbox_map-api:floorplantile-list' %}"
        data-marker-api-url="{% url 'plugins-api:netbox_map-api:mapmarker-list' %}"
+       data-cable-api-url="{% url 'plugins-api:netbox_map-api:cablepath-list' %}"
+       data-cable-split-base-url="/plugins/map/cable-paths/"
        data-detail-base-url="/plugins/map/marker-detail/"
        {% if focus_lat %}data-focus-lat="{{ focus_lat }}" data-focus-lng="{{ focus_lng }}"{% endif %}>
   </div>
@@ -90,7 +98,10 @@
   <div class="site-map-sidebar" id="site-map-sidebar">
     <div class="sidebar-tiles-section">
       <div class="sidebar-header">
-        <input type="text" id="sidebar-search" class="form-control form-control-sm" placeholder="{% trans 'Search markers...' %}">
+        <div class="sidebar-search-wrap">
+          <i class="mdi mdi-magnify"></i>
+          <input type="text" id="sidebar-search" class="form-control form-control-sm" placeholder="{% trans 'Search markers...' %}">
+        </div>
       </div>
       <div class="sidebar-toggles" id="sidebar-toggles"></div>
       <div class="sidebar-filter-row">

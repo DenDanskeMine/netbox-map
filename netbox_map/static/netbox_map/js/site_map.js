@@ -17,6 +17,7 @@
     var tiles              = parseJSON('data-tiles');
     var unplacedTiles      = parseJSON('data-unplaced-tiles');
     var mapMarkers         = parseJSON('data-markers');
+    var cablePaths         = parseJSON('data-cable-paths');
 
     var canEdit   = container.getAttribute('data-can-edit') === 'true';
     var csrfToken = container.getAttribute('data-csrf-token') || '';
@@ -24,6 +25,8 @@
     var locCoordsApiUrl  = container.getAttribute('data-loc-coords-api-url') || '';
     var tileApiUrl       = container.getAttribute('data-tile-api-url') || '';
     var markerApiUrl     = container.getAttribute('data-marker-api-url') || '';
+    var cableApiUrl      = container.getAttribute('data-cable-api-url') || '';
+    var cableSplitBaseUrl = container.getAttribute('data-cable-split-base-url') || '/plugins/map/cable-paths/';
     var detailBaseUrl    = container.getAttribute('data-detail-base-url') || '/plugins/map/marker-detail/';
 
     /* ── Edit mode state ──────────────────────────────────────────── */
@@ -31,7 +34,7 @@
 
     /* ── Toolbar elements ─────────────────────────────────────────── */
     var editModeBtn     = document.getElementById('edit-mode-btn');
-    var toolbarEl       = document.getElementById('site-map-toolbar');
+    var toolbarEl       = document.getElementById('site-map-toolbar-controls');
     var sitesSelect     = document.getElementById('unplaced-sites-select');
     var locationsSelect = document.getElementById('unplaced-locations-select');
     var tilesSelect     = document.getElementById('unplaced-tiles-select');
@@ -46,6 +49,9 @@
     var newMarkerLabel  = document.getElementById('new-marker-label');
     var addMarkerBtn    = document.getElementById('add-marker-btn');
 
+    // Cable drawing
+    var drawCableBtn    = document.getElementById('draw-cable-btn');
+
     /* ── Sidebar elements ─────────────────────────────────────────── */
     var sidebarSearch   = document.getElementById('sidebar-search');
     var sidebarToggles  = document.getElementById('sidebar-toggles');
@@ -56,6 +62,14 @@
     /* ── Placement state ──────────────────────────────────────────── */
     var placementMode = null;   // null | 'site' | 'location' | 'tile' | 'marker'
     var placementItem = null;
+
+    /* ── Cable drawing state ─────────────────────────────────────── */
+    var cableDrawing = false;
+    var cableDrawCoords = [];
+    var cableDrawPolyline = null;  // temporary polyline during drawing
+    var allCableItems = [];         // { data, polyline, sidebarEl }
+    var selectedCable = null;
+    var editingCable = null;        // cable currently being vertex-edited
 
     /* ── Tile type configuration (dynamic, loaded from server) ────── */
     var TYPE_CONFIGS_RAW = [];
@@ -76,7 +90,7 @@
     var selectedItem = null;   // reference to allItems entry
 
     /* ── Empty state ──────────────────────────────────────────────── */
-    var hasItems = placedSites.length || locations.length || tiles.length || mapMarkers.length;
+    var hasItems = placedSites.length || locations.length || tiles.length || mapMarkers.length || cablePaths.length;
     if (!hasItems && !canEdit) {
         container.innerHTML =
             '<div class="site-map-empty">' +
@@ -94,10 +108,25 @@
         attributionControl: true
     });
 
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    var streets = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
         maxZoom: 19
-    }).addTo(map);
+    });
+    var satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+        attribution: 'Esri World Imagery',
+        maxZoom: 19
+    });
+    streets.addTo(map);
+    L.control.layers({ 'Street': streets, 'Satellite': satellite }).addTo(map);
+
+    // Toggle satellite-active class for dark mode tile filter override
+    map.on('baselayerchange', function (e) {
+        if (e.name === 'Satellite') {
+            container.classList.add('satellite-active');
+        } else {
+            container.classList.remove('satellite-active');
+        }
+    });
 
     var bounds = L.latLngBounds();
     var hasBounds = false;
@@ -177,7 +206,11 @@
         }
         // Enable/disable dragging on all markers
         allItems.forEach(function (item) {
-            if (item.marker) {
+            if (!item.marker) return;
+            // Leaflet only creates marker.dragging when draggable:true,
+            // so we set the option first then toggle the handler.
+            item.marker.options.draggable = on;
+            if (item.marker.dragging) {
                 if (on) {
                     item.marker.dragging.enable();
                 } else {
@@ -269,7 +302,7 @@
 
         var marker = L.marker(latlng, {
             icon: icon,
-            draggable: false,       // starts locked
+            draggable: canEdit,     // init handler; toggled by setEditMode
             zIndexOffset: 1000      // sites always on top
         }).addTo(map);
 
@@ -365,7 +398,7 @@
 
         var marker = L.marker(latlng, {
             icon: icon,
-            draggable: false,       // starts locked
+            draggable: canEdit,     // init handler; toggled by setEditMode
             zIndexOffset: 500       // locations above tiles, below sites
         }).addTo(map);
 
@@ -431,7 +464,7 @@
 
         var marker = L.marker(latlng, {
             icon: icon,
-            draggable: false        // starts locked
+            draggable: canEdit      // init handler; toggled by setEditMode
         }).addTo(map);
 
         var popupHtml = '<div class="site-popup-name">' + escHtml(tile.label) + '</div>';
@@ -494,6 +527,75 @@
     /* ══════════════════════════════════════════════════════════════════
        MAP MARKERS (standalone markers) + FOV CONES
        ══════════════════════════════════════════════════════════════════ */
+
+    /* ── Helpers: find cables connected to a marker ──────────────── */
+    function getConnectedCables(markerId) {
+        var cables = [];
+        allCableItems.forEach(function (ci) {
+            if (ci.data.start_marker_id === markerId || ci.data.end_marker_id === markerId) {
+                cables.push(ci);
+            }
+        });
+        return cables;
+    }
+
+    function updateCableEndpointsForMarker(markerId, newLat, newLng) {
+        allCableItems.forEach(function (ci) {
+            var coords = ci.data.path_coordinates;
+            if (!coords || coords.length < 2) return;
+            var changed = false;
+
+            if (ci.data.start_marker_id === markerId) {
+                coords[0] = [newLat, newLng];
+                changed = true;
+            }
+            if (ci.data.end_marker_id === markerId) {
+                coords[coords.length - 1] = [newLat, newLng];
+                changed = true;
+            }
+
+            if (changed && ci.polyline) {
+                ci.polyline.setLatLngs(coords.map(function (c) {
+                    return L.latLng(c[0], c[1]);
+                }));
+            }
+        });
+    }
+
+    function saveCableEndpointsForMarker(markerId) {
+        allCableItems.forEach(function (ci) {
+            if (ci.data.start_marker_id === markerId || ci.data.end_marker_id === markerId) {
+                apiRequest(cableApiUrl + ci.data.id + '/', 'PATCH', {
+                    path_coordinates: ci.data.path_coordinates
+                }).catch(function (err) {
+                    console.error('Failed to update cable path:', err);
+                });
+            }
+        });
+    }
+
+    /* ── Junction ring: visual indicator for cable-connected markers */
+    function updateJunctionRing(item) {
+        var el = item.marker && item.marker.getElement && item.marker.getElement();
+        if (!el) return;
+        var dot = el.querySelector('.site-marker--tile');
+        if (!dot) return;
+        var cables = getConnectedCables(item.data.id);
+        if (cables.length > 0) {
+            dot.classList.add('cable-junction');
+        } else {
+            dot.classList.remove('cable-junction');
+        }
+    }
+
+    function updateAllJunctionRings() {
+        allItems.forEach(function (item) {
+            if (item.kind === 'mapmarker') {
+                updateJunctionRing(item);
+            }
+        });
+    }
+
     function createMapMarker(m) {
         var latlng = L.latLng(m.latitude, m.longitude);
         extendBounds(m.latitude, m.longitude);
@@ -510,7 +612,7 @@
 
         var marker = L.marker(latlng, {
             icon: icon,
-            draggable: false        // starts locked
+            draggable: canEdit      // init handler; toggled by setEditMode
         }).addTo(map);
 
         var popupHtml = '<div class="site-popup-name">' + escHtml(m.label) + '</div>';
@@ -551,8 +653,42 @@
         allItems.push(item);
 
         if (canEdit) {
+            var dragHoveredCable = null;
+
+            // Live drag: update connected cable endpoints + highlight nearby cable
+            marker.on('drag', function () {
+                var pos = marker.getLatLng();
+                updateCableEndpointsForMarker(m.id, parseFloat(pos.lat.toFixed(6)), parseFloat(pos.lng.toFixed(6)));
+
+                // Highlight nearest unconnected cable for snap-to-split
+                var near = findNearestCableAtPoint(pos, 30);
+                // Don't highlight cables already connected to this marker
+                if (near && (near.data.start_marker_id === m.id || near.data.end_marker_id === m.id)) {
+                    near = null;
+                }
+                if (near !== dragHoveredCable) {
+                    if (dragHoveredCable && dragHoveredCable.polyline) {
+                        var prevW = getCableDisplayWeight(dragHoveredCable.data);
+                        dragHoveredCable.polyline.setStyle({ weight: prevW, dashArray: null });
+                    }
+                    dragHoveredCable = near;
+                    if (dragHoveredCable && dragHoveredCable.polyline) {
+                        dragHoveredCable.polyline.setStyle({ weight: 6, dashArray: '8 4' });
+                    }
+                }
+            });
+
             marker.on('dragend', function () {
                 var pos = marker.getLatLng();
+
+                // Clear cable highlight
+                if (dragHoveredCable && dragHoveredCable.polyline) {
+                    var prevW = getCableDisplayWeight(dragHoveredCable.data);
+                    dragHoveredCable.polyline.setStyle({ weight: prevW, dashArray: null });
+                }
+                var targetCable = dragHoveredCable;
+                dragHoveredCable = null;
+
                 apiRequest(markerApiUrl + m.id + '/', 'PATCH', {
                     latitude: pos.lat.toFixed(6),
                     longitude: pos.lng.toFixed(6)
@@ -567,7 +703,19 @@
                             m.fov_direction, m.fov_angle, m.fov_distance
                         ).addTo(map);
                     }
-                    showSavedBadge(marker);
+                    // Persist cable endpoint positions for already-connected cables
+                    saveCableEndpointsForMarker(m.id);
+
+                    // If dropped on an unconnected cable → split it
+                    if (targetCable) {
+                        splitCableAtMarker(targetCable, m.id).then(function () {
+                            buildCableSidebar();
+                            setTimeout(updateAllJunctionRings, 50);
+                            showDetail(item);
+                        });
+                    } else {
+                        showSavedBadge(marker);
+                    }
                 }).catch(function (err) {
                     console.error('Failed to update marker:', err);
                 });
@@ -584,6 +732,767 @@
     mapMarkers.forEach(function (m) {
         createMapMarker(m);
     });
+
+    /* ══════════════════════════════════════════════════════════════════
+       CABLE PATHS — polyline rendering, drawing, editing, split
+       ══════════════════════════════════════════════════════════════════ */
+
+    var CABLE_STATUS_COLORS = {
+        planned: '#95a5a6',
+        active: '#2ecc71',
+        in_progress: '#f39c12',
+        inactive: '#e74c3c'
+    };
+
+    function getCableColor(status) {
+        return CABLE_STATUS_COLORS[status] || '#95a5a6';
+    }
+
+    function getCableDisplayColor(cp) {
+        return cp.color || cp.display_color || cp.status_color || getCableColor(cp.status);
+    }
+
+    function getCableDisplayWeight(cp) {
+        return cp.weight || 3;
+    }
+
+    function createCablePolyline(cp) {
+        if (!cp.path_coordinates || cp.path_coordinates.length < 2) return null;
+
+        var latlngs = cp.path_coordinates.map(function (c) {
+            return L.latLng(c[0], c[1]);
+        });
+
+        var color = getCableDisplayColor(cp);
+        var lineWeight = getCableDisplayWeight(cp);
+
+        // Invisible wider polyline for easier clicking (hit area)
+        var hitArea = L.polyline(latlngs, {
+            color: '#000',
+            weight: Math.max(lineWeight + 14, 18),
+            opacity: 0,
+            interactive: true
+        }).addTo(map);
+
+        var polyline = L.polyline(latlngs, {
+            color: color,
+            weight: lineWeight,
+            opacity: 0.8
+        }).addTo(map);
+
+        var tooltip = (cp.label || 'Cable #' + cp.id) + ' (' + cp.fiber_count + 'F)';
+        polyline.bindTooltip(tooltip, { sticky: true });
+
+        var cableItem = {
+            kind: 'cable',
+            data: cp,
+            polyline: polyline,
+            hitArea: hitArea,
+            vertexMarkers: [],
+            sidebarEl: null
+        };
+        allCableItems.push(cableItem);
+
+        function onCableClick(e) {
+            L.DomEvent.stopPropagation(e);
+            selectCable(cableItem);
+        }
+        polyline.on('click', onCableClick);
+        hitArea.on('click', onCableClick);
+
+        // Extend bounds
+        latlngs.forEach(function (ll) {
+            extendBounds(ll.lat, ll.lng);
+        });
+
+        return cableItem;
+    }
+
+    // Render all existing cable paths
+    cablePaths.forEach(function (cp) {
+        createCablePolyline(cp);
+    });
+
+    /* ── Auto-snap: find nearest marker within threshold ─────────── */
+    function findNearestMarker(lat, lng, thresholdMeters) {
+        var best = null;
+        var bestDist = Infinity;
+        var point = L.latLng(lat, lng);
+
+        allItems.forEach(function (item) {
+            if (item.kind !== 'mapmarker') return;
+            var mll = L.latLng(item.data.latitude, item.data.longitude);
+            var d = point.distanceTo(mll);
+            if (d < thresholdMeters && d < bestDist) {
+                bestDist = d;
+                best = item;
+            }
+        });
+        return best;
+    }
+
+    /* ── Pixel-based snap: zoom-independent, consistent screen distance */
+    function findNearestMarkerPx(lat, lng, thresholdPx) {
+        var best = null;
+        var bestDist = Infinity;
+        var pt = map.latLngToContainerPoint(L.latLng(lat, lng));
+
+        allItems.forEach(function (item) {
+            if (item.kind !== 'mapmarker') return;
+            var mPt = map.latLngToContainerPoint(L.latLng(item.data.latitude, item.data.longitude));
+            var dx = pt.x - mPt.x;
+            var dy = pt.y - mPt.y;
+            var d = Math.sqrt(dx * dx + dy * dy);
+            if (d < thresholdPx && d < bestDist) {
+                bestDist = d;
+                best = item;
+            }
+        });
+        return best;
+    }
+
+    /* ── Cable drawing mode ──────────────────────────────────────── */
+    function startCableDrawing() {
+        cableDrawing = true;
+        cableDrawCoords = [];
+        container.classList.add('placing');
+        map.doubleClickZoom.disable();
+        if (drawCableBtn) {
+            drawCableBtn.classList.add('active');
+            drawCableBtn.style.backgroundColor = '#0dcaf0';
+            drawCableBtn.style.color = '#000';
+        }
+        if (statusEl) statusEl.textContent = 'Click to add points. Double-click or Enter to finish. Escape to cancel.';
+        if (cancelBtn) cancelBtn.classList.remove('d-none');
+    }
+
+    function finishCableDrawing() {
+        // Remove duplicate trailing points from double-click
+        while (cableDrawCoords.length > 1) {
+            var last = cableDrawCoords[cableDrawCoords.length - 1];
+            var prev = cableDrawCoords[cableDrawCoords.length - 2];
+            if (Math.abs(last[0] - prev[0]) < 0.00001 && Math.abs(last[1] - prev[1]) < 0.00001) {
+                cableDrawCoords.pop();
+            } else {
+                break;
+            }
+        }
+
+        if (cableDrawCoords.length < 2) {
+            cancelCableDrawing();
+            return;
+        }
+
+        // Auto-snap endpoints to nearest markers (25px screen distance)
+        var startSnap = findNearestMarkerPx(cableDrawCoords[0][0], cableDrawCoords[0][1], 25);
+        var endSnap = findNearestMarkerPx(
+            cableDrawCoords[cableDrawCoords.length - 1][0],
+            cableDrawCoords[cableDrawCoords.length - 1][1],
+            25
+        );
+
+        // Prevent snapping both ends to the same marker
+        if (startSnap && endSnap && startSnap.data.id === endSnap.data.id) {
+            endSnap = null;
+        }
+
+        if (startSnap) {
+            cableDrawCoords[0] = [startSnap.data.latitude, startSnap.data.longitude];
+        }
+        if (endSnap) {
+            cableDrawCoords[cableDrawCoords.length - 1] = [endSnap.data.latitude, endSnap.data.longitude];
+        }
+
+        // Update preview polyline
+        if (cableDrawPolyline) {
+            cableDrawPolyline.setLatLngs(cableDrawCoords.map(function (c) {
+                return L.latLng(c[0], c[1]);
+            }));
+        }
+
+        var body = {
+            path_coordinates: cableDrawCoords,
+            fiber_count: 12,
+            status: 'planned',
+            label: ''
+        };
+        if (startSnap) body.start_marker = startSnap.data.id;
+        if (endSnap) body.end_marker = endSnap.data.id;
+
+        if (statusEl) statusEl.textContent = 'Saving cable...';
+
+        apiRequest(cableApiUrl, 'POST', body).then(function (data) {
+            // Remove temp polyline
+            if (cableDrawPolyline) {
+                map.removeLayer(cableDrawPolyline);
+                cableDrawPolyline = null;
+            }
+
+            var cpData = {
+                id: data.id,
+                label: data.label || '',
+                path_coordinates: data.path_coordinates,
+                fiber_count: data.fiber_count,
+                status: data.status,
+                status_color: getCableColor(data.status),
+                color: data.color || '',
+                weight: data.weight || 3,
+                display_color: data.display_color || getCableColor(data.status),
+                start_marker_id: data.start_marker ? data.start_marker.id : null,
+                end_marker_id: data.end_marker ? data.end_marker.id : null,
+                start_marker_label: data.start_marker ? data.start_marker.display : '',
+                end_marker_label: data.end_marker ? data.end_marker.display : ''
+            };
+
+            var newItem = createCablePolyline(cpData);
+            cancelCableDrawing();
+            buildCableSidebar();
+            setTimeout(updateAllJunctionRings, 50);
+            if (newItem) selectCable(newItem);
+        }).catch(function (err) {
+            console.error('Failed to create cable:', err);
+            if (statusEl) statusEl.textContent = 'Error: ' + err.message;
+        });
+    }
+
+    function cancelCableDrawing() {
+        cableDrawing = false;
+        cableDrawCoords = [];
+        if (cableDrawPolyline) {
+            map.removeLayer(cableDrawPolyline);
+            cableDrawPolyline = null;
+        }
+        container.classList.remove('placing');
+        map.doubleClickZoom.enable();
+        if (drawCableBtn) {
+            drawCableBtn.classList.remove('active');
+            drawCableBtn.style.backgroundColor = '';
+            drawCableBtn.style.color = '';
+        }
+        if (statusEl) statusEl.textContent = '';
+        if (cancelBtn) cancelBtn.classList.add('d-none');
+    }
+
+    /* ── Cable selection and detail ──────────────────────────────── */
+    function clearVertexEditing(ci) {
+        if (!ci) return;
+        if (ci.vertexMarkers) {
+            ci.vertexMarkers.forEach(function (vm) { map.removeLayer(vm); });
+            ci.vertexMarkers = [];
+        }
+        if (editingCable === ci) editingCable = null;
+    }
+
+    function selectCable(cableItem) {
+        // Deselect any marker
+        if (selectedItem && selectedItem.sidebarEl) {
+            selectedItem.sidebarEl.classList.remove('active');
+        }
+        selectedItem = null;
+
+        // Deselect previous cable + clear vertex editing
+        if (selectedCable && selectedCable !== cableItem) {
+            clearVertexEditing(selectedCable);
+            if (selectedCable.polyline) {
+                var prevColor = getCableDisplayColor(selectedCable.data);
+                var prevWeight = getCableDisplayWeight(selectedCable.data);
+                selectedCable.polyline.setStyle({ weight: prevWeight, color: prevColor });
+            }
+            if (selectedCable.sidebarEl) selectedCable.sidebarEl.classList.remove('active');
+        }
+
+        selectedCable = cableItem;
+        if (cableItem.polyline) {
+            cableItem.polyline.setStyle({ weight: Math.max(getCableDisplayWeight(cableItem.data) + 2, 5), color: '#fff' });
+            // Fit view to cable
+            map.fitBounds(cableItem.polyline.getBounds(), { padding: [60, 60], maxZoom: map.getZoom() });
+        }
+        if (cableItem.sidebarEl) {
+            cableItem.sidebarEl.classList.add('active');
+            cableItem.sidebarEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        }
+
+        showCableDetail(cableItem);
+    }
+
+    function showCableDetail(cableItem) {
+        if (!sidebarDetail) return;
+        var d = cableItem.data;
+        var html = '<div class="sidebar-section-title">Cable Path</div>';
+        html += '<div class="sidebar-detail-list">';
+        html += detailRow('Label', escHtml(d.label) || '<span class="text-muted">\u2014</span>');
+        html += detailRow('Status', '<span class="badge" style="background:' + getCableColor(d.status) + ';color:#fff;font-size:11px">' + escHtml(d.status) + '</span>');
+        html += detailRow('Fibers', d.fiber_count);
+        html += detailRow('Weight', d.weight || 3);
+        if (d.color) {
+            html += detailRow('Color', '<span class="cable-color-swatch" style="background:' + escHtml(d.color) + '"></span> ' + escHtml(d.color));
+        }
+        html += detailRow('Points', d.path_coordinates ? d.path_coordinates.length : 0);
+        if (d.start_marker_label) {
+            html += detailRow('Start', escHtml(d.start_marker_label));
+        }
+        if (d.end_marker_label) {
+            html += detailRow('End', escHtml(d.end_marker_label));
+        }
+        html += '</div>';
+
+        if (editMode) {
+            html += '<div class="sidebar-section-title">Edit Cable</div>';
+            html += '<div class="sidebar-detail-list">';
+            html += '<div class="sidebar-detail-row"><span class="detail-label">Label</span>';
+            html += '<input type="text" id="cable-edit-label" class="form-control form-control-sm" value="' + escHtml(d.label) + '" style="width:140px;display:inline-block"></div>';
+            html += '<div class="sidebar-detail-row"><span class="detail-label">Fibers</span>';
+            html += '<input type="number" id="cable-edit-fibers" class="form-control form-control-sm" value="' + d.fiber_count + '" min="1" style="width:80px;display:inline-block"></div>';
+            html += '<div class="sidebar-detail-row"><span class="detail-label">Status</span>';
+            html += '<select id="cable-edit-status" class="form-select form-select-sm" style="width:140px;display:inline-block">';
+            ['planned', 'in_progress', 'active', 'inactive'].forEach(function (s) {
+                html += '<option value="' + s + '"' + (d.status === s ? ' selected' : '') + '>' + s + '</option>';
+            });
+            html += '</select></div>';
+
+            // Color picker
+            html += '<div class="sidebar-detail-row"><span class="detail-label">Color</span>';
+            html += '<div class="cable-color-edit">';
+            html += '<input type="color" id="cable-edit-color" class="cable-color-picker" value="' + (d.color || getCableColor(d.status)) + '">';
+            html += '<label class="cable-color-auto"><input type="checkbox" id="cable-color-auto"' + (d.color ? '' : ' checked') + '> Auto</label>';
+            html += '</div></div>';
+
+            // Weight slider
+            html += '<div class="sidebar-detail-row"><span class="detail-label">Width</span>';
+            html += '<div class="cable-weight-edit">';
+            html += '<input type="range" id="cable-edit-weight" min="1" max="10" value="' + (d.weight || 3) + '" class="cable-weight-slider">';
+            html += '<span id="cable-weight-value" class="cable-weight-value">' + (d.weight || 3) + '</span>';
+            html += '</div></div>';
+
+            html += '</div>';
+
+            html += '<div class="sidebar-detail-actions">';
+            html += '<button class="btn btn-sm btn-primary" id="cable-save-btn"><i class="mdi mdi-content-save"></i> Save</button>';
+            var isEditing = editingCable === cableItem;
+            html += '<button class="btn btn-sm ' + (isEditing ? 'btn-warning' : 'btn-outline-info') + '" id="cable-edit-path-btn">' +
+                    '<i class="mdi mdi-vector-polyline-edit"></i> ' + (isEditing ? 'Done Editing' : 'Edit Path') + '</button>';
+            html += '<button class="btn btn-sm btn-outline-danger" id="cable-delete-btn"><i class="mdi mdi-trash-can-outline"></i> Delete</button>';
+            html += '</div>';
+        }
+
+        sidebarDetail.innerHTML = html;
+
+        // Wire up edit controls
+        if (editMode) {
+            // Live preview for color and weight
+            var colorInput = document.getElementById('cable-edit-color');
+            var colorAuto = document.getElementById('cable-color-auto');
+            var weightSlider = document.getElementById('cable-edit-weight');
+            var weightValue = document.getElementById('cable-weight-value');
+
+            if (colorInput && colorAuto) {
+                colorInput.disabled = colorAuto.checked;
+                colorAuto.addEventListener('change', function () {
+                    colorInput.disabled = colorAuto.checked;
+                    if (colorAuto.checked) {
+                        // Preview with status color
+                        if (cableItem.polyline) {
+                            cableItem.polyline.setStyle({ color: getCableColor(d.status) });
+                        }
+                    } else {
+                        if (cableItem.polyline) {
+                            cableItem.polyline.setStyle({ color: colorInput.value });
+                        }
+                    }
+                });
+                colorInput.addEventListener('input', function () {
+                    if (!colorAuto.checked && cableItem.polyline) {
+                        cableItem.polyline.setStyle({ color: colorInput.value });
+                    }
+                });
+            }
+
+            if (weightSlider && weightValue) {
+                weightSlider.addEventListener('input', function () {
+                    weightValue.textContent = weightSlider.value;
+                    if (cableItem.polyline) {
+                        cableItem.polyline.setStyle({ weight: parseInt(weightSlider.value) });
+                    }
+                });
+            }
+
+            var saveBtn = document.getElementById('cable-save-btn');
+            if (saveBtn) {
+                saveBtn.addEventListener('click', function () {
+                    var newLabel = document.getElementById('cable-edit-label').value;
+                    var newFibers = parseInt(document.getElementById('cable-edit-fibers').value) || 12;
+                    var newStatus = document.getElementById('cable-edit-status').value;
+                    var newColor = (colorAuto && colorAuto.checked) ? '' : (colorInput ? colorInput.value : '');
+                    var newWeight = weightSlider ? parseInt(weightSlider.value) : 3;
+
+                    apiRequest(cableApiUrl + d.id + '/', 'PATCH', {
+                        label: newLabel,
+                        fiber_count: newFibers,
+                        status: newStatus,
+                        color: newColor,
+                        weight: newWeight
+                    }).then(function () {
+                        d.label = newLabel;
+                        d.fiber_count = newFibers;
+                        d.status = newStatus;
+                        d.color = newColor;
+                        d.weight = newWeight;
+                        d.status_color = getCableColor(newStatus);
+                        d.display_color = newColor || getCableColor(newStatus);
+                        // Update polyline style
+                        if (cableItem.polyline) {
+                            var displayColor = getCableDisplayColor(d);
+                            cableItem.polyline.setStyle({ color: displayColor, weight: newWeight });
+                            var tooltip = (newLabel || 'Cable #' + d.id) + ' (' + newFibers + 'F)';
+                            cableItem.polyline.unbindTooltip();
+                            cableItem.polyline.bindTooltip(tooltip, { sticky: true });
+                        }
+                        saveBtn.innerHTML = '<i class="mdi mdi-check"></i> Saved!';
+                        setTimeout(function () {
+                            saveBtn.innerHTML = '<i class="mdi mdi-content-save"></i> Save';
+                        }, 1200);
+                        buildCableSidebar();
+                    }).catch(function (err) {
+                        console.error('Failed to save cable:', err);
+                        alert('Error: ' + err.message);
+                    });
+                });
+            }
+
+            var deleteBtn = document.getElementById('cable-delete-btn');
+            if (deleteBtn) {
+                deleteBtn.addEventListener('click', function () {
+                    if (!confirm('Delete cable "' + (d.label || 'Cable #' + d.id) + '"?')) return;
+
+                    apiRequest(cableApiUrl + d.id + '/', 'DELETE').then(function () {
+                        clearVertexEditing(cableItem);
+                        if (cableItem.polyline) map.removeLayer(cableItem.polyline);
+                        if (cableItem.hitArea) map.removeLayer(cableItem.hitArea);
+                        var idx = allCableItems.indexOf(cableItem);
+                        if (idx !== -1) allCableItems.splice(idx, 1);
+                        selectedCable = null;
+                        buildCableSidebar();
+                        showDetail(null);
+                    }).catch(function (err) {
+                        console.error('Failed to delete cable:', err);
+                        alert('Error: ' + err.message);
+                    });
+                });
+            }
+
+            // Edit Path — toggle vertex editing
+            var editPathBtn = document.getElementById('cable-edit-path-btn');
+            if (editPathBtn) {
+                editPathBtn.addEventListener('click', function () {
+                    if (editingCable === cableItem) {
+                        // Stop editing — save path and clear vertex markers
+                        finishVertexEditing(cableItem);
+                    } else {
+                        // Start editing — show vertex markers
+                        if (editingCable) finishVertexEditing(editingCable);
+                        startVertexEditing(cableItem);
+                    }
+                    showCableDetail(cableItem);
+                });
+            }
+        }
+    }
+
+    /* ── Vertex editing — drag cable vertices on the map ─────────── */
+    function startVertexEditing(cableItem) {
+        editingCable = cableItem;
+        var coords = cableItem.data.path_coordinates;
+        if (!coords || coords.length < 2) return;
+
+        // Restore cable to its normal color (not selected white)
+        var displayColor = getCableDisplayColor(cableItem.data);
+        cableItem.polyline.setStyle({ color: displayColor, weight: getCableDisplayWeight(cableItem.data), dashArray: '6 3' });
+
+        cableItem.vertexMarkers = [];
+
+        // Create draggable vertex markers
+        coords.forEach(function (c, idx) {
+            var isEndpoint = (idx === 0 || idx === coords.length - 1);
+            var vm = L.circleMarker(L.latLng(c[0], c[1]), {
+                radius: isEndpoint ? 7 : 5,
+                color: '#fff',
+                fillColor: isEndpoint ? '#0d6efd' : '#ffc107',
+                fillOpacity: 1,
+                weight: 2,
+                interactive: true,
+                bubblingMouseEvents: false
+            }).addTo(map);
+
+            // Make it draggable via custom drag handling
+            vm._vertexIdx = idx;
+            vm._cableItem = cableItem;
+            enableVertexDrag(vm, cableItem, idx);
+
+            cableItem.vertexMarkers.push(vm);
+        });
+
+        // Add midpoint markers for inserting new vertices
+        for (var i = 0; i < coords.length - 1; i++) {
+            (function (segIdx) {
+                var midLat = (coords[segIdx][0] + coords[segIdx + 1][0]) / 2;
+                var midLng = (coords[segIdx][1] + coords[segIdx + 1][1]) / 2;
+                var midMarker = L.circleMarker(L.latLng(midLat, midLng), {
+                    radius: 4,
+                    color: '#fff',
+                    fillColor: '#6c757d',
+                    fillOpacity: 0.6,
+                    weight: 1,
+                    interactive: true,
+                    bubblingMouseEvents: false,
+                    className: 'cable-midpoint-marker'
+                }).addTo(map);
+
+                midMarker.on('click', function (e) {
+                    L.DomEvent.stopPropagation(e);
+                    // Insert a new vertex at this midpoint
+                    coords.splice(segIdx + 1, 0, [midLat, midLng]);
+                    // Rebuild vertex markers
+                    clearVertexEditing(cableItem);
+                    editingCable = cableItem; // re-set since clearVertexEditing resets it
+                    updateCablePolyline(cableItem);
+                    startVertexEditing(cableItem);
+                    showCableDetail(cableItem);
+                });
+
+                cableItem.vertexMarkers.push(midMarker);
+            })(i);
+        }
+    }
+
+    function enableVertexDrag(vm, cableItem, idx) {
+        var dragging = false;
+        var snapTarget = null;   // allItems entry we're hovering near
+
+        vm.on('mousedown', function (e) {
+            dragging = true;
+            snapTarget = null;
+            map.dragging.disable();
+            L.DomEvent.stopPropagation(e);
+            L.DomEvent.preventDefault(e);
+
+            function onMove(ev) {
+                if (!dragging) return;
+                var lat = parseFloat(ev.latlng.lat.toFixed(6));
+                var lng = parseFloat(ev.latlng.lng.toFixed(6));
+
+                // Check for nearby marker to snap to (25px screen distance)
+                var near = findNearestMarkerPx(lat, lng, 25);
+                if (near !== snapTarget) {
+                    // Remove previous highlight
+                    if (snapTarget) {
+                        var prevEl = snapTarget.marker && snapTarget.marker.getElement();
+                        if (prevEl) prevEl.classList.remove('snap-target');
+                    }
+                    snapTarget = near;
+                    if (snapTarget) {
+                        var el = snapTarget.marker && snapTarget.marker.getElement();
+                        if (el) el.classList.add('snap-target');
+                    }
+                }
+
+                // If snapping, show vertex at marker position
+                if (snapTarget) {
+                    vm.setLatLng(L.latLng(snapTarget.data.latitude, snapTarget.data.longitude));
+                    var coords = cableItem.data.path_coordinates;
+                    coords[idx] = [snapTarget.data.latitude, snapTarget.data.longitude];
+                } else {
+                    vm.setLatLng(ev.latlng);
+                    var coords = cableItem.data.path_coordinates;
+                    coords[idx] = [lat, lng];
+                }
+                updateCablePolyline(cableItem);
+            }
+
+            function onUp() {
+                dragging = false;
+                map.dragging.enable();
+                map.off('mousemove', onMove);
+                map.off('mouseup', onUp);
+
+                // Clear snap highlight
+                if (snapTarget) {
+                    var el = snapTarget.marker && snapTarget.marker.getElement();
+                    if (el) el.classList.remove('snap-target');
+                }
+
+                // If endpoint snapped to a marker, update cable FK
+                var coords = cableItem.data.path_coordinates;
+                var isFirst = (idx === 0);
+                var isLast = (idx === coords.length - 1);
+
+                if (snapTarget && (isFirst || isLast)) {
+                    var fkField = isFirst ? 'start_marker' : 'end_marker';
+                    var idField = isFirst ? 'start_marker_id' : 'end_marker_id';
+                    var labelField = isFirst ? 'start_marker_label' : 'end_marker_label';
+
+                    cableItem.data[idField] = snapTarget.data.id;
+                    cableItem.data[labelField] = snapTarget.data.label || snapTarget.data.type;
+
+                    // Persist the FK now (path_coordinates saved on finishVertexEditing)
+                    var patch = {};
+                    patch[fkField] = snapTarget.data.id;
+                    apiRequest(cableApiUrl + cableItem.data.id + '/', 'PATCH', patch).then(function () {
+                        setTimeout(updateAllJunctionRings, 50);
+                    }).catch(function (err) {
+                        console.error('Failed to update cable marker FK:', err);
+                    });
+                }
+
+                snapTarget = null;
+            }
+
+            map.on('mousemove', onMove);
+            map.on('mouseup', onUp);
+        });
+    }
+
+    function updateCablePolyline(cableItem) {
+        var latlngs = cableItem.data.path_coordinates.map(function (c) {
+            return L.latLng(c[0], c[1]);
+        });
+        cableItem.polyline.setLatLngs(latlngs);
+        if (cableItem.hitArea) cableItem.hitArea.setLatLngs(latlngs);
+    }
+
+    function finishVertexEditing(cableItem) {
+        // Save coordinates to backend
+        apiRequest(cableApiUrl + cableItem.data.id + '/', 'PATCH', {
+            path_coordinates: cableItem.data.path_coordinates
+        }).then(function () {
+            // Restore normal style
+            var displayColor = getCableDisplayColor(cableItem.data);
+            cableItem.polyline.setStyle({ dashArray: null, color: displayColor });
+        }).catch(function (err) {
+            console.error('Failed to save cable path:', err);
+        });
+
+        clearVertexEditing(cableItem);
+    }
+
+    /* ── Cable sidebar section ───────────────────────────────────── */
+    function buildCableSidebar() {
+        // Find or create the cables section in sidebar
+        var cablesSection = document.getElementById('sidebar-cables-section');
+        if (!cablesSection) {
+            cablesSection = document.createElement('div');
+            cablesSection.id = 'sidebar-cables-section';
+            cablesSection.className = 'sidebar-cables-section';
+            // Insert before the detail panel
+            if (sidebarDetail && sidebarDetail.parentNode) {
+                sidebarDetail.parentNode.insertBefore(cablesSection, sidebarDetail);
+            }
+        }
+
+        if (allCableItems.length === 0) {
+            cablesSection.innerHTML = '';
+            return;
+        }
+
+        var html = '<div class="sidebar-section-title" style="padding:6px 12px;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;color:var(--fp-text-muted,#6c757d);opacity:0.7;border-top:1px solid var(--fp-border-light,rgba(0,0,0,0.06));margin-top:4px">' +
+            '<i class="mdi mdi-vector-polyline"></i> Cables (' + allCableItems.length + ')</div>';
+        html += '<div class="sidebar-cable-list" style="max-height:150px;overflow-y:auto">';
+
+        allCableItems.forEach(function (item, idx) {
+            var d = item.data;
+            var isActive = selectedCable === item;
+            html += '<div class="sidebar-tile-item' + (isActive ? ' active' : '') + '" data-cable-idx="' + idx + '">';
+            html += '<span class="sidebar-tile-dot" style="background:' + getCableDisplayColor(d) + ';border-radius:2px">' +
+                '<i class="mdi mdi-vector-polyline" style="font-size:10px;color:#fff"></i></span>';
+            html += '<span class="sidebar-tile-label">' + escHtml(d.label || 'Cable #' + d.id) + '</span>';
+            html += '<span class="sidebar-tile-ip" style="font-size:10px;color:var(--fp-text-muted,#6c757d)">' + d.fiber_count + 'F</span>';
+            html += '</div>';
+        });
+
+        html += '</div>';
+        cablesSection.innerHTML = html;
+
+        // Wire up click handlers
+        var cableEls = cablesSection.querySelectorAll('[data-cable-idx]');
+        cableEls.forEach(function (el) {
+            el.addEventListener('click', function () {
+                var idx = parseInt(el.getAttribute('data-cable-idx'));
+                if (allCableItems[idx]) {
+                    selectCable(allCableItems[idx]);
+                }
+            });
+        });
+
+        // Update sidebar element references
+        allCableItems.forEach(function (item, idx) {
+            item.sidebarEl = cableEls[idx] || null;
+        });
+    }
+
+    /* ── Drop marker on cable (split) ────────────────────────────── */
+    function findNearestCableAtPoint(latlng, thresholdPx) {
+        var best = null;
+        var bestDist = Infinity;
+
+        allCableItems.forEach(function (item) {
+            var coords = item.data.path_coordinates;
+            if (!coords || coords.length < 2) return;
+
+            for (var i = 0; i < coords.length - 1; i++) {
+                var a = map.latLngToContainerPoint(L.latLng(coords[i][0], coords[i][1]));
+                var b = map.latLngToContainerPoint(L.latLng(coords[i + 1][0], coords[i + 1][1]));
+                var p = map.latLngToContainerPoint(latlng);
+                var d = pointToSegmentDistance(p, a, b);
+                if (d < thresholdPx && d < bestDist) {
+                    bestDist = d;
+                    best = item;
+                }
+            }
+        });
+
+        return best;
+    }
+
+    function pointToSegmentDistance(p, a, b) {
+        var dx = b.x - a.x;
+        var dy = b.y - a.y;
+        if (dx === 0 && dy === 0) {
+            return Math.sqrt((p.x - a.x) * (p.x - a.x) + (p.y - a.y) * (p.y - a.y));
+        }
+        var t = ((p.x - a.x) * dx + (p.y - a.y) * dy) / (dx * dx + dy * dy);
+        t = Math.max(0, Math.min(1, t));
+        var nx = a.x + t * dx;
+        var ny = a.y + t * dy;
+        return Math.sqrt((p.x - nx) * (p.x - nx) + (p.y - ny) * (p.y - ny));
+    }
+
+    /* Highlight cable under cursor during marker placement */
+    var hoveredCable = null;
+
+    function onMapMoveForCableHighlight(e) {
+        if (!editMode || !placementMode) return;
+        var near = findNearestCableAtPoint(e.latlng, 30);
+        if (near !== hoveredCable) {
+            if (hoveredCable && hoveredCable.polyline) {
+                hoveredCable.polyline.setStyle({ weight: 3, dashArray: null });
+            }
+            hoveredCable = near;
+            if (hoveredCable && hoveredCable.polyline) {
+                hoveredCable.polyline.setStyle({ weight: 6, dashArray: '8 4' });
+            }
+        }
+    }
+
+    /* ── Wire up cable drawing button ────────────────────────────── */
+    if (drawCableBtn) {
+        drawCableBtn.addEventListener('click', function () {
+            if (cableDrawing) {
+                cancelCableDrawing();
+            } else {
+                exitPlacementMode();
+                startCableDrawing();
+            }
+        });
+    }
 
     /* ── Focus from ?q=lat,lng (NetBox Maps URL) or fit bounds ──── */
     var focusLat = parseFloat(container.dataset.focusLat);
@@ -871,6 +1780,27 @@
                 html += '</div>';
             }
 
+            // Connected Cables section
+            var connectedCables = getConnectedCables(d.id);
+            if (connectedCables.length > 0) {
+                html += '<div class="sidebar-section-title">Connected Cables (' + connectedCables.length + ')</div>';
+                html += '<div class="sidebar-connected-cables">';
+                connectedCables.forEach(function (ci, idx) {
+                    var cd = ci.data;
+                    var role = cd.start_marker_id === d.id ? 'start' : 'end';
+                    html += '<div class="connected-cable-row">';
+                    html += '<span class="cable-color-swatch" style="background:' + getCableDisplayColor(cd) + '"></span>';
+                    html += '<span class="connected-cable-label">' + escHtml(cd.label || 'Cable #' + cd.id) + '</span>';
+                    html += '<span class="connected-cable-role">' + role + '</span>';
+                    if (editMode) {
+                        html += '<button class="btn btn-xs btn-outline-warning detach-cable-btn" data-cable-id="' + cd.id + '" data-role="' + role + '" title="Detach">' +
+                                '<i class="mdi mdi-link-variant-off"></i></button>';
+                    }
+                    html += '</div>';
+                });
+                html += '</div>';
+            }
+
             // Edit/Delete buttons (only in edit mode)
             if (editMode) {
                 html += '<div class="sidebar-detail-actions">';
@@ -924,9 +1854,17 @@
                 ).addTo(map);
             }
 
-            if (dirInput) dirInput.addEventListener('input', updateFovPreview);
-            if (angleInput) angleInput.addEventListener('input', updateFovPreview);
-            if (distInput) distInput.addEventListener('input', updateFovPreview);
+            // Bidirectional slider ↔ number sync
+            function syncPair(sliderId, numberId) {
+                var slider = document.getElementById(sliderId);
+                var number = document.getElementById(numberId);
+                if (!slider || !number) return;
+                slider.addEventListener('input', function() { number.value = slider.value; updateFovPreview(); });
+                number.addEventListener('input', function() { slider.value = number.value; updateFovPreview(); });
+            }
+            syncPair('fov-dir-slider', 'fov-dir');
+            syncPair('fov-angle-slider', 'fov-angle');
+            syncPair('fov-dist-slider', 'fov-dist');
 
             if (saveBtn) {
                 saveBtn.addEventListener('click', function () {
@@ -976,6 +1914,41 @@
             });
         }
 
+        // Wire up detach cable buttons for map markers
+        if (item.kind === 'mapmarker' && editMode) {
+            var detachBtns = sidebarDetail.querySelectorAll('.detach-cable-btn');
+            detachBtns.forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    var cableId = parseInt(btn.getAttribute('data-cable-id'));
+                    var role = btn.getAttribute('data-role');
+                    var patchData = {};
+                    patchData[role === 'start' ? 'start_marker' : 'end_marker'] = null;
+
+                    apiRequest(cableApiUrl + cableId + '/', 'PATCH', patchData).then(function () {
+                        // Update local data
+                        allCableItems.forEach(function (ci) {
+                            if (ci.data.id === cableId) {
+                                if (role === 'start') {
+                                    ci.data.start_marker_id = null;
+                                    ci.data.start_marker_label = '';
+                                } else {
+                                    ci.data.end_marker_id = null;
+                                    ci.data.end_marker_label = '';
+                                }
+                            }
+                        });
+                        // Refresh junction ring and detail panel
+                        updateJunctionRing(item);
+                        showDetail(item);
+                        buildCableSidebar();
+                    }).catch(function (err) {
+                        console.error('Failed to detach cable:', err);
+                        alert('Error: ' + err.message);
+                    });
+                });
+            });
+        }
+
         // Wire up "Remove from Map" button for tiles
         var removeTileBtn = document.getElementById('remove-tile-btn');
         if (removeTileBtn && item.kind === 'tile') {
@@ -1021,13 +1994,13 @@
     }
 
     function fovField(label, id, value, min, max, suffix) {
-        return '<label style="font-size:11px;color:var(--fp-text-muted);white-space:nowrap">' +
-               label +
-               '<input id="' + id + '" type="number" class="form-control form-control-sm sidebar-input" ' +
-               'value="' + value + '" min="' + min + '" max="' + max + '" ' +
-               'style="width:70px;display:inline-block;margin-left:4px">' +
-               (suffix ? '<span style="font-size:11px;color:var(--fp-text-muted)">' + suffix + '</span>' : '') +
-               '</label>';
+        return '<div class="fov-slider-group">' +
+               '<label>' + label + '</label>' +
+               '<input type="range" id="' + id + '-slider" min="' + min + '" max="' + max + '" value="' + value + '" step="5">' +
+               '<input type="number" id="' + id + '" class="form-control form-control-sm fov-number" ' +
+               'value="' + value + '" min="' + min + '" max="' + max + '">' +
+               (suffix ? '<span class="fov-unit">' + suffix + '</span>' : '') +
+               '</div>';
     }
 
     /* ── AJAX enriched detail ─────────────────────────────────────── */
@@ -1086,6 +2059,10 @@
     // Initial sidebar build
     buildToggleButtons();
     buildSidebarList();
+
+    // Markers are created with draggable:canEdit so the handler gets
+    // initialized, but edit mode starts OFF — disable dragging now.
+    if (canEdit) setEditMode(false);
 
     // Auto-select nearest marker when opened via ?q=lat,lng (Maps URL)
     if (!isNaN(focusLat) && !isNaN(focusLng)) {
@@ -1231,11 +2208,52 @@
 
     // ESC key
     document.addEventListener('keydown', function (e) {
-        if (e.key === 'Escape' && placementMode) exitPlacementMode();
+        if (e.key === 'Escape') {
+            if (cableDrawing) cancelCableDrawing();
+            else if (placementMode) exitPlacementMode();
+        }
+        if (e.key === 'Enter' && cableDrawing) {
+            finishCableDrawing();
+        }
     });
 
-    // Map click → place item
+    // Cable drawing: mousemove for highlight
+    map.on('mousemove', function (e) {
+        onMapMoveForCableHighlight(e);
+    });
+
+    // Cable drawing: double-click to finish
+    map.on('dblclick', function (e) {
+        if (cableDrawing) {
+            L.DomEvent.stopPropagation(e);
+            L.DomEvent.preventDefault(e);
+            finishCableDrawing();
+        }
+    });
+
+    // Map click → cable drawing or place item
     map.on('click', function (e) {
+        // Cable drawing mode: add point
+        if (cableDrawing) {
+            var clat = parseFloat(e.latlng.lat.toFixed(6));
+            var clng = parseFloat(e.latlng.lng.toFixed(6));
+            cableDrawCoords.push([clat, clng]);
+
+            if (cableDrawPolyline) {
+                cableDrawPolyline.addLatLng(e.latlng);
+            } else {
+                cableDrawPolyline = L.polyline([e.latlng], {
+                    color: '#95a5a6',
+                    weight: 3,
+                    dashArray: '6 4',
+                    opacity: 0.9
+                }).addTo(map);
+            }
+
+            if (statusEl) statusEl.textContent = cableDrawCoords.length + ' points. Double-click or Enter to finish.';
+            return;
+        }
+
         if (!placementMode || !placementItem) return;
 
         var lat = e.latlng.lat.toFixed(6);
@@ -1327,6 +2345,9 @@
             });
 
         } else if (mode === 'marker') {
+            // Check if dropping on a cable (split)
+            var targetCable = findNearestCableAtPoint(e.latlng, 30);
+
             // Create a NEW MapMarker via POST
             var body = {
                 latitude: lat,
@@ -1358,10 +2379,26 @@
 
                 var newItem = createMapMarker(newMarkerData);
                 exitPlacementMode();
-                buildToggleButtons();
-                buildSidebarList();
-                selectItem(newItem);
-                setEditMode(editMode);
+
+                // If we dropped on a cable, split it
+                if (targetCable) {
+                    if (hoveredCable && hoveredCable.polyline) {
+                        hoveredCable.polyline.setStyle({ weight: 3, dashArray: null });
+                        hoveredCable = null;
+                    }
+                    splitCableAtMarker(targetCable, data.id).then(function () {
+                        buildToggleButtons();
+                        buildSidebarList();
+                        buildCableSidebar();
+                        selectItem(newItem);
+                        setEditMode(editMode);
+                    });
+                } else {
+                    buildToggleButtons();
+                    buildSidebarList();
+                    selectItem(newItem);
+                    setEditMode(editMode);
+                }
                 // Clear label input
                 if (newMarkerLabel) newMarkerLabel.value = '';
             }).catch(function (err) {
@@ -1370,5 +2407,37 @@
             });
         }
     });
+
+    /* ── Split cable at marker (POST to backend) ──────────────────── */
+    function splitCableAtMarker(cableItem, markerId) {
+        return apiRequest(cableSplitBaseUrl + cableItem.data.id + '/split/', 'POST', {
+            marker_id: markerId
+        }).then(function (result) {
+            // Remove the old polyline and hit area
+            clearVertexEditing(cableItem);
+            if (cableItem.polyline) map.removeLayer(cableItem.polyline);
+            if (cableItem.hitArea) map.removeLayer(cableItem.hitArea);
+            var idx = allCableItems.indexOf(cableItem);
+            if (idx !== -1) allCableItems.splice(idx, 1);
+
+            // Create two new cables
+            createCablePolyline(result.cable_a);
+            createCablePolyline(result.cable_b);
+
+            buildCableSidebar();
+            setTimeout(updateAllJunctionRings, 50);
+        }).catch(function (err) {
+            console.error('Failed to split cable:', err);
+        });
+    }
+
+    /* ── Initialize cable sidebar ────────────────────────────────── */
+    buildCableSidebar();
+
+    /* ── Initialize junction rings on cable-connected markers ──── */
+    // Use a short delay to ensure marker DOM elements are rendered
+    setTimeout(function () {
+        updateAllJunctionRings();
+    }, 100);
 
 })();

@@ -10,6 +10,7 @@ from django.utils.translation import gettext_lazy as _
 from netbox.models import NetBoxModel
 from .choices import (
     FloorPlanTileStatusChoices, FloorPlanTileTypeChoices,
+    CablePathStatusChoices,
     BUILTIN_TYPE_SLUGS, get_tile_type_display,
 )
 
@@ -545,6 +546,101 @@ class MapMarker(NetBoxModel):
         if self.assigned_object:
             return str(self.assigned_object)
         return self.get_marker_type_display()
+
+
+class CablePath(NetBoxModel):
+    """A fiber/cable path drawn on the global site map."""
+    label = models.CharField(
+        verbose_name=_('label'),
+        max_length=200,
+        blank=True,
+    )
+    path_coordinates = models.JSONField(
+        default=list,
+        verbose_name=_('path coordinates'),
+        help_text=_('Array of [lat, lng] coordinate pairs'),
+    )
+    fiber_count = models.PositiveIntegerField(
+        verbose_name=_('fiber count'),
+        default=12,
+    )
+    start_marker = models.ForeignKey(
+        to='netbox_map.MapMarker',
+        on_delete=models.SET_NULL,
+        related_name='cables_from',
+        blank=True,
+        null=True,
+        verbose_name=_('start marker'),
+    )
+    end_marker = models.ForeignKey(
+        to='netbox_map.MapMarker',
+        on_delete=models.SET_NULL,
+        related_name='cables_to',
+        blank=True,
+        null=True,
+        verbose_name=_('end marker'),
+    )
+    status = models.CharField(
+        verbose_name=_('status'),
+        max_length=50,
+        choices=CablePathStatusChoices,
+        default=CablePathStatusChoices.STATUS_PLANNED,
+    )
+    color = models.CharField(
+        max_length=7,
+        blank=True,
+        verbose_name=_('color'),
+        help_text=_('Hex color override (blank = use status color)'),
+        validators=[
+            RegexValidator(
+                regex=r'^#[0-9a-fA-F]{6}$',
+                message=_('Enter a valid hex color (e.g. #ff5733).'),
+            ),
+        ],
+    )
+    weight = models.PositiveSmallIntegerField(
+        default=3,
+        verbose_name=_('line weight'),
+        validators=[MinValueValidator(1), MaxValueValidator(10)],
+        help_text=_('Line thickness on the map (1-10)'),
+    )
+
+    clone_fields = ('fiber_count', 'status', 'color', 'weight')
+
+    class Meta:
+        ordering = ('label',)
+        verbose_name = _('cable path')
+        verbose_name_plural = _('cable paths')
+
+    def __str__(self):
+        if self.label:
+            return self.label
+        parts = []
+        if self.start_marker:
+            parts.append(str(self.start_marker))
+        if self.end_marker:
+            parts.append(str(self.end_marker))
+        if parts:
+            return ' \u2192 '.join(parts)
+        return f'Cable Path #{self.pk}'
+
+    def get_absolute_url(self):
+        return reverse('plugins:netbox_map:cablepath', args=[self.pk])
+
+    def get_status_color(self):
+        """Return the status-based color (without considering the color override)."""
+        return {
+            'planned': '#95a5a6',
+            'in_progress': '#f39c12',
+            'active': '#2ecc71',
+            'inactive': '#e74c3c',
+        }.get(self.status, '#95a5a6')
+
+    def get_display_color(self):
+        """Return the effective display color: custom override or status-based."""
+        if self.color:
+            return self.color
+        return self.get_status_color()
 
 
 class MapSettings(models.Model):

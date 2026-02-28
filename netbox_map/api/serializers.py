@@ -7,7 +7,7 @@ from netbox.api.fields import ContentTypeField
 from netbox.api.serializers import NetBoxModelSerializer
 from utilities.api import get_serializer_for_model
 from ..choices import BUILTIN_TYPE_SLUGS
-from ..models import FloorPlan, FloorPlanTile, CustomMarkerType, LocationCoordinates, MapMarker, TilePortAssignment
+from ..models import FloorPlan, FloorPlanTile, CustomMarkerType, LocationCoordinates, MapMarker, TilePortAssignment, CablePath
 
 
 class CustomMarkerTypeSerializer(NetBoxModelSerializer):
@@ -166,3 +166,27 @@ class MapMarkerSerializer(NetBoxModelSerializer):
 
     def validate_marker_type(self, value):
         return _validate_type_slug(value)
+
+
+class CablePathSerializer(NetBoxModelSerializer):
+    start_marker = MapMarkerSerializer(nested=True, required=False, allow_null=True, default=None)
+    end_marker = MapMarkerSerializer(nested=True, required=False, allow_null=True, default=None)
+    status_color = serializers.SerializerMethodField(read_only=True)
+    display_color = serializers.SerializerMethodField(read_only=True)
+
+    class Meta:
+        model = CablePath
+        fields = [
+            'id', 'url', 'display_url', 'display',
+            'label', 'path_coordinates', 'fiber_count', 'status', 'status_color',
+            'color', 'weight', 'display_color',
+            'start_marker', 'end_marker',
+            'tags', 'custom_fields', 'created', 'last_updated',
+        ]
+        brief_fields = ('id', 'url', 'display', 'label', 'status', 'fiber_count')
+
+    def get_status_color(self, obj):
+        return obj.get_status_color()
+
+    def get_display_color(self, obj):
+        return obj.get_display_color()

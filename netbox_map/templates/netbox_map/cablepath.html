@@ -1,0 +1,72 @@
+{% extends 'generic/object.html' %}
+{% load helpers %}
+{% load i18n %}
+
+{% block content %}
+  <div class="row mb-3">
+    <div class="col-md-6">
+      <div class="card">
+        <h5 class="card-header">{% trans "Cable Path Details" %}</h5>
+        <table class="table table-hover attr-table">
+          <tr>
+            <th scope="row">{% trans "Label" %}</th>
+            <td>{{ object.label|placeholder }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Status" %}</th>
+            <td>
+              <span class="badge" style="background-color: {{ object.get_status_color }}; color: #fff;">
+                {{ object.get_status_display }}
+              </span>
+            </td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Fiber Count" %}</th>
+            <td>{{ object.fiber_count }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Coordinates" %}</th>
+            <td>{{ object.path_coordinates|length }} points</td>
+          </tr>
+        </table>
+      </div>
+    </div>
+    <div class="col-md-6">
+      <div class="card">
+        <h5 class="card-header">{% trans "Connections" %}</h5>
+        <table class="table table-hover attr-table">
+          <tr>
+            <th scope="row">{% trans "Start Marker" %}</th>
+            <td>
+              {% if object.start_marker %}
+                <a href="{{ object.start_marker.get_absolute_url }}">{{ object.start_marker }}</a>
+              {% else %}
+                <span class="text-muted">&mdash;</span>
+              {% endif %}
+            </td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "End Marker" %}</th>
+            <td>
+              {% if object.end_marker %}
+                <a href="{{ object.end_marker.get_absolute_url }}">{{ object.end_marker }}</a>
+              {% else %}
+                <span class="text-muted">&mdash;</span>
+              {% endif %}
+            </td>
+          </tr>
+        </table>
+      </div>
+      <div class="card mt-3">
+        <h5 class="card-header">{% trans "Actions" %}</h5>
+        <div class="card-body">
+          {% if object.path_coordinates %}
+          <a href="{% url 'plugins:netbox_map:sitemap' %}?q={{ object.path_coordinates.0.0 }},{{ object.path_coordinates.0.1 }}" class="btn btn-primary">
+            <i class="mdi mdi-map-marker-multiple-outline"></i> {% trans "View on Site Map" %}
+          </a>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}
