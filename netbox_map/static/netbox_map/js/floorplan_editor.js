@@ -24,6 +24,7 @@
             label: document.getElementById('tile-label-input').value,
             width: document.getElementById('tile-width-input').value,
             height: document.getElementById('tile-height-input').value,
+            orientation: document.getElementById('tile-orientation-select') ? document.getElementById('tile-orientation-select').value : '0',
             fovDirection: document.getElementById('tile-fov-direction-input') ? document.getElementById('tile-fov-direction-input').value : '0',
             fovAngle: document.getElementById('tile-fov-angle-input') ? document.getElementById('tile-fov-angle-input').value : '90',
             fovDistance: document.getElementById('tile-fov-distance-input') ? document.getElementById('tile-fov-distance-input').value : '5'
@@ -47,6 +48,10 @@
             }
             if (settings.height) {
                 document.getElementById('tile-height-input').value = settings.height;
+            }
+            if (settings.orientation) {
+                var orientSel = document.getElementById('tile-orientation-select');
+                if (orientSel) orientSel.value = settings.orientation;
             }
             if (settings.fovDirection) {
                 var dirNum = document.getElementById('tile-fov-direction-input');
@@ -154,6 +159,9 @@
 
         saveSettings();
 
+        var orientSelect = document.getElementById('tile-orientation-select');
+        var orientation = parseInt(orientSelect ? orientSelect.value : 0, 10) || 0;
+
         var data = {
             floorplan: state.floorplanId,
             x_position: gridX,
@@ -163,7 +171,7 @@
             tile_type: tileType,
             label: label,
             status: 'active',
-            orientation: 0
+            orientation: orientation
         };
 
         if (tileType === 'camera') {
@@ -291,6 +299,50 @@
                 alert('Resize failed: ' + (err.detail ? JSON.stringify(err.detail) : err.message));
                 resizeBtn.innerHTML = '<i class="mdi mdi-resize"></i> Resize';
                 resizeBtn.disabled = false;
+            });
+        });
+    }
+
+    // ─── Orientation Change ──────────────────────────────────────
+
+    var orientBtn = document.getElementById('orientation-tile-btn');
+    var orientSelect = document.getElementById('orientation-select');
+
+    if (orientBtn) {
+        orientBtn.addEventListener('click', function() {
+            var tile = state.selectedTile;
+            if (!tile) { alert('No tile selected.'); return; }
+
+            var newOrient = parseInt(orientSelect.value, 10);
+            if (newOrient === (tile.orientation || 0)) return;
+
+            var origOrient = tile.orientation || 0;
+            tile.orientation = newOrient;
+            events.emit('render');
+
+            orientBtn.disabled = true;
+            orientBtn.textContent = 'Saving...';
+
+            var api = new App.API(state);
+            api.patch(state.apiUrl + tile.id + '/', { orientation: newOrient })
+            .then(function() {
+                orientBtn.innerHTML = '<i class="mdi mdi-check"></i> Saved!';
+                orientBtn.classList.remove('btn-primary');
+                orientBtn.classList.add('btn-success');
+                events.emit('tile:update', tile);
+                setTimeout(function() {
+                    orientBtn.innerHTML = '<i class="mdi mdi-rotate-right"></i> Set';
+                    orientBtn.classList.remove('btn-success');
+                    orientBtn.classList.add('btn-primary');
+                    orientBtn.disabled = false;
+                }, 1500);
+            })
+            .catch(function(err) {
+                tile.orientation = origOrient;
+                events.emit('render');
+                alert('Orientation change failed: ' + (err.detail ? JSON.stringify(err.detail) : err.message));
+                orientBtn.innerHTML = '<i class="mdi mdi-rotate-right"></i> Set';
+                orientBtn.disabled = false;
             });
         });
     }

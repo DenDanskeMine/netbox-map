@@ -4,8 +4,8 @@ from django.utils.translation import gettext_lazy as _
 
 from dcim.models import Site, Location
 from netbox.filtersets import NetBoxModelFilterSet
-from .models import FloorPlan, FloorPlanTile, CustomMarkerType, MapMarker, TilePortAssignment
-from .choices import FloorPlanTileStatusChoices, get_all_tile_type_choices
+from .models import FloorPlan, FloorPlanTile, CustomMarkerType, MapMarker, TilePortAssignment, CablePath
+from .choices import FloorPlanTileStatusChoices, CablePathStatusChoices, get_all_tile_type_choices
 
 
 class FloorPlanFilterSet(NetBoxModelFilterSet):
@@ -87,6 +87,31 @@ class TilePortAssignmentFilterSet(NetBoxModelFilterSet):
 
     def search(self, queryset, name, value):
         return queryset
+
+
+class CablePathFilterSet(NetBoxModelFilterSet):
+    status = django_filters.MultipleChoiceFilter(
+        choices=CablePathStatusChoices,
+        label=_('Status'),
+    )
+    fiber_count = django_filters.NumberFilter(
+        label=_('Fiber Count'),
+    )
+    start_marker_id = django_filters.ModelMultipleChoiceFilter(
+        queryset=MapMarker.objects.all(),
+        label=_('Start Marker (ID)'),
+    )
+    end_marker_id = django_filters.ModelMultipleChoiceFilter(
+        queryset=MapMarker.objects.all(),
+        label=_('End Marker (ID)'),
+    )
+
+    class Meta:
+        model = CablePath
+        fields = ['id', 'status', 'fiber_count']
+
+    def search(self, queryset, name, value):
+        return queryset.filter(label__icontains=value)
 
 
 class MapMarkerFilterSet(NetBoxModelFilterSet):

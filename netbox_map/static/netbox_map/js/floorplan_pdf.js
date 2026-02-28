@@ -174,7 +174,14 @@
             var innerW = tw - gap * 4;
             var innerH = th - gap * 4;
 
-            var hasSecondary = tile.type === 'rack' && tile.utilization !== null && tile.utilization !== undefined && th > s.tileSize * 0.8;
+            // Text orientation — swap effective dimensions for 90°/270°
+            var orientDeg = tile.orientation || 0;
+            var orientRad = orientDeg * Math.PI / 180;
+            var textW = (orientDeg === 90 || orientDeg === 270) ? innerH : innerW;
+            var textH = (orientDeg === 90 || orientDeg === 270) ? innerW : innerH;
+            var effectiveH = (orientDeg === 90 || orientDeg === 270) ? tw : th;
+
+            var hasSecondary = tile.type === 'rack' && tile.utilization !== null && tile.utilization !== undefined && effectiveH > s.tileSize * 0.8;
 
             if (label.length > 0) {
                 offCtx.save();
@@ -182,36 +189,48 @@
                 offCtx.rect(tx + gap, ty + gap, tw - gap * 2, th - gap * 2);
                 offCtx.clip();
 
+                // Translate to center and rotate for text orientation
+                offCtx.translate(centerX, centerY);
+                offCtx.rotate(orientRad);
+
                 offCtx.textAlign = 'center';
                 offCtx.textBaseline = 'middle';
 
-                var maxLabelH = hasSecondary ? innerH * 0.55 : innerH * 0.8;
-                var fit = App.autoFontSize(offCtx, label, innerW, maxLabelH, 6, s.tileSize / 2.5);
+                var maxLabelH = hasSecondary ? textH * 0.55 : textH * 0.8;
+                var fit = App.autoFontSize(offCtx, label, textW, maxLabelH, 6, s.tileSize / 2.5);
 
                 if (!fit.fits) {
                     offCtx.font = 'bold ' + fit.size + 'px ' + FONT_FAMILY;
-                    label = App.truncateText(offCtx, label, innerW);
+                    label = App.truncateText(offCtx, label, textW);
                 } else {
                     offCtx.font = 'bold ' + fit.size + 'px ' + FONT_FAMILY;
                 }
 
                 if (hasSecondary) {
-                    offCtx.fillText(label, centerX, centerY - fit.size * 0.4);
+                    offCtx.fillText(label, 0, -fit.size * 0.4);
                 } else {
-                    offCtx.fillText(label, centerX, centerY);
+                    offCtx.fillText(label, 0, 0);
                 }
                 offCtx.restore();
             }
 
             // Secondary text (utilization)
             if (hasSecondary) {
-                var secSize = Math.max(6, innerH * 0.25);
+                var secSize = Math.max(6, textH * 0.25);
                 secSize = Math.min(secSize, s.tileSize / 3.5);
                 offCtx.font = secSize + 'px ' + FONT_FAMILY;
                 offCtx.textAlign = 'center';
                 offCtx.textBaseline = 'middle';
                 offCtx.globalAlpha = 0.7;
-                offCtx.fillText(Math.round(tile.utilization) + '%', centerX, centerY + innerH * 0.25);
+                offCtx.save();
+                offCtx.beginPath();
+                offCtx.rect(tx + gap, ty + gap, tw - gap * 2, th - gap * 2);
+                offCtx.clip();
+                offCtx.translate(centerX, centerY);
+                offCtx.rotate(orientRad);
+                var secY = label.length > 0 ? textH * 0.25 : 0;
+                offCtx.fillText(Math.round(tile.utilization) + '%', 0, secY);
+                offCtx.restore();
                 offCtx.globalAlpha = 1.0;
             }
         }

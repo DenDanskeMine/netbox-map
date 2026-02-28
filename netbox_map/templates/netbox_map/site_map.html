@@ -46,6 +46,12 @@
     </div>
     <div class="toolbar-divider"></div>
     <div class="toolbar-group">
+      <button class="btn btn-sm btn-outline-info" id="draw-cable-btn">
+        <i class="mdi mdi-vector-polyline"></i> {% trans "Draw Cable" %}
+      </button>
+    </div>
+    <div class="toolbar-divider"></div>
+    <div class="toolbar-group">
       <label class="toolbar-label">{% trans "New Marker" %}</label>
       <select id="new-marker-type" class="form-select form-select-sm">
         {% for tc in type_configs %}
@@ -75,6 +81,7 @@
        data-tiles='{{ tiles_json }}'
        data-unplaced-tiles='{{ unplaced_tiles_json }}'
        data-markers='{{ markers_json }}'
+       data-cable-paths='{{ cable_paths_json }}'
        data-type-configs='{{ type_configs_json }}'
        data-csrf-token="{{ csrf_token }}"
        data-can-edit="{{ can_edit|yesno:'true,false' }}"
@@ -82,6 +89,8 @@
        data-loc-coords-api-url="{% url 'plugins-api:netbox_map-api:locationcoordinates-list' %}"
        data-tile-api-url="{% url 'plugins-api:netbox_map-api:floorplantile-list' %}"
        data-marker-api-url="{% url 'plugins-api:netbox_map-api:mapmarker-list' %}"
+       data-cable-api-url="{% url 'plugins-api:netbox_map-api:cablepath-list' %}"
+       data-cable-split-base-url="/plugins/map/cable-paths/"
        data-detail-base-url="/plugins/map/marker-detail/"
        {% if focus_lat %}data-focus-lat="{{ focus_lat }}" data-focus-lng="{{ focus_lng }}"{% endif %}>
   </div>

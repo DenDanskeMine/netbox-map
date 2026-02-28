@@ -25,6 +25,20 @@ menu = PluginMenu(
                     ),
                 )
             ),
+            PluginMenuItem(
+                link='plugins:netbox_map:cablepath_list',
+                link_text=_('Cable Paths'),
+                permissions=['netbox_map.view_cablepath'],
+                buttons=(
+                    PluginMenuButton(
+                        link='plugins:netbox_map:cablepath_add',
+                        title=_('Add'),
+                        icon_class='mdi mdi-plus-thick',
+                        color=ButtonColorChoices.GREEN,
+                        permissions=['netbox_map.add_cablepath'],
+                    ),
+                )
+            ),
         )),
         (_('Floor Plans'), (
             PluginMenuItem(

@@ -15,7 +15,7 @@ from utilities.views import ViewTab, register_model_view
 
 from . import filtersets, forms, tables
 from .choices import get_all_type_configs
-from .models import FloorPlan, FloorPlanTile, CustomMarkerType, LocationCoordinates, MapMarker, MapSettings, TilePortAssignment
+from .models import FloorPlan, FloorPlanTile, CustomMarkerType, LocationCoordinates, MapMarker, MapSettings, TilePortAssignment, CablePath
 
 
 #
@@ -227,6 +227,26 @@ class SiteMapView(LoginRequiredMixin, View):
                 'description': m.description,
             })
 
+        # Cable paths
+        all_cable_paths = CablePath.objects.select_related('start_marker', 'end_marker')
+        cable_paths_data = []
+        for cp in all_cable_paths:
+            cable_paths_data.append({
+                'id': cp.pk,
+                'label': cp.label,
+                'path_coordinates': cp.path_coordinates,
+                'fiber_count': cp.fiber_count,
+                'status': cp.status,
+                'status_color': cp.get_status_color(),
+                'color': cp.color,
+                'weight': cp.weight,
+                'display_color': cp.get_display_color(),
+                'start_marker_id': cp.start_marker_id,
+                'end_marker_id': cp.end_marker_id,
+                'start_marker_label': str(cp.start_marker) if cp.start_marker else '',
+                'end_marker_label': str(cp.end_marker) if cp.end_marker else '',
+            })
+
         can_edit = request.user.has_perm('dcim.change_site')
 
         # Support ?q=lat,lng from NetBox's Maps URL setting
@@ -251,6 +271,7 @@ class SiteMapView(LoginRequiredMixin, View):
             'tiles_json': json.dumps(tiles_data),
             'unplaced_tiles_json': json.dumps(unplaced_tiles),
             'markers_json': json.dumps(markers_data),
+            'cable_paths_json': json.dumps(cable_paths_data),
             'can_edit': can_edit,
             'focus_lat': focus_lat,
             'focus_lng': focus_lng,
@@ -549,6 +570,168 @@ class MapMarkerBulkDeleteView(generic.BulkDeleteView):
     queryset = MapMarker.objects.all()
     filterset = filtersets.MapMarkerFilterSet
     table = tables.MapMarkerTable
+
+
+#
+# CablePath views
+#
+
+class CablePathListView(generic.ObjectListView):
+    queryset = CablePath.objects.select_related('start_marker', 'end_marker')
+    filterset = filtersets.CablePathFilterSet
+    filterset_form = forms.CablePathFilterForm
+    table = tables.CablePathTable
+
+
+@register_model_view(CablePath)
+class CablePathView(generic.ObjectView):
+    queryset = CablePath.objects.select_related('start_marker', 'end_marker')
+
+
+@register_model_view(CablePath, 'edit')
+class CablePathEditView(generic.ObjectEditView):
+    queryset = CablePath.objects.all()
+    form = forms.CablePathForm
+
+
+@register_model_view(CablePath, 'delete')
+class CablePathDeleteView(generic.ObjectDeleteView):
+    queryset = CablePath.objects.all()
+
+
+class CablePathBulkEditView(generic.BulkEditView):
+    queryset = CablePath.objects.all()
+    filterset = filtersets.CablePathFilterSet
+    table = tables.CablePathTable
+    form = forms.CablePathBulkEditForm
+
+
+class CablePathBulkImportView(generic.BulkImportView):
+    queryset = CablePath.objects.all()
+    model_form = forms.CablePathImportForm
+
+
+class CablePathBulkDeleteView(generic.BulkDeleteView):
+    queryset = CablePath.objects.all()
+    filterset = filtersets.CablePathFilterSet
+    table = tables.CablePathTable
+
+
+#
+# AJAX: Split Cable at Marker
+#
+
+class SplitCableView(LoginRequiredMixin, View):
+    """Split a CablePath at the position of a given MapMarker."""
+
+    def post(self, request, pk):
+        import math
+
+        try:
+            cable = CablePath.objects.get(pk=pk)
+        except CablePath.DoesNotExist:
+            return JsonResponse({'error': 'Cable path not found'}, status=404)
+
+        try:
+            data = json.loads(request.body)
+        except json.JSONDecodeError:
+            return JsonResponse({'error': 'Invalid JSON'}, status=400)
+
+        marker_id = data.get('marker_id')
+        if not marker_id:
+            return JsonResponse({'error': 'marker_id required'}, status=400)
+
+        try:
+            marker = MapMarker.objects.get(pk=marker_id)
+        except MapMarker.DoesNotExist:
+            return JsonResponse({'error': 'Marker not found'}, status=404)
+
+        coords = cable.path_coordinates
+        if len(coords) < 2:
+            return JsonResponse({'error': 'Cable has fewer than 2 coordinates'}, status=400)
+
+        mlat = float(marker.latitude)
+        mlng = float(marker.longitude)
+
+        # Find the nearest segment on the polyline
+        best_dist = float('inf')
+        best_seg = 0
+        best_point = [mlat, mlng]
+
+        for i in range(len(coords) - 1):
+            p = self._nearest_point_on_segment(
+                coords[i][0], coords[i][1],
+                coords[i + 1][0], coords[i + 1][1],
+                mlat, mlng
+            )
+            d = math.hypot(p[0] - mlat, p[1] - mlng)
+            if d < best_dist:
+                best_dist = d
+                best_seg = i
+                best_point = p
+
+        split_point = [round(best_point[0], 6), round(best_point[1], 6)]
+
+        # First cable: start → split point
+        coords_a = coords[:best_seg + 1] + [split_point]
+        # Second cable: split point → end
+        coords_b = [split_point] + coords[best_seg + 1:]
+
+        # Update original cable
+        original_end = cable.end_marker
+        cable.path_coordinates = coords_a
+        cable.end_marker = marker
+        cable.save()
+
+        # Create new cable for the second segment
+        new_cable = CablePath.objects.create(
+            label=cable.label + ' (split)' if cable.label else '',
+            path_coordinates=coords_b,
+            fiber_count=cable.fiber_count,
+            start_marker=marker,
+            end_marker=original_end,
+            status=cable.status,
+        )
+
+        return JsonResponse({
+            'cable_a': {
+                'id': cable.pk,
+                'label': cable.label,
+                'path_coordinates': cable.path_coordinates,
+                'fiber_count': cable.fiber_count,
+                'status': cable.status,
+                'status_color': cable.get_status_color(),
+                'color': cable.color,
+                'weight': cable.weight,
+                'display_color': cable.get_display_color(),
+                'start_marker_id': cable.start_marker_id,
+                'end_marker_id': cable.end_marker_id,
+            },
+            'cable_b': {
+                'id': new_cable.pk,
+                'label': new_cable.label,
+                'path_coordinates': new_cable.path_coordinates,
+                'fiber_count': new_cable.fiber_count,
+                'status': new_cable.status,
+                'status_color': new_cable.get_status_color(),
+                'color': new_cable.color,
+                'weight': new_cable.weight,
+                'display_color': new_cable.get_display_color(),
+                'start_marker_id': new_cable.start_marker_id,
+                'end_marker_id': new_cable.end_marker_id,
+            },
+        })
+
+    @staticmethod
+    def _nearest_point_on_segment(ax, ay, bx, by, px, py):
+        """Find the nearest point on segment AB to point P."""
+        dx = bx - ax
+        dy = by - ay
+        if dx == 0 and dy == 0:
+            return [ax, ay]
+        t = ((px - ax) * dx + (py - ay) * dy) / (dx * dx + dy * dy)
+        t = max(0, min(1, t))
+        return [ax + t * dx, ay + t * dy]
 
 
 #

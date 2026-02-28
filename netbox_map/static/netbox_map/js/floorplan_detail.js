@@ -77,6 +77,8 @@
         if (fovPanel) fovPanel.classList.add('d-none');
         var resizePanel = document.getElementById('resize-tile-panel');
         if (resizePanel) resizePanel.classList.add('d-none');
+        var orientPanel = document.getElementById('orientation-tile-panel');
+        if (orientPanel) orientPanel.classList.add('d-none');
 
         // Hide label editor
         var labelForm = document.getElementById('edit-label-form');
@@ -201,6 +203,14 @@
             var resizeH = document.getElementById('resize-height-input');
             if (resizeW) resizeW.value = tile.w;
             if (resizeH) resizeH.value = tile.h;
+        }
+
+        // Show orientation panel in edit mode
+        var orientPanel = document.getElementById('orientation-tile-panel');
+        if (orientPanel) {
+            orientPanel.classList.remove('d-none');
+            var orientSel = document.getElementById('orientation-select');
+            if (orientSel) orientSel.value = tile.orientation || 0;
         }
 
         var deleteBtn = document.getElementById('delete-tile-btn');

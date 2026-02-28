@@ -403,3 +403,218 @@
     font-size: 12px;
     padding: 4px 10px;
 }
+
+/* ── Cable drawing cursor ────────────────────────────────────── */
+.site-map-container.placing .leaflet-container {
+    cursor: crosshair !important;
+}
+
+/* ── Cable sidebar section ───────────────────────────────────── */
+.sidebar-cables-section .sidebar-cable-list {
+    padding: 0;
+}
+
+/* ── Active cable draw button ────────────────────────────────── */
+#draw-cable-btn.active {
+    background-color: #0dcaf0 !important;
+    border-color: #0dcaf0 !important;
+    color: #000 !important;
+}
+
+/* ── Leaflet layer control — CSS icon (replaces missing layers.png) */
+.site-map-container .leaflet-control-layers-toggle {
+    background-image: none !important;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    color: #333;
+    background: #fff;
+    border-radius: 5px;
+    box-shadow: 0 1px 5px rgba(0,0,0,0.3);
+}
+
+.site-map-container .leaflet-control-layers-toggle::after {
+    content: '\F034D';  /* mdi-layers-outline */
+    font-family: 'Material Design Icons';
+    font-size: 20px;
+    line-height: 1;
+}
+
+/* ── Leaflet layer control theme fix ─────────────────────────── */
+[data-bs-theme="dark"] .site-map-container .leaflet-control-layers {
+    background: var(--fp-bg, #212529);
+    color: var(--fp-text, #dee2e6);
+    border-color: var(--fp-border, #495057);
+}
+
+[data-bs-theme="dark"] .site-map-container .leaflet-control-layers-toggle {
+    background: var(--fp-bg, #212529) !important;
+    color: var(--fp-text, #dee2e6);
+    border-color: var(--fp-border, #495057);
+}
+
+[data-bs-theme="dark"] .site-map-container .leaflet-control-layers-expanded {
+    background: var(--fp-bg, #212529);
+}
+
+/* ── Satellite view: disable tile inversion ──────────────────── */
+[data-bs-theme="dark"] .site-map-container.satellite-active .leaflet-tile-pane {
+    filter: none;
+}
+
+/* ── Junction ring: cable-connected marker indicator ─────────── */
+.site-marker--tile.cable-junction {
+    box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.9),
+                0 0 0 5px rgba(46, 204, 113, 0.7),
+                0 2px 6px rgba(0, 0, 0, 0.3);
+}
+
+[data-bs-theme="dark"] .site-marker--tile.cable-junction {
+    box-shadow: 0 0 0 3px rgba(30, 30, 30, 0.9),
+                0 0 0 5px rgba(46, 204, 113, 0.7),
+                0 2px 6px rgba(0, 0, 0, 0.5);
+}
+
+/* ── Cable color picker in sidebar ───────────────────────────── */
+.cable-color-edit {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.cable-color-picker {
+    width: 28px;
+    height: 24px;
+    padding: 1px;
+    border: 1px solid var(--fp-input-border, rgba(0,0,0,0.15));
+    border-radius: 4px;
+    cursor: pointer;
+    background: none;
+}
+
+.cable-color-picker:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.cable-color-auto {
+    font-size: 11px;
+    color: var(--fp-text-muted, #6c757d);
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.cable-color-auto input[type="checkbox"] {
+    width: 13px;
+    height: 13px;
+    margin: 0;
+}
+
+/* ── Cable weight slider in sidebar ──────────────────────────── */
+.cable-weight-edit {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.cable-weight-slider {
+    width: 90px;
+    height: 4px;
+    cursor: pointer;
+    accent-color: var(--fp-accent, #0d6efd);
+}
+
+.cable-weight-value {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--fp-text, #212529);
+    min-width: 16px;
+    text-align: center;
+}
+
+/* ── Cable color swatch ──────────────────────────────────────── */
+.cable-color-swatch {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border-radius: 3px;
+    vertical-align: middle;
+    border: 1px solid rgba(0,0,0,0.15);
+}
+
+/* ── Connected cables section in marker detail ───────────────── */
+.sidebar-connected-cables {
+    padding: 0 12px 8px;
+}
+
+.connected-cable-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 0;
+    font-size: 12px;
+    border-bottom: 1px solid var(--fp-border-light, rgba(0,0,0,0.04));
+}
+
+.connected-cable-row:last-child {
+    border-bottom: none;
+}
+
+.connected-cable-label {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--fp-text, #212529);
+}
+
+.connected-cable-role {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    color: var(--fp-text-muted, #6c757d);
+    opacity: 0.7;
+}
+
+.detach-cable-btn {
+    padding: 1px 4px !important;
+    font-size: 11px !important;
+    line-height: 1 !important;
+    flex-shrink: 0;
+}
+
+.btn-xs {
+    padding: 1px 4px;
+    font-size: 11px;
+    line-height: 1.4;
+    border-radius: 3px;
+}
+
+/* ── Vertex editing markers ──────────────────────────────────── */
+.cable-midpoint-marker {
+    cursor: pointer;
+    opacity: 0.5;
+    transition: opacity 0.15s ease;
+}
+
+.cable-midpoint-marker:hover {
+    opacity: 1;
+}
+
+/* ── Snap target highlight during vertex drag ─────────────── */
+.snap-target {
+    box-shadow: 0 0 0 4px rgba(46, 204, 113, 0.8),
+                0 0 12px rgba(46, 204, 113, 0.5) !important;
+    transform: scale(1.3) !important;
+    transition: transform 0.1s ease, box-shadow 0.1s ease;
+    z-index: 1000 !important;
+}
+
+[data-bs-theme="dark"] .snap-target {
+    box-shadow: 0 0 0 4px rgba(46, 204, 113, 0.9),
+                0 0 16px rgba(46, 204, 113, 0.6) !important;
+}

@@ -169,13 +169,20 @@
         var innerW = w - gap * 4;
         var innerH = h - gap * 4;
 
+        // Text orientation — swap effective dimensions for 90°/270°
+        var orientDeg = tile.orientation || 0;
+        var orientRad = orientDeg * Math.PI / 180;
+        var textW = (orientDeg === 90 || orientDeg === 270) ? innerH : innerW;
+        var textH = (orientDeg === 90 || orientDeg === 270) ? innerW : innerH;
+        var effectiveH = (orientDeg === 90 || orientDeg === 270) ? w : h;
+
         // Determine if there's secondary text (utilization %, port count)
         var hasSecondary = false;
         var secondaryText = '';
-        if (tile.type === 'rack' && tile.utilization !== null && tile.utilization !== undefined && h > ts * 0.8) {
+        if (tile.type === 'rack' && tile.utilization !== null && tile.utilization !== undefined && effectiveH > ts * 0.8) {
             hasSecondary = true;
             secondaryText = Math.round(tile.utilization) + '%';
-        } else if (tile.type === 'drop' && tile.drop_port_count && h > ts * 0.8) {
+        } else if (tile.type === 'drop' && tile.drop_port_count && effectiveH > ts * 0.8) {
             hasSecondary = true;
             secondaryText = tile.drop_port_count + ' port' + (tile.drop_port_count !== 1 ? 's' : '');
         }
@@ -186,25 +193,29 @@
             ctx.rect(x + gap, y + gap, w - gap * 2, h - gap * 2);
             ctx.clip();
 
+            // Translate to center and rotate for text orientation
+            ctx.translate(centerX, centerY);
+            ctx.rotate(orientRad);
+
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
 
-            // Auto-size: find largest font that fits the tile width
-            var maxLabelH = hasSecondary ? innerH * 0.55 : innerH * 0.8;
-            var fit = App.autoFontSize(ctx, label, innerW, maxLabelH, 6, ts / 2.5);
+            // Auto-size: find largest font that fits the effective text width
+            var maxLabelH = hasSecondary ? textH * 0.55 : textH * 0.8;
+            var fit = App.autoFontSize(ctx, label, textW, maxLabelH, 6, ts / 2.5);
 
             if (!fit.fits) {
                 // Text too long even at min size — truncate with ellipsis
                 ctx.font = 'bold ' + fit.size + 'px ' + FONT_FAMILY;
-                label = App.truncateText(ctx, label, innerW);
+                label = App.truncateText(ctx, label, textW);
             } else {
                 ctx.font = 'bold ' + fit.size + 'px ' + FONT_FAMILY;
             }
 
             if (hasSecondary) {
-                ctx.fillText(label, centerX, centerY - fit.size * 0.4);
+                ctx.fillText(label, 0, -fit.size * 0.4);
             } else {
-                ctx.fillText(label, centerX, centerY);
+                ctx.fillText(label, 0, 0);
             }
 
             ctx.restore();
@@ -212,7 +223,7 @@
 
         // Secondary text (utilization / port count)
         if (hasSecondary && secondaryText) {
-            var secSize = Math.max(6, (label.length > 0 ? innerH * 0.25 : innerH * 0.4));
+            var secSize = Math.max(6, (label.length > 0 ? textH * 0.25 : textH * 0.4));
             secSize = Math.min(secSize, ts / 3.5);
             ctx.font = secSize + 'px ' + FONT_FAMILY;
             ctx.textAlign = 'center';
@@ -222,8 +233,10 @@
             ctx.beginPath();
             ctx.rect(x + gap, y + gap, w - gap * 2, h - gap * 2);
             ctx.clip();
-            var secY = label.length > 0 ? centerY + innerH * 0.25 : centerY;
-            ctx.fillText(secondaryText, centerX, secY);
+            ctx.translate(centerX, centerY);
+            ctx.rotate(orientRad);
+            var secY = label.length > 0 ? textH * 0.25 : 0;
+            ctx.fillText(secondaryText, 0, secY);
             ctx.restore();
             ctx.globalAlpha = 1.0;
         }
