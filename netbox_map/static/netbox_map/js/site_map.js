@@ -867,16 +867,19 @@
         revPath.setAttribute('stroke', 'none');
         pathEl.parentNode.appendChild(revPath);
 
-        // Pre-allocate label text elements (hidden until needed)
+        // Pre-allocate label text elements
         var labelEls = [];
         var parent = pathEl.parentNode;
         for (var i = 0; i < MAX_LABELS_PER_CABLE; i++) {
             var text = createLabelTextEl();
             var textPath = document.createElementNS(SVG_NS, 'textPath');
+            textPath.setAttributeNS(XLINK_NS, 'xlink:href', '#' + pathId);
+            textPath.setAttribute('href', '#' + pathId);
             textPath.setAttribute('startOffset', '50%');
             textPath.textContent = displayLabel;
             text.appendChild(textPath);
-            text.style.display = 'none';
+            // First label visible immediately, rest hidden until zoom recalculates
+            if (i > 0) text.style.display = 'none';
             parent.appendChild(text);
             labelEls.push({ text: text, textPath: textPath });
         }
@@ -887,8 +890,10 @@
         cableItem.displayLabel = displayLabel;
         cableItem.labelEls = labelEls;
 
-        // Initial positioning
-        updateCableLabelPositions(cableItem);
+        // Defer full positioning — SVG path needs a render frame for getTotalLength()
+        setTimeout(function () {
+            updateCableLabelPositions(cableItem);
+        }, 0);
     }
 
     function reversePathD(d) {
