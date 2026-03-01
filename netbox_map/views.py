@@ -974,12 +974,13 @@ class MarkerDetailView(LoginRequiredMixin, View):
         """Trace a port and follow through patch panel RearPort→FrontPort
         internal mappings so the full end-to-end path is returned.
 
-        NetBox's RearPort.trace() only returns the immediate cable hop
-        without continuing through the next panel.  This method loops,
-        checking whether the trace ended at a RearPort and, if so, looks
-        up the corresponding FrontPort and keeps tracing.
+        RearPort has no trace() method in NetBox, so for RearPorts we
+        build a single hop from the directly attached cable.  After each
+        batch of hops we check whether the trace ended at a RearPort; if
+        so we look up the corresponding FrontPort via PortMapping and
+        keep tracing (FrontPort *does* have trace()).
         """
-        from dcim.models import RearPort, FrontPort
+        from dcim.models import PortMapping
         import logging
         logger = logging.getLogger('netbox_map')
 
@@ -990,81 +991,62 @@ class MarkerDetailView(LoginRequiredMixin, View):
         while current_port and current_port.pk not in visited:
             visited.add(current_port.pk)
 
+            last_far_end_raw = None
+            hops = []
+
+            # Try trace() — works for FrontPort / Interface, not RearPort
             try:
                 trace_result = current_port.trace()
-            except Exception as e:
-                logger.debug(
-                    'Cable trace failed for %s (pk=%s): %s',
-                    current_port, getattr(current_port, 'pk', '?'), e,
-                )
-                all_hops.extend(self._direct_cable_hop(current_port))
-                break
+                if trace_result:
+                    for near_ends, cables, far_ends in trace_result:
+                        if not cables:
+                            continue
+                        cable = cables[0] if isinstance(cables, (list, tuple)) else cables
+                        hop = {'cable': self._serialize_cable(cable)}
+                        for key, ep_list in (('near_end', near_ends), ('far_end', far_ends)):
+                            if not ep_list:
+                                hop[key] = None
+                                continue
+                            ep = ep_list[0] if isinstance(ep_list, (list, tuple)) else ep_list
+                            hop[key] = self._serialize_endpoint(ep)
+                            if key == 'far_end':
+                                last_far_end_raw = ep
+                        hops.append(hop)
+            except Exception:
+                pass
 
-            if not trace_result:
-                all_hops.extend(self._direct_cable_hop(current_port))
-                break
+            # Fallback for RearPort (no trace()) — build hop from cable
+            if not hops:
+                cable = getattr(current_port, 'cable', None)
+                if not cable:
+                    break
+                hop = {
+                    'cable': self._serialize_cable(cable),
+                    'near_end': self._serialize_endpoint(current_port),
+                    'far_end': None,
+                }
+                link_peers = getattr(current_port, 'link_peers', None)
+                if link_peers:
+                    peers = list(link_peers) if not isinstance(link_peers, (list, tuple)) else link_peers
+                    if peers:
+                        last_far_end_raw = peers[0]
+                        hop['far_end'] = self._serialize_endpoint(peers[0])
+                hops.append(hop)
 
-            last_far_end_obj = None
-            found_cable_hop = False
-            for near_ends, cables, far_ends in trace_result:
-                if not cables:
-                    continue
-                cable = cables[0] if isinstance(cables, (list, tuple)) else cables
-                hop = {'cable': self._serialize_cable(cable)}
-                for key, ep_list in (('near_end', near_ends), ('far_end', far_ends)):
-                    if not ep_list:
-                        hop[key] = None
-                        continue
-                    ep = ep_list[0] if isinstance(ep_list, (list, tuple)) else ep_list
-                    hop[key] = self._serialize_endpoint(ep)
-                    if key == 'far_end':
-                        last_far_end_obj = ep
-                all_hops.append(hop)
-                found_cable_hop = True
-
-            if not found_cable_hop:
-                all_hops.extend(self._direct_cable_hop(current_port))
-                break
+            all_hops.extend(hops)
 
             # If trace ended at a RearPort, find the corresponding
-            # FrontPort and keep tracing from there.
-            if last_far_end_obj and last_far_end_obj.__class__.__name__ == 'RearPort':
-                next_port = None
-
-                # FrontPort has a direct rear_port FK in NetBox
+            # FrontPort via PortMapping and keep tracing from there.
+            if last_far_end_raw and last_far_end_raw.__class__.__name__ == 'RearPort':
                 try:
-                    fp = FrontPort.objects.filter(
-                        rear_port=last_far_end_obj,
-                        cable__isnull=False,
+                    mapping = PortMapping.objects.filter(
+                        rear_port=last_far_end_raw
                     ).first()
-                    if fp:
-                        next_port = fp
+                    if mapping and mapping.front_port and getattr(mapping.front_port, 'cable', None):
+                        current_port = mapping.front_port
+                        continue
                 except Exception as e:
-                    logger.debug('FrontPort FK lookup failed: %s', e)
-
-                # Fallback: PortMapping (if model exists)
-                if not next_port:
-                    try:
-                        from dcim.models import PortMapping
-                        mapping = PortMapping.objects.filter(
-                            rear_port=last_far_end_obj
-                        ).first()
-                        if mapping and mapping.front_port:
-                            cable = getattr(mapping.front_port, 'cable', None)
-                            if cable:
-                                next_port = mapping.front_port
-                    except Exception as e:
-                        logger.debug('PortMapping lookup failed: %s', e)
-
-                if next_port:
-                    current_port = next_port
-                    continue
-                else:
-                    logger.debug(
-                        'Panel continuation stopped at RearPort %s (pk=%s): '
-                        'no cabled FrontPort found',
-                        last_far_end_obj, last_far_end_obj.pk,
-                    )
+                    logger.debug('PortMapping lookup failed: %s', e)
             break
 
         return all_hops
