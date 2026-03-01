@@ -1274,6 +1274,10 @@ a.ct-port-name:hover {
     color: var(--fp-link-color);
     text-decoration: underline;
 }
+.ct-cable-meta {
+    font-size: 9px;
+    color: var(--fp-text-dim);
+}
 .ct-cable-status {
     font-size: 9px;
     font-weight: 600;

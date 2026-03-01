@@ -466,10 +466,19 @@ window.FloorplanApp = (function() {
                         html += '<a href="' + escapeHtml(node.data.url) + '">';
                         html += '<i class="mdi mdi-cable-data"></i> ' + escapeHtml(node.data.label);
                         html += '</a>';
+                        var cableMeta = [];
+                        if (node.data.type_display) cableMeta.push(escapeHtml(node.data.type_display));
+                        if (node.data.length) {
+                            var lenStr = node.data.length + (node.data.length_unit ? ' ' + escapeHtml(node.data.length_unit) : '');
+                            cableMeta.push(lenStr);
+                        }
                         if (node.data.status) {
                             var sColor = node.data.status_color || '';
                             var sStyle = sColor ? ' style="color:' + escapeHtml(sColor) + '"' : '';
-                            html += ' <span class="ct-cable-status"' + sStyle + '>' + escapeHtml(node.data.status) + '</span>';
+                            cableMeta.push('<span class="ct-cable-status"' + sStyle + '>' + escapeHtml(node.data.status) + '</span>');
+                        }
+                        if (cableMeta.length) {
+                            html += ' <span class="ct-cable-meta">' + cableMeta.join(' &middot; ') + '</span>';
                         }
                         html += '</div>';
                         html += '<div class="ct-cable-line"></div>';
