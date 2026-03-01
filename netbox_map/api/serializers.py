@@ -178,12 +178,12 @@ class CablePathSerializer(NetBoxModelSerializer):
         model = CablePath
         fields = [
             'id', 'url', 'display_url', 'display',
-            'label', 'path_coordinates', 'fiber_count', 'status', 'status_color',
+            'label', 'path_coordinates', 'fiber_count', 'cable_type', 'status', 'status_color',
             'color', 'weight', 'display_color',
             'start_marker', 'end_marker',
             'tags', 'custom_fields', 'created', 'last_updated',
         ]
-        brief_fields = ('id', 'url', 'display', 'label', 'status', 'fiber_count')
+        brief_fields = ('id', 'url', 'display', 'label', 'status', 'fiber_count', 'cable_type')
 
     def get_status_color(self, obj):
         return obj.get_status_color()

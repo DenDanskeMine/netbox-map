@@ -247,6 +247,9 @@
                     } else if (node.kind === 'cable') {
                         html += '<div class="pt-cable">';
                         html += '<i class="mdi mdi-cable-data"></i> ' + App.escapeHtml(node.data.label);
+                        if (node.data.type_display) {
+                            html += ' <span class="popover-dim">' + App.escapeHtml(node.data.type_display) + '</span>';
+                        }
                         html += '</div>';
                     }
                 }

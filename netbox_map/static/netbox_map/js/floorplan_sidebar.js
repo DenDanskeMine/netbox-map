@@ -15,6 +15,11 @@
         this.tileSearchInput = document.getElementById('tile-search-input');
         this.tileCountEl = document.getElementById('tile-count');
 
+        // Panel-swap DOM references
+        this.panelList = document.getElementById('sidebar-panel-list');
+        this.panelDetail = document.getElementById('sidebar-panel-detail');
+        this.detailBackBtn = document.getElementById('sidebar-detail-back');
+
         // Rack device expansion
         this.rackDevicesMap = {};
         this.rackDevicesLoaded = false;
@@ -27,8 +32,14 @@
 
         // Wire up events
         var self = this;
-        events.on('tile:select', function() { self._highlightSelected(); });
-        events.on('tile:deselect', function() { self._highlightSelected(); });
+        events.on('tile:select', function() {
+            self._highlightSelected();
+            self.showDetailPanel();
+        });
+        events.on('tile:deselect', function() {
+            self._highlightSelected();
+            self.showListPanel();
+        });
         events.on('tile:create', function() { self.build(); });
         events.on('tile:delete', function() { self.build(); });
         events.on('tile:update', function() { self.build(); });
@@ -40,6 +51,8 @@
         this._bindTypeToggles();
         this._bindFOVToggle();
         this._bindFloorplanSelector();
+        this._bindBackButton();
+        this._bindEscKey();
     }
 
     // ─── Public ───────────────────────────────────────────────────
@@ -475,90 +488,34 @@
         });
     };
 
-    // ─── Divider ──────────────────────────────────────────────────
+    // ─── Panel Swap ───────────────────────────────────────────────
 
-    Sidebar.prototype.initDivider = function() {
-        var sidebarDivider = document.getElementById('sidebar-divider');
-        var sidebarTilesSection = document.querySelector('.sidebar-tiles-section');
-        var sidebarContextSection = document.getElementById('sidebar-context');
+    Sidebar.prototype.showListPanel = function() {
+        if (this.panelList)   this.panelList.classList.remove('d-none');
+        if (this.panelDetail) this.panelDetail.classList.add('d-none');
+    };
 
-        if (!sidebarDivider || !sidebarTilesSection || !sidebarContextSection) return;
+    Sidebar.prototype.showDetailPanel = function() {
+        if (this.panelList)   this.panelList.classList.add('d-none');
+        if (this.panelDetail) this.panelDetail.classList.remove('d-none');
+    };
 
-        var isDraggingDivider = false;
-        var dividerStartY = 0;
-        var startTilesHeight = 0;
-        var sidebar = sidebarTilesSection.parentElement;
-        var events = this.events;
+    Sidebar.prototype._bindBackButton = function() {
+        if (!this.detailBackBtn) return;
+        var self = this;
+        this.detailBackBtn.addEventListener('click', function() {
+            self.state.deselectTile();
+        });
+    };
 
-        function applyDefaultSplit() {
-            var sidebarHeight = sidebar.clientHeight;
-            var dividerHeight = sidebarDivider.offsetHeight;
-            var contextMinHeight = 48;
-            var detailPanel = document.getElementById('tile-detail-panel');
-            var hasSelection = detailPanel && !detailPanel.classList.contains('d-none');
-            if (hasSelection) {
-                var half = (sidebarHeight - dividerHeight) / 2;
-                sidebarTilesSection.style.flex = 'none';
-                sidebarTilesSection.style.height = half + 'px';
-                sidebarContextSection.style.flex = '1';
-            } else {
-                sidebarTilesSection.style.flex = '1';
-                sidebarTilesSection.style.height = '';
-                sidebarContextSection.style.flex = 'none';
-                sidebarContextSection.style.height = contextMinHeight + 'px';
+    Sidebar.prototype._bindEscKey = function() {
+        var self = this;
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' && self.panelDetail && !self.panelDetail.classList.contains('d-none')) {
+                // Don't intercept ESC if user is typing in an input/select
+                if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA') return;
+                self.state.deselectTile();
             }
-        }
-
-        applyDefaultSplit();
-
-        // Watch for tile selection changes to adjust the split
-        var detailPanelEl = document.getElementById('tile-detail-panel');
-        if (detailPanelEl) {
-            var splitObserver = new MutationObserver(function() {
-                var nowHasSelection = !detailPanelEl.classList.contains('d-none');
-                if (!nowHasSelection) {
-                    delete sidebarDivider.dataset.userDragged;
-                }
-                if (!isDraggingDivider && !sidebarDivider.dataset.userDragged) {
-                    applyDefaultSplit();
-                }
-            });
-            splitObserver.observe(detailPanelEl, { attributes: true, attributeFilter: ['class'] });
-        }
-
-        sidebarDivider.addEventListener('mousedown', function(e) {
-            e.preventDefault();
-            isDraggingDivider = true;
-            dividerStartY = e.clientY;
-            startTilesHeight = sidebarTilesSection.offsetHeight;
-            sidebarDivider.classList.add('dragging');
-            document.body.style.cursor = 'row-resize';
-            document.body.style.userSelect = 'none';
-        });
-
-        window.addEventListener('mousemove', function(e) {
-            if (!isDraggingDivider) return;
-            var dy = e.clientY - dividerStartY;
-            var sidebarHeight = sidebar.clientHeight;
-            var dividerHeight = sidebarDivider.offsetHeight;
-            var minTiles = 100;
-            var minContext = 48;
-            var available = sidebarHeight - dividerHeight;
-            var newTilesHeight = Math.max(minTiles, Math.min(available - minContext, startTilesHeight + dy));
-
-            sidebarTilesSection.style.flex = 'none';
-            sidebarTilesSection.style.height = newTilesHeight + 'px';
-            sidebarContextSection.style.flex = '1';
-            sidebarContextSection.style.height = '';
-            sidebarDivider.dataset.userDragged = 'true';
-        });
-
-        window.addEventListener('mouseup', function() {
-            if (!isDraggingDivider) return;
-            isDraggingDivider = false;
-            sidebarDivider.classList.remove('dragging');
-            document.body.style.cursor = '';
-            document.body.style.userSelect = '';
         });
     };
 

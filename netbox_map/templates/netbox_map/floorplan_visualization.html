@@ -37,11 +37,15 @@
     {% if edit_mode %}
     <div class="toolbar-divider"></div>
     <div class="toolbar-group">
-      <select id="tile-type-select" class="form-select form-select-sm no-ts" style="width: auto;">
+      <div class="fp-type-chips" id="fp-type-chips">
         {% for tc in type_configs %}
-        <option value="{{ tc.slug }}">{{ tc.name }}</option>
+        <span class="fp-type-chip{% if forloop.first %} active{% endif %}"
+              data-type="{{ tc.slug }}" title="{{ tc.name }}"
+              style="background: {{ tc.color }}">
+          <i class="mdi {{ tc.icon }}"></i>
+        </span>
         {% endfor %}
-      </select>
+      </div>
       <input type="text" id="tile-label-input" class="form-control form-control-sm toolbar-input-label"
              placeholder="{% trans 'Label' %}">
     </div>
@@ -133,10 +137,10 @@
       </div>
     </div>
 
-    {# Right: Sidebar with tile list + detail panels #}
+    {# Right: Sidebar with swappable list / detail panels #}
     <div class="floorplan-sidebar">
-      {# Top section: tile list #}
-      <div class="sidebar-tiles-section">
+      {# Panel 1: Tile list (shown initially) #}
+      <div class="sidebar-panel sidebar-panel--list" id="sidebar-panel-list">
         <div class="sidebar-header">
           <div class="sidebar-search-wrap">
             <i class="mdi mdi-magnify"></i>
@@ -156,249 +160,247 @@
         <div id="tile-list" class="sidebar-tile-list"></div>
       </div>
 
-      {# Draggable divider between tile list and context section #}
-      <div class="sidebar-divider" id="sidebar-divider"></div>
-
-      {# Bottom section: context panels (details, rack elevation, link) #}
-      <div class="sidebar-context-section" id="sidebar-context">
-        {# Placeholder shown when nothing selected #}
-        <div id="sidebar-no-selection" class="sidebar-empty-state sidebar-empty-state-compact">
-          <i class="mdi mdi-cursor-default-click-outline"></i>
-          <span>{% trans "Select a tile to view details" %}</span>
+      {# Panel 2: Detail (hidden initially, swaps in on tile select) #}
+      <div class="sidebar-panel sidebar-panel--detail d-none" id="sidebar-panel-detail">
+        <div class="sidebar-detail-header" id="sidebar-detail-back">
+          <i class="mdi mdi-arrow-left"></i>
+          {% trans "Back to list" %}
+          <span class="sidebar-detail-esc">Esc</span>
         </div>
-
-        {# Tile Details #}
-        <div id="tile-detail-panel" class="d-none">
-          <div class="sidebar-section-title">
-            <i class="mdi mdi-information-outline"></i> {% trans "Tile Details" %}
-          </div>
-          <div class="sidebar-detail-list">
-            <div class="detail-row">
-              <span class="detail-label">{% trans "Label" %}</span>
-              <span class="detail-value">
-                <span id="tile-detail-name">-</span>
-                <button id="edit-label-btn" class="btn btn-sm btn-link p-0 ms-1" title="{% trans 'Edit label' %}">
-                  <i class="mdi mdi-pencil"></i>
-                </button>
-                <div id="edit-label-form" class="d-none mt-1">
-                  <div class="d-flex gap-1 align-items-center">
-                    <input type="text" id="edit-label-input" class="form-control form-control-sm sidebar-input" style="flex:1;">
-                    <button id="save-label-btn" class="btn btn-sm btn-primary px-1">
-                      <i class="mdi mdi-check"></i>
-                    </button>
-                    <button id="cancel-label-btn" class="btn btn-sm btn-outline-secondary px-1">
-                      <i class="mdi mdi-close"></i>
-                    </button>
-                  </div>
-                </div>
-              </span>
+        <div class="sidebar-detail-content">
+          {# Tile Details #}
+          <div id="tile-detail-panel" class="d-none">
+            <div class="sidebar-section-title">
+              <i class="mdi mdi-information-outline"></i> {% trans "Tile Details" %}
             </div>
-            <div class="detail-row">
-              <span class="detail-label">{% trans "Position" %}</span>
-              <span class="detail-value" id="tile-detail-position">-</span>
-            </div>
-            <div class="detail-row">
-              <span class="detail-label">{% trans "Size" %}</span>
-              <span class="detail-value" id="tile-detail-size">-</span>
-            </div>
-            {% if edit_mode %}
-            <div id="resize-tile-panel" class="d-none">
-              <div class="detail-row resize-controls">
-                <span class="detail-label">{% trans "Resize" %}</span>
-                <span class="detail-value">
-                  <div class="d-flex gap-1 align-items-center">
-                    <input type="number" id="resize-width-input" class="form-control form-control-sm sidebar-input" style="width:50px;" min="1" max="10" title="{% trans 'Width' %}">
-                    <span class="text-muted">&times;</span>
-                    <input type="number" id="resize-height-input" class="form-control form-control-sm sidebar-input" style="width:50px;" min="1" max="10" title="{% trans 'Height' %}">
-                    <button id="resize-tile-btn" class="btn btn-sm btn-primary px-2">
-                      <i class="mdi mdi-resize"></i> {% trans "Resize" %}
-                    </button>
-                  </div>
-                </span>
-              </div>
-            </div>
-            <div id="orientation-tile-panel" class="d-none">
+            <div class="sidebar-detail-list">
               <div class="detail-row">
-                <span class="detail-label">{% trans "Orientation" %}</span>
+                <span class="detail-label">{% trans "Label" %}</span>
                 <span class="detail-value">
-                  <div class="d-flex gap-1 align-items-center">
-                    <select id="orientation-select" class="form-select form-select-sm sidebar-input" style="width:70px;">
-                      <option value="0">0&deg;</option>
-                      <option value="90">90&deg;</option>
-                      <option value="180">180&deg;</option>
-                      <option value="270">270&deg;</option>
-                    </select>
-                    <button id="orientation-tile-btn" class="btn btn-sm btn-primary px-2">
-                      <i class="mdi mdi-rotate-right"></i> {% trans "Set" %}
-                    </button>
+                  <span id="tile-detail-name">-</span>
+                  <button id="edit-label-btn" class="btn btn-sm btn-link p-0 ms-1" title="{% trans 'Edit label' %}">
+                    <i class="mdi mdi-pencil"></i>
+                  </button>
+                  <div id="edit-label-form" class="d-none mt-1">
+                    <div class="d-flex gap-1 align-items-center">
+                      <input type="text" id="edit-label-input" class="form-control form-control-sm sidebar-input" style="flex:1;">
+                      <button id="save-label-btn" class="btn btn-sm btn-primary px-1">
+                        <i class="mdi mdi-check"></i>
+                      </button>
+                      <button id="cancel-label-btn" class="btn btn-sm btn-outline-secondary px-1">
+                        <i class="mdi mdi-close"></i>
+                      </button>
+                    </div>
                   </div>
                 </span>
               </div>
-            </div>
-            {% endif %}
-            <div class="detail-row">
-              <span class="detail-label">{% trans "Type" %}</span>
-              <span class="detail-value" id="tile-detail-type">-</span>
-            </div>
-            <div class="detail-row">
-              <span class="detail-label">{% trans "Object Type" %}</span>
-              <span class="detail-value" id="tile-detail-object-type">-</span>
-            </div>
-            <div class="detail-row" id="tile-detail-ip-row">
-              <span class="detail-label">{% trans "IP Address" %}</span>
-              <span class="detail-value" id="tile-detail-ip">-</span>
-            </div>
-            <div class="detail-row">
-              <span class="detail-label">{% trans "Utilization" %}</span>
-              <span class="detail-value" id="tile-detail-utilization">-</span>
-            </div>
-            <div class="detail-row">
-              <span class="detail-label">{% trans "Linked Object" %}</span>
-              <span class="detail-value" id="tile-detail-object-link">-</span>
-            </div>
-            <div class="detail-row" id="tile-detail-fplink-row" style="display:none">
-              <span class="detail-label">{% trans "Linked Floor Plan" %}</span>
-              <span class="detail-value" id="tile-detail-fplink">-</span>
-            </div>
-          </div>
-
-          {# Enriched detail loaded via AJAX #}
-          <div id="fp-enriched-detail"></div>
-
-          {# Camera FOV edit (inline, for camera tiles only) #}
-          <div id="camera-fov-edit-panel" class="d-none sidebar-fov-panel">
-            <div class="sidebar-section-title"><i class="mdi mdi-cctv"></i> {% trans "Camera FOV" %}</div>
-            <div class="sidebar-fov-controls">
-              <div class="fov-slider-group">
-                <label>{% trans "Direction" %}</label>
-                <input type="range" id="edit-fov-direction-slider" min="0" max="360" step="5">
-                <input type="number" id="edit-fov-direction" class="form-control form-control-sm fov-number" min="0" max="360" step="5">
-                <span class="fov-unit">&deg;</span>
+              <div class="detail-row">
+                <span class="detail-label">{% trans "Position" %}</span>
+                <span class="detail-value" id="tile-detail-position">-</span>
               </div>
-              <div class="fov-slider-group">
-                <label>{% trans "Angle" %}</label>
-                <input type="range" id="edit-fov-angle-slider" min="10" max="360" step="5">
-                <input type="number" id="edit-fov-angle" class="form-control form-control-sm fov-number" min="10" max="360" step="5">
-                <span class="fov-unit">&deg;</span>
+              <div class="detail-row">
+                <span class="detail-label">{% trans "Size" %}</span>
+                <span class="detail-value" id="tile-detail-size">-</span>
               </div>
-              <div class="fov-slider-group">
-                <label>{% trans "Range" %}</label>
-                <input type="range" id="edit-fov-distance-slider" min="1" max="50" step="1">
-                <input type="number" id="edit-fov-distance" class="form-control form-control-sm fov-number" min="1" max="50" step="1">
-                <span class="fov-unit">{% trans "cells" %}</span>
+              {% if edit_mode %}
+              <div id="resize-tile-panel" class="d-none">
+                <div class="detail-row resize-controls">
+                  <span class="detail-label">{% trans "Resize" %}</span>
+                  <span class="detail-value">
+                    <div class="d-flex gap-1 align-items-center">
+                      <input type="number" id="resize-width-input" class="form-control form-control-sm sidebar-input" style="width:50px;" min="1" max="10" title="{% trans 'Width' %}">
+                      <span class="text-muted">&times;</span>
+                      <input type="number" id="resize-height-input" class="form-control form-control-sm sidebar-input" style="width:50px;" min="1" max="10" title="{% trans 'Height' %}">
+                      <button id="resize-tile-btn" class="btn btn-sm btn-primary px-2">
+                        <i class="mdi mdi-resize"></i> {% trans "Resize" %}
+                      </button>
+                    </div>
+                  </span>
+                </div>
               </div>
-              <button id="save-fov-btn" class="btn btn-sm btn-primary">
-                <i class="mdi mdi-check"></i> {% trans "Save" %}
-              </button>
+              <div id="orientation-tile-panel" class="d-none">
+                <div class="detail-row">
+                  <span class="detail-label">{% trans "Orientation" %}</span>
+                  <span class="detail-value">
+                    <div class="d-flex gap-1 align-items-center">
+                      <select id="orientation-select" class="form-select form-select-sm sidebar-input" style="width:70px;">
+                        <option value="0">0&deg;</option>
+                        <option value="90">90&deg;</option>
+                        <option value="180">180&deg;</option>
+                        <option value="270">270&deg;</option>
+                      </select>
+                      <button id="orientation-tile-btn" class="btn btn-sm btn-primary px-2">
+                        <i class="mdi mdi-rotate-right"></i> {% trans "Set" %}
+                      </button>
+                    </div>
+                  </span>
+                </div>
+              </div>
+              {% endif %}
+              <div class="detail-row">
+                <span class="detail-label">{% trans "Type" %}</span>
+                <span class="detail-value" id="tile-detail-type">-</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">{% trans "Object Type" %}</span>
+                <span class="detail-value" id="tile-detail-object-type">-</span>
+              </div>
+              <div class="detail-row" id="tile-detail-ip-row">
+                <span class="detail-label">{% trans "IP Address" %}</span>
+                <span class="detail-value" id="tile-detail-ip">-</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">{% trans "Utilization" %}</span>
+                <span class="detail-value" id="tile-detail-utilization">-</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">{% trans "Linked Object" %}</span>
+                <span class="detail-value" id="tile-detail-object-link">-</span>
+              </div>
+              <div class="detail-row" id="tile-detail-fplink-row" style="display:none">
+                <span class="detail-label">{% trans "Linked Floor Plan" %}</span>
+                <span class="detail-value" id="tile-detail-fplink">-</span>
+              </div>
             </div>
-          </div>
-        </div>
 
-        {# Rack Elevation (shown for rack tiles with linked rack) #}
-        <div id="rack-elevation-panel" class="d-none">
-          <div class="sidebar-section-title d-flex align-items-center justify-content-between">
-            <span id="rack-elevation-title">{% trans "Rack Elevation" %}</span>
-            <div class="btn-group btn-group-sm" role="group">
-              <button type="button" class="btn btn-outline-secondary active btn-xs" id="rack-face-front" data-face="front">
-                {% trans "Front" %}
-              </button>
-              <button type="button" class="btn btn-outline-secondary btn-xs" id="rack-face-rear" data-face="rear">
-                {% trans "Rear" %}
-              </button>
-            </div>
-          </div>
-          <div class="rack-elevation-body">
-            <div id="rack-elevation-loading" class="text-center py-3 d-none">
-              <div class="spinner-border spinner-border-sm text-secondary" role="status"></div>
-              <span class="ms-2 text-muted small">{% trans "Loading..." %}</span>
-            </div>
-            <div id="rack-elevation-svg" class="rack-elevation-svg-container"></div>
-          </div>
-        </div>
+            {# Enriched detail loaded via AJAX #}
+            <div id="fp-enriched-detail"></div>
 
-        {# Cable Trace (shown for devices, rear ports, front ports) #}
-        <div id="cable-trace-panel" class="d-none">
-          <div class="sidebar-section-title"><span id="cable-trace-title">{% trans "Ports" %}</span></div>
-          <div id="cable-trace-content"></div>
-        </div>
-
-        {% if edit_mode %}
-        {# Link Floor Plan panel (edit mode, for floorplan_link tiles) #}
-        <div id="link-floorplan-panel" class="d-none">
-          <div class="sidebar-section-title"><i class="mdi mdi-floor-plan"></i> {% trans "Link Floor Plan" %}</div>
-          <div class="sidebar-link-controls">
-            <select id="link-floorplan-select" class="form-select form-select-sm sidebar-input no-ts">
-              <option value="">-- {% trans "Select Floor Plan" %} --</option>
-              {% for fp in site_floorplans %}
-                {% if fp.id != object.pk %}
-                <option value="{{ fp.id }}">{{ fp.name }}{% if fp.location__name %} ({{ fp.location__name }}){% endif %}</option>
-                {% endif %}
-              {% endfor %}
-            </select>
-            <div class="d-flex gap-1 align-items-center">
-              <button id="link-floorplan-btn" class="btn btn-sm btn-primary" disabled>
-                <i class="mdi mdi-link"></i> {% trans "Link" %}
-              </button>
-              <button id="unlink-floorplan-btn" class="btn btn-sm btn-outline-danger" disabled>
-                <i class="mdi mdi-link-off"></i> {% trans "Unlink" %}
-              </button>
-              <span id="link-floorplan-status" class="small text-muted ms-1"></span>
+            {# Camera FOV edit (inline, for camera tiles only) #}
+            <div id="camera-fov-edit-panel" class="d-none sidebar-fov-panel">
+              <div class="sidebar-section-title"><i class="mdi mdi-cctv"></i> {% trans "Camera FOV" %}</div>
+              <div class="sidebar-fov-controls">
+                <div class="fov-slider-group">
+                  <label>{% trans "Direction" %}</label>
+                  <input type="range" id="edit-fov-direction-slider" min="0" max="360" step="5">
+                  <input type="number" id="edit-fov-direction" class="form-control form-control-sm fov-number" min="0" max="360" step="5">
+                  <span class="fov-unit">&deg;</span>
+                </div>
+                <div class="fov-slider-group">
+                  <label>{% trans "Angle" %}</label>
+                  <input type="range" id="edit-fov-angle-slider" min="10" max="360" step="5">
+                  <input type="number" id="edit-fov-angle" class="form-control form-control-sm fov-number" min="10" max="360" step="5">
+                  <span class="fov-unit">&deg;</span>
+                </div>
+                <div class="fov-slider-group">
+                  <label>{% trans "Range" %}</label>
+                  <input type="range" id="edit-fov-distance-slider" min="1" max="50" step="1">
+                  <input type="number" id="edit-fov-distance" class="form-control form-control-sm fov-number" min="1" max="50" step="1">
+                  <span class="fov-unit">{% trans "cells" %}</span>
+                </div>
+                <button id="save-fov-btn" class="btn btn-sm btn-primary">
+                  <i class="mdi mdi-check"></i> {% trans "Save" %}
+                </button>
+              </div>
             </div>
-            <div id="link-floorplan-current" class="small text-muted"></div>
           </div>
-        </div>
 
-        {# Link Object panel (edit mode only) #}
-        <div id="link-object-panel" class="d-none">
-          <div class="sidebar-section-title"><i class="mdi mdi-link"></i> {% trans "Link Object" %}</div>
-          <div class="sidebar-link-controls">
-            <select id="link-object-type" class="form-select form-select-sm sidebar-input no-ts">
-              <option value="">-- {% trans "Select Type" %} --</option>
-              <option value="dcim.rack">{% trans "Rack" %}</option>
-              <option value="dcim.device">{% trans "Device" %}</option>
-              <option value="dcim.powerpanel">{% trans "Power Panel" %}</option>
-              <option value="dcim.powerfeed">{% trans "Power Feed" %}</option>
-              <option value="dcim.rearport">{% trans "Rear Port" %}</option>
-              <option value="dcim.frontport">{% trans "Front Port" %}</option>
-            </select>
-            <select id="link-object-select" class="form-select form-select-sm sidebar-input no-ts" disabled>
-              <option value="">-- {% trans "Select object type first" %} --</option>
-            </select>
-            <div class="d-flex gap-1 align-items-center">
-              <button id="link-object-btn" class="btn btn-sm btn-primary" disabled>
-                <i class="mdi mdi-link"></i> {% trans "Link" %}
-              </button>
-              <button id="unlink-object-btn" class="btn btn-sm btn-outline-danger" disabled>
-                <i class="mdi mdi-link-off"></i> {% trans "Unlink" %}
-              </button>
-              <span id="link-status" class="small text-muted ms-1"></span>
+          {# Rack Elevation (shown for rack tiles with linked rack) #}
+          <div id="rack-elevation-panel" class="d-none">
+            <div class="sidebar-section-title d-flex align-items-center justify-content-between">
+              <span id="rack-elevation-title">{% trans "Rack Elevation" %}</span>
+              <div class="btn-group btn-group-sm" role="group">
+                <button type="button" class="btn btn-outline-secondary active btn-xs" id="rack-face-front" data-face="front">
+                  {% trans "Front" %}
+                </button>
+                <button type="button" class="btn btn-outline-secondary btn-xs" id="rack-face-rear" data-face="rear">
+                  {% trans "Rear" %}
+                </button>
+              </div>
             </div>
-            <div id="link-current" class="small text-muted"></div>
+            <div class="rack-elevation-body">
+              <div id="rack-elevation-loading" class="text-center py-3 d-none">
+                <div class="spinner-border spinner-border-sm text-secondary" role="status"></div>
+                <span class="ms-2 text-muted small">{% trans "Loading..." %}</span>
+              </div>
+              <div id="rack-elevation-svg" class="rack-elevation-svg-container"></div>
+            </div>
           </div>
-        </div>
 
-        {# Drop Ports panel (edit mode, for drop tiles) #}
-        <div id="drop-ports-panel" class="d-none">
-          <div class="sidebar-section-title"><i class="mdi mdi-ethernet"></i> {% trans "Drop Ports" %}</div>
-          <div class="sidebar-link-controls">
-            <select id="drop-port-type" class="form-select form-select-sm sidebar-input no-ts">
-              <option value="">-- {% trans "Select Port Type" %} --</option>
-              <option value="dcim.frontport">{% trans "Front Port" %}</option>
-              <option value="dcim.rearport">{% trans "Rear Port" %}</option>
-            </select>
-            <select id="drop-port-select" class="form-select form-select-sm sidebar-input no-ts" disabled>
-              <option value="">-- {% trans "Select port type first" %} --</option>
-            </select>
-            <div class="d-flex gap-1 align-items-center">
-              <button id="add-drop-port-btn" class="btn btn-sm btn-primary" disabled>
-                <i class="mdi mdi-plus"></i> {% trans "Add Port" %}
-              </button>
-              <span id="drop-port-status" class="small text-muted ms-1"></span>
-            </div>
-            <div id="drop-port-list" class="mt-2"></div>
+          {# Cable Trace (shown for devices, rear ports, front ports) #}
+          <div id="cable-trace-panel" class="d-none">
+            <div class="sidebar-section-title"><span id="cable-trace-title">{% trans "Ports" %}</span></div>
+            <div id="cable-trace-content"></div>
           </div>
+
+          {% if edit_mode %}
+          {# Link Floor Plan panel (edit mode, for floorplan_link tiles) #}
+          <div id="link-floorplan-panel" class="d-none">
+            <div class="sidebar-section-title"><i class="mdi mdi-floor-plan"></i> {% trans "Link Floor Plan" %}</div>
+            <div class="sidebar-link-controls">
+              <select id="link-floorplan-select" class="form-select form-select-sm sidebar-input no-ts">
+                <option value="">-- {% trans "Select Floor Plan" %} --</option>
+                {% for fp in site_floorplans %}
+                  {% if fp.id != object.pk %}
+                  <option value="{{ fp.id }}">{{ fp.name }}{% if fp.location__name %} ({{ fp.location__name }}){% endif %}</option>
+                  {% endif %}
+                {% endfor %}
+              </select>
+              <div class="d-flex gap-1 align-items-center">
+                <button id="link-floorplan-btn" class="btn btn-sm btn-primary" disabled>
+                  <i class="mdi mdi-link"></i> {% trans "Link" %}
+                </button>
+                <button id="unlink-floorplan-btn" class="btn btn-sm btn-outline-danger" disabled>
+                  <i class="mdi mdi-link-off"></i> {% trans "Unlink" %}
+                </button>
+                <span id="link-floorplan-status" class="small text-muted ms-1"></span>
+              </div>
+              <div id="link-floorplan-current" class="small text-muted"></div>
+            </div>
+          </div>
+
+          {# Link Object panel (edit mode only) #}
+          <div id="link-object-panel" class="d-none">
+            <div class="sidebar-section-title"><i class="mdi mdi-link"></i> {% trans "Link Object" %}</div>
+            <div class="sidebar-link-controls">
+              <select id="link-object-type" class="form-select form-select-sm sidebar-input no-ts">
+                <option value="">-- {% trans "Select Type" %} --</option>
+                <option value="dcim.rack">{% trans "Rack" %}</option>
+                <option value="dcim.device">{% trans "Device" %}</option>
+                <option value="dcim.powerpanel">{% trans "Power Panel" %}</option>
+                <option value="dcim.powerfeed">{% trans "Power Feed" %}</option>
+                <option value="dcim.rearport">{% trans "Rear Port" %}</option>
+                <option value="dcim.frontport">{% trans "Front Port" %}</option>
+              </select>
+              <select id="link-object-select" class="form-select form-select-sm sidebar-input no-ts" disabled>
+                <option value="">-- {% trans "Select object type first" %} --</option>
+              </select>
+              <div class="d-flex gap-1 align-items-center">
+                <button id="link-object-btn" class="btn btn-sm btn-primary" disabled>
+                  <i class="mdi mdi-link"></i> {% trans "Link" %}
+                </button>
+                <button id="unlink-object-btn" class="btn btn-sm btn-outline-danger" disabled>
+                  <i class="mdi mdi-link-off"></i> {% trans "Unlink" %}
+                </button>
+                <span id="link-status" class="small text-muted ms-1"></span>
+              </div>
+              <div id="link-current" class="small text-muted"></div>
+            </div>
+          </div>
+
+          {# Drop Ports panel (edit mode, for drop tiles) #}
+          <div id="drop-ports-panel" class="d-none">
+            <div class="sidebar-section-title"><i class="mdi mdi-ethernet"></i> {% trans "Drop Ports" %}</div>
+            <div class="sidebar-link-controls">
+              <select id="drop-port-type" class="form-select form-select-sm sidebar-input no-ts">
+                <option value="">-- {% trans "Select Port Type" %} --</option>
+                <option value="dcim.frontport">{% trans "Front Port" %}</option>
+                <option value="dcim.rearport">{% trans "Rear Port" %}</option>
+              </select>
+              <select id="drop-port-select" class="form-select form-select-sm sidebar-input no-ts" disabled>
+                <option value="">-- {% trans "Select port type first" %} --</option>
+              </select>
+              <div class="d-flex gap-1 align-items-center">
+                <button id="add-drop-port-btn" class="btn btn-sm btn-primary" disabled>
+                  <i class="mdi mdi-plus"></i> {% trans "Add Port" %}
+                </button>
+                <span id="drop-port-status" class="small text-muted ms-1"></span>
+              </div>
+              <div id="drop-port-list" class="mt-2"></div>
+            </div>
+          </div>
+          {% endif %}
         </div>
-        {% endif %}
       </div>
     </div>
   </div>

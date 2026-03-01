@@ -15,57 +15,39 @@
 {% endblock %}
 
 {% block content %}
-{# Combined header bar: edit toggle + toolbar controls #}
+{# Toolbar: edit toggle + controls #}
 <div class="site-map-header mb-3">
   {% if can_edit %}
-  <button class="btn btn-sm btn-outline-warning" id="edit-mode-btn">
-    <i class="mdi mdi-pencil-lock-outline"></i> {% trans "Edit Mode" %}
-  </button>
-  <div class="toolbar-divider"></div>
-  <div id="site-map-toolbar-controls" class="d-none d-flex align-items-center gap-2 flex-wrap">
-    <div class="toolbar-group">
-      <label class="toolbar-label">{% trans "Place Existing" %}</label>
-      <select id="unplaced-sites-select" class="form-select form-select-sm">
-        <option value="">{% trans "Site..." %}</option>
-      </select>
-      <button class="btn btn-sm btn-primary" id="place-site-btn" disabled>
-        <i class="mdi mdi-map-marker-plus"></i> {% trans "Place" %}
-      </button>
-      <select id="unplaced-locations-select" class="form-select form-select-sm">
-        <option value="">{% trans "Location..." %}</option>
-      </select>
-      <button class="btn btn-sm btn-outline-primary" id="place-location-btn" disabled>
-        <i class="mdi mdi-map-marker-outline"></i> {% trans "Place" %}
-      </button>
-      <select id="unplaced-tiles-select" class="form-select form-select-sm">
-        <option value="">{% trans "Tile..." %}</option>
-      </select>
-      <button class="btn btn-sm btn-outline-secondary" id="place-tile-btn" disabled>
-        <i class="mdi mdi-crosshairs-gps"></i> {% trans "Place" %}
-      </button>
-    </div>
-    <div class="toolbar-divider"></div>
-    <div class="toolbar-group">
-      <button class="btn btn-sm btn-outline-info" id="draw-cable-btn">
-        <i class="mdi mdi-vector-polyline"></i> {% trans "Draw Cable" %}
-      </button>
-    </div>
-    <div class="toolbar-divider"></div>
-    <div class="toolbar-group">
-      <label class="toolbar-label">{% trans "New Marker" %}</label>
-      <select id="new-marker-type" class="form-select form-select-sm">
-        {% for tc in type_configs %}
-        <option value="{{ tc.slug }}">{{ tc.name }}</option>
-        {% endfor %}
-      </select>
-      <input type="text" id="new-marker-label" class="form-control form-control-sm" placeholder="{% trans 'Label...' %}">
-      <button class="btn btn-sm btn-success" id="add-marker-btn">
-        <i class="mdi mdi-plus"></i> {% trans "Add Marker" %}
-      </button>
-    </div>
-    <div class="site-map-toolbar-status ms-auto">
+  <div class="toolbar-top-row">
+    <button class="btn btn-sm btn-outline-warning" id="edit-mode-btn">
+      <i class="mdi mdi-pencil-lock-outline"></i> {% trans "Edit Mode" %}
+    </button>
+    <div class="site-map-toolbar-status">
       <span id="placement-status" class="text-muted small"></span>
       <button id="cancel-placement-btn" class="btn btn-sm btn-outline-danger d-none">{% trans "Cancel" %}</button>
+    </div>
+  </div>
+  <div id="site-map-toolbar-controls" class="toolbar-controls d-none">
+    <div class="toolbar-card">
+      <div class="toolbar-card-label">{% trans "Place on Map" %}</div>
+      <div class="toolbar-card-body">
+        <div class="chip-tray" id="chip-tray-place">
+          <span class="chip-tray-empty text-muted small">{% trans "All items placed" %}</span>
+        </div>
+        <div class="tile-place-row" id="tile-place-row">
+          <input type="text" id="tile-search-input" class="form-control form-control-sm" placeholder="{% trans 'Search tiles...' %}" autocomplete="off">
+          <div class="tile-search-results" id="tile-search-results"></div>
+        </div>
+      </div>
+    </div>
+    <div class="toolbar-card">
+      <div class="toolbar-card-label">{% trans "Create" %}</div>
+      <div class="toolbar-card-body toolbar-create-body">
+        <div class="chip-tray chip-tray--create" id="chip-tray-create"></div>
+        <button class="btn btn-sm btn-outline-info" id="draw-cable-btn">
+          <i class="mdi mdi-vector-polyline"></i> {% trans "Cable" %}
+        </button>
+      </div>
     </div>
   </div>
   {% endif %}
@@ -96,7 +78,7 @@
   </div>
 
   <div class="site-map-sidebar" id="site-map-sidebar">
-    <div class="sidebar-tiles-section">
+    <div class="sidebar-panel sidebar-panel--list" id="sidebar-panel-list">
       <div class="sidebar-header">
         <div class="sidebar-search-wrap">
           <i class="mdi mdi-magnify"></i>
@@ -109,11 +91,13 @@
       </div>
       <div class="sidebar-tile-list" id="sidebar-list"></div>
     </div>
-    <div class="sidebar-context-section" id="sidebar-detail">
-      <div class="sidebar-empty-state">
-        <i class="mdi mdi-cursor-default-click-outline"></i>
-        <span>{% trans "Click a marker to see details" %}</span>
+    <div class="sidebar-panel sidebar-panel--detail d-none" id="sidebar-panel-detail">
+      <div class="sidebar-detail-header" id="sidebar-detail-back">
+        <i class="mdi mdi-arrow-left"></i>
+        <span>{% trans "Back to list" %}</span>
+        <span class="sidebar-detail-esc">Esc</span>
       </div>
+      <div class="sidebar-detail-content" id="sidebar-detail"></div>
     </div>
   </div>
 </div>

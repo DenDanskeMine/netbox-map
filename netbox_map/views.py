@@ -236,6 +236,7 @@ class SiteMapView(LoginRequiredMixin, View):
                 'label': cp.label,
                 'path_coordinates': cp.path_coordinates,
                 'fiber_count': cp.fiber_count,
+                'cable_type': cp.cable_type,
                 'status': cp.status,
                 'status_color': cp.get_status_color(),
                 'color': cp.color,
@@ -911,13 +912,20 @@ class MarkerDetailView(LoginRequiredMixin, View):
 
     def _serialize_cable(self, cable):
         """Serialize a Cable object to dict."""
-        return {
+        data = {
             'id': cable.id,
             'label': str(cable),
             'url': cable.get_absolute_url(),
             'status': cable.get_status_display() if hasattr(cable, 'get_status_display') else '',
             'status_color': cable.get_status_color() if hasattr(cable, 'get_status_color') else '',
         }
+        if cable.type:
+            data['type'] = cable.type
+            data['type_display'] = cable.get_type_display()
+        if cable.length is not None:
+            data['length'] = float(cable.length)
+            data['length_unit'] = cable.get_length_unit_display() if cable.length_unit else ''
+        return data
 
     def _trace_port(self, port):
         """Call .trace() on a port/interface and serialize each hop.

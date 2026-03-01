@@ -158,13 +158,59 @@
     overflow: hidden;
 }
 
-/* Top section: tile list */
-.sidebar-tiles-section {
-    flex: 1 1 auto;
-    min-height: 150px;
+/* Sidebar panel swap */
+.sidebar-panel {
     display: flex;
     flex-direction: column;
+    height: 100%;
     overflow: hidden;
+}
+
+.sidebar-panel--list .sidebar-tile-list {
+    flex: 1;
+    overflow-y: auto;
+}
+
+.sidebar-panel--detail {
+    height: 100%;
+}
+
+.sidebar-detail-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    color: var(--fp-accent);
+    border-bottom: 1px solid var(--fp-border-light);
+    flex-shrink: 0;
+    user-select: none;
+}
+
+.sidebar-detail-header:hover {
+    background: var(--fp-hover);
+}
+
+.sidebar-detail-header .mdi {
+    font-size: 16px;
+}
+
+.sidebar-detail-esc {
+    margin-left: auto;
+    font-size: 10px;
+    font-weight: 500;
+    padding: 1px 5px;
+    border-radius: 3px;
+    background: var(--fp-border-light);
+    color: var(--fp-text-muted);
+    letter-spacing: 0.3px;
+}
+
+.sidebar-detail-content {
+    flex: 1;
+    overflow-y: auto;
 }
 
 .sidebar-header {
@@ -345,81 +391,6 @@
     font-size: 10px;
     color: var(--fp-text-dim);
     flex-shrink: 0;
-}
-
-/* ===== Draggable sidebar divider ===== */
-
-.sidebar-divider {
-    height: 5px;
-    flex-shrink: 0;
-    cursor: row-resize;
-    background: var(--fp-border);
-    position: relative;
-    transition: background 0.15s;
-}
-.sidebar-divider::after {
-    content: '';
-    position: absolute;
-    left: 50%;
-    top: 50%;
-    transform: translate(-50%, -50%);
-    width: 24px;
-    height: 2px;
-    border-radius: 1px;
-    background: var(--fp-text-dim);
-    opacity: 0.4;
-}
-.sidebar-divider:hover,
-.sidebar-divider.dragging {
-    background: var(--fp-accent);
-}
-.sidebar-divider:hover::after,
-.sidebar-divider.dragging::after {
-    opacity: 0;
-}
-
-/* ===== Bottom section: context / detail panels ===== */
-
-.sidebar-context-section {
-    flex: 1 1 50%;
-    overflow-y: auto;
-    min-height: 48px;
-}
-
-/* Placeholder when no tile selected */
-.sidebar-empty-state {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    height: 100%;
-    gap: 8px;
-    padding: 20px;
-}
-
-/* Compact variant: small strip at the bottom instead of centered in half the sidebar */
-.sidebar-empty-state-compact {
-    flex-direction: row;
-    justify-content: center;
-    height: auto;
-    padding: 10px 16px;
-    gap: 6px;
-}
-.sidebar-empty-state-compact .mdi {
-    font-size: 16px;
-}
-.sidebar-empty-state-compact span {
-    font-size: 12px;
-}
-
-.sidebar-empty-state .mdi {
-    font-size: 32px;
-    color: var(--fp-placeholder-icon);
-}
-
-.sidebar-empty-state span {
-    font-size: 13px;
-    color: var(--fp-placeholder-text);
 }
 
 /* Section titles inside context panel */
@@ -793,6 +764,40 @@
 .toolbar-input-label { width: 150px; }
 .toolbar-input-dim { width: 56px; }
 .toolbar-input-fov { width: 64px; }
+
+/* Tile type chips (toolbar) */
+.fp-type-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    align-items: center;
+}
+
+.fp-type-chip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    cursor: pointer;
+    color: #fff;
+    font-size: 14px;
+    border: 2px solid transparent;
+    opacity: 0.6;
+    transition: opacity 0.15s, border-color 0.15s, transform 0.1s;
+}
+
+.fp-type-chip:hover {
+    opacity: 0.9;
+    transform: scale(1.1);
+}
+
+.fp-type-chip.active {
+    opacity: 1;
+    border-color: var(--fp-accent);
+    box-shadow: 0 0 0 2px var(--fp-accent-glow);
+}
 
 /* ===== Tile Popover ===== */
 
@@ -1274,6 +1279,10 @@ a.ct-port-name:hover {
     color: var(--fp-link-color);
     text-decoration: underline;
 }
+.ct-cable-meta {
+    font-size: 9px;
+    color: var(--fp-text-dim);
+}
 .ct-cable-status {
     font-size: 9px;
     font-weight: 600;
@@ -1320,22 +1329,22 @@ a.ct-port-name:hover {
 /* ===== Scrollbar styling ===== */
 
 .sidebar-tile-list::-webkit-scrollbar,
-.sidebar-context-section::-webkit-scrollbar {
+.sidebar-detail-content::-webkit-scrollbar {
     width: 6px;
 }
 
 .sidebar-tile-list::-webkit-scrollbar-track,
-.sidebar-context-section::-webkit-scrollbar-track {
+.sidebar-detail-content::-webkit-scrollbar-track {
     background: transparent;
 }
 
 .sidebar-tile-list::-webkit-scrollbar-thumb,
-.sidebar-context-section::-webkit-scrollbar-thumb {
+.sidebar-detail-content::-webkit-scrollbar-thumb {
     background: var(--fp-scrollbar-thumb);
     border-radius: 3px;
 }
 
 .sidebar-tile-list::-webkit-scrollbar-thumb:hover,
-.sidebar-context-section::-webkit-scrollbar-thumb:hover {
+.sidebar-detail-content::-webkit-scrollbar-thumb:hover {
     background: var(--fp-scrollbar-hover);
 }
