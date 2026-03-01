@@ -977,9 +977,9 @@ class MarkerDetailView(LoginRequiredMixin, View):
         NetBox's RearPort.trace() only returns the immediate cable hop
         without continuing through the next panel.  This method loops,
         checking whether the trace ended at a RearPort and, if so, looks
-        up the corresponding FrontPort via PortMapping and keeps tracing.
+        up the corresponding FrontPort and keeps tracing.
         """
-        from dcim.models import RearPort, PortMapping
+        from dcim.models import RearPort, FrontPort
         import logging
         logger = logging.getLogger('netbox_map')
 
@@ -1026,18 +1026,45 @@ class MarkerDetailView(LoginRequiredMixin, View):
                 all_hops.extend(self._direct_cable_hop(current_port))
                 break
 
-            # If trace ended at a RearPort, follow through the panel's
-            # internal mapping and keep tracing from the FrontPort side.
-            if last_far_end_obj and isinstance(last_far_end_obj, RearPort):
+            # If trace ended at a RearPort, find the corresponding
+            # FrontPort and keep tracing from there.
+            if last_far_end_obj and last_far_end_obj.__class__.__name__ == 'RearPort':
+                next_port = None
+
+                # FrontPort has a direct rear_port FK in NetBox
                 try:
-                    mapping = PortMapping.objects.filter(
-                        rear_port=last_far_end_obj
-                    ).select_related('front_port__cable').first()
-                    if mapping and mapping.front_port and mapping.front_port.cable:
-                        current_port = mapping.front_port
-                        continue
-                except Exception:
-                    pass
+                    fp = FrontPort.objects.filter(
+                        rear_port=last_far_end_obj,
+                        cable__isnull=False,
+                    ).first()
+                    if fp:
+                        next_port = fp
+                except Exception as e:
+                    logger.debug('FrontPort FK lookup failed: %s', e)
+
+                # Fallback: PortMapping (if model exists)
+                if not next_port:
+                    try:
+                        from dcim.models import PortMapping
+                        mapping = PortMapping.objects.filter(
+                            rear_port=last_far_end_obj
+                        ).first()
+                        if mapping and mapping.front_port:
+                            cable = getattr(mapping.front_port, 'cable', None)
+                            if cable:
+                                next_port = mapping.front_port
+                    except Exception as e:
+                        logger.debug('PortMapping lookup failed: %s', e)
+
+                if next_port:
+                    current_port = next_port
+                    continue
+                else:
+                    logger.debug(
+                        'Panel continuation stopped at RearPort %s (pk=%s): '
+                        'no cabled FrontPort found',
+                        last_far_end_obj, last_far_end_obj.pk,
+                    )
             break
 
         return all_hops
