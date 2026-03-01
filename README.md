@@ -68,6 +68,10 @@ A NetBox plugin for interactive floor plan visualization, site maps, rack utiliz
 
 ![Rack_showcase](https://github.com/user-attachments/assets/7666a522-740d-4445-a340-cc2b07cb7632)
 
+<img width="765" height="457" alt="image" src="https://github.com/user-attachments/assets/9fe6f38a-e8b7-46b8-a800-8672581b837e" />
+
+
+
 ## Installation
 
 ```bash
