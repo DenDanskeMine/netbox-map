@@ -16,11 +16,41 @@
     // Settings persistence key
     var STORAGE_KEY = 'floorplan_editor_settings';
 
+    // ─── Chip Type Helpers ──────────────────────────────────────────
+
+    function getActiveType() {
+        var active = document.querySelector('.fp-type-chip.active');
+        return active ? active.getAttribute('data-type') : '';
+    }
+
+    function setActiveType(slug) {
+        var chips = document.querySelectorAll('.fp-type-chip');
+        for (var i = 0; i < chips.length; i++) {
+            if (chips[i].getAttribute('data-type') === slug) {
+                chips[i].classList.add('active');
+            } else {
+                chips[i].classList.remove('active');
+            }
+        }
+    }
+
+    // Wire click handlers on chips
+    var chipContainer = document.getElementById('fp-type-chips');
+    if (chipContainer) {
+        chipContainer.addEventListener('click', function(e) {
+            var chip = e.target.closest('.fp-type-chip');
+            if (!chip) return;
+            setActiveType(chip.getAttribute('data-type'));
+            toggleCameraFovControls();
+            saveSettings();
+        });
+    }
+
     // ─── Settings Persistence ─────────────────────────────────────
 
     function saveSettings() {
         var settings = {
-            tileType: document.getElementById('tile-type-select').value,
+            tileType: getActiveType(),
             label: document.getElementById('tile-label-input').value,
             width: document.getElementById('tile-width-input').value,
             height: document.getElementById('tile-height-input').value,
@@ -38,7 +68,7 @@
         try {
             var settings = JSON.parse(stored);
             if (settings.tileType) {
-                document.getElementById('tile-type-select').value = settings.tileType;
+                setActiveType(settings.tileType);
             }
             if (settings.label !== undefined) {
                 document.getElementById('tile-label-input').value = settings.label;
@@ -102,12 +132,11 @@
 
     // ─── Camera FOV Controls Toggle ───────────────────────────────
 
-    var tileTypeSelect = document.getElementById('tile-type-select');
     var cameraFovControls = document.getElementById('camera-fov-controls');
 
     function toggleCameraFovControls() {
         if (!cameraFovControls) return;
-        if (tileTypeSelect && tileTypeSelect.value === 'camera') {
+        if (getActiveType() === 'camera') {
             cameraFovControls.classList.remove('d-none');
             cameraFovControls.classList.add('d-flex');
         } else {
@@ -116,13 +145,7 @@
         }
     }
 
-    if (tileTypeSelect) {
-        tileTypeSelect.addEventListener('change', function() {
-            toggleCameraFovControls();
-            saveSettings();
-        });
-        toggleCameraFovControls();
-    }
+    toggleCameraFovControls();
 
     // ─── Collision Detection ──────────────────────────────────────
 
@@ -142,7 +165,7 @@
     // ─── Create Tile ──────────────────────────────────────────────
 
     function createTile(gridX, gridY) {
-        var tileType = document.getElementById('tile-type-select').value;
+        var tileType = getActiveType();
         var label = document.getElementById('tile-label-input').value;
         var tileWidth = parseInt(document.getElementById('tile-width-input').value, 10) || 1;
         var tileHeight = parseInt(document.getElementById('tile-height-input').value, 10) || 1;
