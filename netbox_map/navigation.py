@@ -9,7 +9,7 @@ menu = PluginMenu(
             PluginMenuItem(
                 link='plugins:netbox_map:sitemap',
                 link_text=_('Site Map'),
-                permissions=['dcim.view_site'],
+                permissions=['netbox_map.view_mapmarker'],
             ),
             PluginMenuItem(
                 link='plugins:netbox_map:mapmarker_list',
