@@ -863,23 +863,29 @@ class MarkerDetailView(LoginRequiredMixin, View):
             except Exception:
                 pass
 
-            # Reverse peer hops (swap near_end/far_end) so path flows toward
-            # the clicked port's side of the patch panel.
-            reversed_peer = []
-            for hop in peer_hops:
-                reversed_peer.append({
-                    'cable': hop['cable'],
-                    'near_end': hop.get('far_end'),
-                    'far_end': hop.get('near_end'),
-                })
-            reversed_peer.reverse()
-
-            # Combine: for rearport the path is peer-side → own-side,
-            # for frontport it is own-side → peer-side reversed.
+            # Combine traces into a single end-to-end path.
             if object_type == 'rearport':
+                # peer = FrontPort trace (front side) — reverse it
+                reversed_peer = []
+                for hop in peer_hops:
+                    reversed_peer.append({
+                        'cable': hop['cable'],
+                        'near_end': hop.get('far_end'),
+                        'far_end': hop.get('near_end'),
+                    })
+                reversed_peer.reverse()
                 combined = reversed_peer + own_hops
             else:
-                combined = own_hops + reversed_peer
+                # own = FrontPort trace (front side) — reverse it
+                reversed_own = []
+                for hop in own_hops:
+                    reversed_own.append({
+                        'cable': hop['cable'],
+                        'near_end': hop.get('far_end'),
+                        'far_end': hop.get('near_end'),
+                    })
+                reversed_own.reverse()
+                combined = reversed_own + peer_hops
 
             if combined:
                 traces.append({
