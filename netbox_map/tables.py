@@ -213,6 +213,9 @@ class CablePathTable(NetBoxTable):
     status = tables.Column(
         verbose_name=_('Status')
     )
+    cable_type = tables.Column(
+        verbose_name=_('Cable Type')
+    )
     fiber_count = tables.Column(
         verbose_name=_('Fiber Count')
     )
@@ -229,12 +232,12 @@ class CablePathTable(NetBoxTable):
     class Meta(NetBoxTable.Meta):
         model = CablePath
         fields = (
-            'pk', 'id', 'label', 'status', 'fiber_count',
+            'pk', 'id', 'label', 'status', 'cable_type', 'fiber_count',
             'start_marker', 'end_marker',
             'tags', 'actions',
         )
         default_columns = (
-            'pk', 'label', 'status', 'fiber_count', 'start_marker', 'end_marker',
+            'pk', 'label', 'status', 'cable_type', 'fiber_count', 'start_marker', 'end_marker',
         )
 
     def value_status(self, value, record):

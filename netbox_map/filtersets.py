@@ -4,6 +4,7 @@ from django.utils.translation import gettext_lazy as _
 
 from dcim.models import Site, Location
 from netbox.filtersets import NetBoxModelFilterSet
+from dcim.choices import CableTypeChoices
 from .models import FloorPlan, FloorPlanTile, CustomMarkerType, MapMarker, TilePortAssignment, CablePath
 from .choices import FloorPlanTileStatusChoices, CablePathStatusChoices, get_all_tile_type_choices
 
@@ -94,6 +95,10 @@ class CablePathFilterSet(NetBoxModelFilterSet):
         choices=CablePathStatusChoices,
         label=_('Status'),
     )
+    cable_type = django_filters.MultipleChoiceFilter(
+        choices=CableTypeChoices,
+        label=_('Cable Type'),
+    )
     fiber_count = django_filters.NumberFilter(
         label=_('Fiber Count'),
     )
@@ -108,7 +113,7 @@ class CablePathFilterSet(NetBoxModelFilterSet):
 
     class Meta:
         model = CablePath
-        fields = ['id', 'status', 'fiber_count']
+        fields = ['id', 'status', 'cable_type', 'fiber_count']
 
     def search(self, queryset, name, value):
         return queryset.filter(label__icontains=value)

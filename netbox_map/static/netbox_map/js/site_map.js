@@ -35,19 +35,16 @@
     /* ── Toolbar elements ─────────────────────────────────────────── */
     var editModeBtn     = document.getElementById('edit-mode-btn');
     var toolbarEl       = document.getElementById('site-map-toolbar-controls');
-    var sitesSelect     = document.getElementById('unplaced-sites-select');
-    var locationsSelect = document.getElementById('unplaced-locations-select');
-    var tilesSelect     = document.getElementById('unplaced-tiles-select');
-    var placeSiteBtn    = document.getElementById('place-site-btn');
-    var placeLocBtn     = document.getElementById('place-location-btn');
-    var placeTileBtn    = document.getElementById('place-tile-btn');
     var statusEl        = document.getElementById('placement-status');
     var cancelBtn       = document.getElementById('cancel-placement-btn');
 
-    // New marker toolbar
-    var newMarkerType   = document.getElementById('new-marker-type');
-    var newMarkerLabel  = document.getElementById('new-marker-label');
-    var addMarkerBtn    = document.getElementById('add-marker-btn');
+    // Chip trays
+    var chipTrayPlace   = document.getElementById('chip-tray-place');
+    var chipTrayCreate  = document.getElementById('chip-tray-create');
+
+    // Tile search
+    var tileSearchInput   = document.getElementById('tile-search-input');
+    var tileSearchResults = document.getElementById('tile-search-results');
 
     // Cable drawing
     var drawCableBtn    = document.getElementById('draw-cable-btn');
@@ -58,6 +55,9 @@
     var sidebarCount    = document.getElementById('sidebar-count');
     var sidebarList     = document.getElementById('sidebar-list');
     var sidebarDetail   = document.getElementById('sidebar-detail');
+    var panelList       = document.getElementById('sidebar-panel-list');
+    var panelDetail     = document.getElementById('sidebar-panel-detail');
+    var detailBackBtn   = document.getElementById('sidebar-detail-back');
 
     /* ── Placement state ──────────────────────────────────────────── */
     var placementMode = null;   // null | 'site' | 'location' | 'tile' | 'marker'
@@ -756,6 +756,70 @@
         return cp.weight || 3;
     }
 
+    /* ── Cable type helpers ─────────────────────────────────────── */
+    var CABLE_TYPE_LABELS = {
+        'cat3': 'CAT3', 'cat5': 'CAT5', 'cat5e': 'CAT5e', 'cat6': 'CAT6',
+        'cat6a': 'CAT6a', 'cat7': 'CAT7', 'cat7a': 'CAT7a', 'cat8': 'CAT8',
+        'mrj21-trunk': 'MRJ21',
+        'dac-active': 'DAC (Active)', 'dac-passive': 'DAC (Passive)',
+        'coaxial': 'Coaxial', 'rg-6': 'RG-6', 'rg-8': 'RG-8', 'rg-11': 'RG-11',
+        'rg-59': 'RG-59', 'rg-62': 'RG-62', 'rg-213': 'RG-213',
+        'lmr-100': 'LMR-100', 'lmr-200': 'LMR-200', 'lmr-400': 'LMR-400',
+        'mmf': 'MMF', 'mmf-om1': 'OM1', 'mmf-om2': 'OM2', 'mmf-om3': 'OM3',
+        'mmf-om4': 'OM4', 'mmf-om5': 'OM5',
+        'smf': 'SMF', 'smf-os1': 'OS1', 'smf-os2': 'OS2',
+        'aoc': 'AOC', 'power': 'Power', 'usb': 'USB'
+    };
+
+    var COPPER_TYPES = [
+        'cat3', 'cat5', 'cat5e', 'cat6', 'cat6a', 'cat7', 'cat7a', 'cat8', 'mrj21-trunk',
+        'dac-active', 'dac-passive'
+    ];
+    var FIBER_TYPES = [
+        'mmf', 'mmf-om1', 'mmf-om2', 'mmf-om3', 'mmf-om4', 'mmf-om5',
+        'smf', 'smf-os1', 'smf-os2'
+    ];
+    var COAX_TYPES = [
+        'coaxial', 'rg-6', 'rg-8', 'rg-11', 'rg-59', 'rg-62', 'rg-213',
+        'lmr-100', 'lmr-200', 'lmr-400'
+    ];
+
+    function getCableTypeLabel(type) {
+        if (!type) return '';
+        return CABLE_TYPE_LABELS[type] || type.toUpperCase();
+    }
+
+    function isFiberType(type) {
+        return !type || FIBER_TYPES.indexOf(type) !== -1;
+    }
+    function isCopperType(type) {
+        return COPPER_TYPES.indexOf(type) !== -1;
+    }
+
+    function formatCableCount(type, count) {
+        if (!count || count <= 0) return null;
+        if (isFiberType(type)) return count + 'F';
+        if (isCopperType(type)) return count + ' pairs';
+        // coaxial, aoc, power, usb — no count suffix
+        return null;
+    }
+
+    function computeCableLength(coords) {
+        if (!coords || coords.length < 2) return 0;
+        var total = 0;
+        for (var i = 1; i < coords.length; i++) {
+            var a = L.latLng(coords[i - 1][0], coords[i - 1][1]);
+            var b = L.latLng(coords[i][0], coords[i][1]);
+            total += a.distanceTo(b);
+        }
+        return total;
+    }
+
+    function formatCableLength(meters) {
+        if (meters >= 1000) return (meters / 1000).toFixed(2) + ' km';
+        return Math.round(meters) + ' m';
+    }
+
     function createCablePolyline(cp) {
         if (!cp.path_coordinates || cp.path_coordinates.length < 2) return null;
 
@@ -780,8 +844,14 @@
             opacity: 0.8
         }).addTo(map);
 
-        var tooltip = (cp.label || 'Cable #' + cp.id) + ' (' + cp.fiber_count + 'F)';
-        polyline.bindTooltip(tooltip, { sticky: true });
+        var tooltipParts = [cp.label || 'Cable #' + cp.id];
+        var typeLabel = getCableTypeLabel(cp.cable_type);
+        var countLabel = formatCableCount(cp.cable_type, cp.fiber_count);
+        if (typeLabel || countLabel) {
+            var sub = [typeLabel, countLabel].filter(Boolean).join(' \u00b7 ');
+            tooltipParts.push('(' + sub + ')');
+        }
+        polyline.bindTooltip(tooltipParts.join(' '), { sticky: true });
 
         var cableItem = {
             kind: 'cable',
@@ -826,7 +896,8 @@
         var cp = cableItem.data;
         if (!cp.label) return;
 
-        cableItem.displayLabel = cp.label + (cp.fiber_count ? ' \u00b7 ' + cp.fiber_count + 'F' : '');
+        var labelCount = formatCableCount(cp.cable_type, cp.fiber_count);
+        cableItem.displayLabel = cp.label + (labelCount ? ' \u00b7 ' + labelCount : '');
         cableItem.labelMarkers = [];
 
         updateCableLabelPositions(cableItem);
@@ -1081,6 +1152,7 @@
         var body = {
             path_coordinates: cableDrawCoords,
             fiber_count: 12,
+            cable_type: '',
             status: 'planned',
             label: ''
         };
@@ -1101,6 +1173,7 @@
                 label: data.label || '',
                 path_coordinates: data.path_coordinates,
                 fiber_count: data.fiber_count,
+                cable_type: data.cable_type || '',
                 status: data.status,
                 status_color: getCableColor(data.status),
                 color: data.color || '',
@@ -1178,10 +1251,10 @@
         }
         if (cableItem.sidebarEl) {
             cableItem.sidebarEl.classList.add('active');
-            cableItem.sidebarEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
         }
 
         showCableDetail(cableItem);
+        showDetailPanel();
     }
 
     function showCableDetail(cableItem) {
@@ -1191,7 +1264,17 @@
         html += '<div class="sidebar-detail-list">';
         html += detailRow('Label', escHtml(d.label) || '<span class="text-muted">\u2014</span>');
         html += detailRow('Status', '<span class="badge" style="background:' + getCableColor(d.status) + ';color:#fff;font-size:11px">' + escHtml(d.status) + '</span>');
-        html += detailRow('Fibers', d.fiber_count);
+        if (d.cable_type) {
+            html += detailRow('Type', escHtml(getCableTypeLabel(d.cable_type)));
+        }
+        var detailCount = formatCableCount(d.cable_type, d.fiber_count);
+        if (detailCount) {
+            html += detailRow(isFiberType(d.cable_type) ? 'Fibers' : 'Pairs', detailCount);
+        }
+        var cableLen = computeCableLength(d.path_coordinates);
+        if (cableLen > 0) {
+            html += detailRow('Length', formatCableLength(cableLen));
+        }
         html += detailRow('Weight', d.weight || 3);
         if (d.color) {
             html += detailRow('Color', '<span class="cable-color-swatch" style="background:' + escHtml(d.color) + '"></span> ' + escHtml(d.color));
@@ -1210,8 +1293,15 @@
             html += '<div class="sidebar-detail-list">';
             html += '<div class="sidebar-detail-row"><span class="detail-label">Label</span>';
             html += '<input type="text" id="cable-edit-label" class="form-control form-control-sm" value="' + escHtml(d.label) + '" style="width:140px;display:inline-block"></div>';
-            html += '<div class="sidebar-detail-row"><span class="detail-label">Fibers</span>';
-            html += '<input type="number" id="cable-edit-fibers" class="form-control form-control-sm" value="' + d.fiber_count + '" min="1" style="width:80px;display:inline-block"></div>';
+            html += '<div class="sidebar-detail-row"><span class="detail-label">Type</span>';
+            html += '<select id="cable-edit-type" class="form-select form-select-sm" style="width:140px;display:inline-block">';
+            html += '<option value=""' + (!d.cable_type ? ' selected' : '') + '>\u2014</option>';
+            Object.keys(CABLE_TYPE_LABELS).forEach(function (k) {
+                html += '<option value="' + k + '"' + (d.cable_type === k ? ' selected' : '') + '>' + CABLE_TYPE_LABELS[k] + '</option>';
+            });
+            html += '</select></div>';
+            html += '<div class="sidebar-detail-row"><span class="detail-label">' + (isCopperType(d.cable_type) ? 'Pairs' : 'Fibers') + '</span>';
+            html += '<input type="number" id="cable-edit-fibers" class="form-control form-control-sm" value="' + d.fiber_count + '" min="0" style="width:80px;display:inline-block"></div>';
             html += '<div class="sidebar-detail-row"><span class="detail-label">Status</span>';
             html += '<select id="cable-edit-status" class="form-select form-select-sm" style="width:140px;display:inline-block">';
             ['planned', 'in_progress', 'active', 'inactive'].forEach(function (s) {
@@ -1289,19 +1379,23 @@
             if (saveBtn) {
                 saveBtn.addEventListener('click', function () {
                     var newLabel = document.getElementById('cable-edit-label').value;
-                    var newFibers = parseInt(document.getElementById('cable-edit-fibers').value) || 12;
+                    var newType = document.getElementById('cable-edit-type').value;
+                    var newFibersVal = parseInt(document.getElementById('cable-edit-fibers').value);
+                    var newFibers = isNaN(newFibersVal) ? 0 : newFibersVal;
                     var newStatus = document.getElementById('cable-edit-status').value;
                     var newColor = (colorAuto && colorAuto.checked) ? '' : (colorInput ? colorInput.value : '');
                     var newWeight = weightSlider ? parseInt(weightSlider.value) : 3;
 
                     apiRequest(cableApiUrl + d.id + '/', 'PATCH', {
                         label: newLabel,
+                        cable_type: newType,
                         fiber_count: newFibers,
                         status: newStatus,
                         color: newColor,
                         weight: newWeight
                     }).then(function () {
                         d.label = newLabel;
+                        d.cable_type = newType;
                         d.fiber_count = newFibers;
                         d.status = newStatus;
                         d.color = newColor;
@@ -1312,9 +1406,12 @@
                         if (cableItem.polyline) {
                             var displayColor = getCableDisplayColor(d);
                             cableItem.polyline.setStyle({ color: displayColor, weight: newWeight });
-                            var tooltip = (newLabel || 'Cable #' + d.id) + ' (' + newFibers + 'F)';
+                            var tParts = [newLabel || 'Cable #' + d.id];
+                            var tType = getCableTypeLabel(newType);
+                            var tCount = formatCableCount(newType, newFibers);
+                            if (tType || tCount) tParts.push('(' + [tType, tCount].filter(Boolean).join(' \u00b7 ') + ')');
                             cableItem.polyline.unbindTooltip();
-                            cableItem.polyline.bindTooltip(tooltip, { sticky: true });
+                            cableItem.polyline.bindTooltip(tParts.join(' '), { sticky: true });
                         }
                         // Update path label
                         removeCableLabel(cableItem);
@@ -1345,7 +1442,7 @@
                         if (idx !== -1) allCableItems.splice(idx, 1);
                         selectedCable = null;
                         buildCableSidebar();
-                        showDetail(null);
+                        showListPanel();
                     }).catch(function (err) {
                         console.error('Failed to delete cable:', err);
                         alert('Error: ' + err.message);
@@ -1555,9 +1652,9 @@
             cablesSection = document.createElement('div');
             cablesSection.id = 'sidebar-cables-section';
             cablesSection.className = 'sidebar-cables-section';
-            // Insert before the detail panel
-            if (sidebarDetail && sidebarDetail.parentNode) {
-                sidebarDetail.parentNode.insertBefore(cablesSection, sidebarDetail);
+            // Append to the list panel
+            if (panelList) {
+                panelList.appendChild(cablesSection);
             }
         }
 
@@ -1577,7 +1674,10 @@
             html += '<span class="sidebar-tile-dot" style="background:' + getCableDisplayColor(d) + ';border-radius:2px">' +
                 '<i class="mdi mdi-vector-polyline" style="font-size:10px;color:#fff"></i></span>';
             html += '<span class="sidebar-tile-label">' + escHtml(d.label || 'Cable #' + d.id) + '</span>';
-            html += '<span class="sidebar-tile-ip" style="font-size:10px;color:var(--fp-text-muted,#6c757d)">' + d.fiber_count + 'F</span>';
+            var sidebarType = getCableTypeLabel(d.cable_type);
+            var sidebarCount = formatCableCount(d.cable_type, d.fiber_count);
+            var sidebarMeta = [sidebarType, sidebarCount].filter(Boolean).join(' \u00b7 ');
+            html += '<span class="sidebar-tile-ip" style="font-size:10px;color:var(--fp-text-muted,#6c757d)">' + escHtml(sidebarMeta || '') + '</span>';
             html += '</div>';
         });
 
@@ -1838,6 +1938,41 @@
         });
     }
 
+    /* ── Sidebar panel switching ──────────────────────────────────── */
+    function showListPanel() {
+        if (panelList)   panelList.classList.remove('d-none');
+        if (panelDetail) panelDetail.classList.add('d-none');
+
+        // Deselect current item/cable
+        if (selectedItem && selectedItem.sidebarEl) {
+            selectedItem.sidebarEl.classList.remove('active');
+        }
+        selectedItem = null;
+        if (selectedCable) {
+            clearVertexEditing(selectedCable);
+            if (selectedCable.polyline) {
+                selectedCable.polyline.setStyle({
+                    weight: getCableDisplayWeight(selectedCable.data),
+                    color: getCableDisplayColor(selectedCable.data)
+                });
+            }
+            if (selectedCable.sidebarEl) selectedCable.sidebarEl.classList.remove('active');
+            selectedCable = null;
+        }
+    }
+
+    function showDetailPanel() {
+        if (panelList)   panelList.classList.add('d-none');
+        if (panelDetail) panelDetail.classList.remove('d-none');
+    }
+
+    // Back button
+    if (detailBackBtn) {
+        detailBackBtn.addEventListener('click', function () {
+            showListPanel();
+        });
+    }
+
     /* ── Detail Panel ─────────────────────────────────────────────── */
     function selectItem(item) {
         // Deselect previous
@@ -1847,22 +1982,14 @@
         selectedItem = item;
         if (item.sidebarEl) {
             item.sidebarEl.classList.add('active');
-            item.sidebarEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
         }
         showDetail(item);
+        showDetailPanel();
     }
 
     function showDetail(item) {
         if (!sidebarDetail) return;
-
-        if (!item) {
-            sidebarDetail.innerHTML =
-                '<div class="sidebar-empty-state">' +
-                    '<i class="mdi mdi-cursor-default-click-outline"></i>' +
-                    '<span>Click a marker to see details</span>' +
-                '</div>';
-            return;
-        }
+        if (!item) return;
 
         var html = '';
 
@@ -1965,9 +2092,15 @@
                 connectedCables.forEach(function (ci, idx) {
                     var cd = ci.data;
                     var role = cd.start_marker_id === d.id ? 'start' : 'end';
-                    html += '<div class="connected-cable-row">';
+                    html += '<div class="connected-cable-row connected-cable-clickable" data-connected-cable-idx="' + idx + '">';
                     html += '<span class="cable-color-swatch" style="background:' + getCableDisplayColor(cd) + '"></span>';
                     html += '<span class="connected-cable-label">' + escHtml(cd.label || 'Cable #' + cd.id) + '</span>';
+                    var ccType = getCableTypeLabel(cd.cable_type);
+                    var ccCount = formatCableCount(cd.cable_type, cd.fiber_count);
+                    var ccMeta = [ccType, ccCount].filter(Boolean).join(' \u00b7 ');
+                    if (ccMeta) {
+                        html += '<span class="connected-cable-meta" style="font-size:10px;color:var(--fp-text-muted,#6c757d)">' + escHtml(ccMeta) + '</span>';
+                    }
                     html += '<span class="connected-cable-role">' + role + '</span>';
                     if (editMode) {
                         html += '<button class="btn btn-xs btn-outline-warning detach-cable-btn" data-cable-id="' + cd.id + '" data-role="' + role + '" title="Detach">' +
@@ -2083,10 +2216,26 @@
                     selectedItem = null;
                     buildToggleButtons();
                     buildSidebarList();
-                    showDetail(null);
+                    showListPanel();
                 }).catch(function (err) {
                     console.error('Failed to delete marker:', err);
                     alert('Failed to delete: ' + err.message);
+                });
+            });
+        }
+
+        // Wire up clickable connected cable rows
+        if (item.kind === 'mapmarker') {
+            var connectedCables = getConnectedCables(item.data.id);
+            var clickableCables = sidebarDetail.querySelectorAll('.connected-cable-clickable');
+            clickableCables.forEach(function (el) {
+                el.addEventListener('click', function (e) {
+                    // Don't navigate if clicking the detach button
+                    if (e.target.closest('.detach-cable-btn')) return;
+                    var idx = parseInt(el.getAttribute('data-connected-cable-idx'));
+                    if (connectedCables[idx]) {
+                        selectCable(connectedCables[idx]);
+                    }
                 });
             });
         }
@@ -2138,23 +2287,16 @@
                 }).then(function () {
                     // Remove from map
                     if (item.marker) map.removeLayer(item.marker);
-                    // Add back to unplaced list
+                    // Add back to unplaced list and rebuild chips
                     unplacedTiles.push(item.data);
-                    if (tilesSelect) {
-                        populateSelect(tilesSelect, unplacedTiles, function (t) {
-                            var suffix = '';
-                            if (t.floorplan_name) suffix = ' [' + t.floorplan_name + ']';
-                            else if (t.site_name) suffix = ' [' + t.site_name + ']';
-                            return t.label + ' (' + t.type + ')' + suffix;
-                        });
-                    }
+                    buildPlaceChips();
                     // Remove from sidebar
                     var idx = allItems.indexOf(item);
                     if (idx !== -1) allItems.splice(idx, 1);
                     selectedItem = null;
                     buildToggleButtons();
                     buildSidebarList();
-                    showDetail(null);
+                    showListPanel();
                 }).catch(function (err) {
                     console.error('Failed to remove tile from map:', err);
                     alert('Failed to remove: ' + err.message);
@@ -2261,59 +2403,14 @@
     }
 
     /* ══════════════════════════════════════════════════════════════════
-       PLACEMENT MODE (edit only)
+       PLACEMENT MODE — Drag-and-Drop Chips (edit only)
        ══════════════════════════════════════════════════════════════════ */
     if (!canEdit) return;
 
-    // Populate unplaced dropdowns
-    function populateSelect(selectEl, items, labelFn) {
-        while (selectEl.options.length > 1) selectEl.remove(1);
-        items.forEach(function (item) {
-            var opt = document.createElement('option');
-            opt.value = item.id;
-            opt.textContent = labelFn(item);
-            selectEl.appendChild(opt);
-        });
-    }
-
-    populateSelect(sitesSelect, unplacedSites, function (s) {
-        return s.name + (s.region ? ' (' + s.region + ')' : '');
-    });
-    populateSelect(locationsSelect, unplacedLocations, function (l) {
-        return l.name + (l.site_name ? ' (' + l.site_name + ')' : '');
-    });
-    populateSelect(tilesSelect, unplacedTiles, function (t) {
-        var suffix = '';
-        if (t.floorplan_name) suffix = ' [' + t.floorplan_name + ']';
-        else if (t.site_name) suffix = ' [' + t.site_name + ']';
-        return t.label + ' (' + t.type + ')' + suffix;
-    });
-
-    // Enable/disable buttons based on selection
-    if (sitesSelect) {
-        sitesSelect.addEventListener('change', function () {
-            placeSiteBtn.disabled = !sitesSelect.value;
-        });
-    }
-    if (locationsSelect) {
-        locationsSelect.addEventListener('change', function () {
-            placeLocBtn.disabled = !locationsSelect.value;
-        });
-    }
-    if (tilesSelect) {
-        tilesSelect.addEventListener('change', function () {
-            placeTileBtn.disabled = !tilesSelect.value;
-        });
-    }
-
-    function enterPlacementMode(mode, item) {
-        placementMode = mode;
-        placementItem = item;
-        container.classList.add('placing');
-        var label = item.name || item.label || mode;
-        statusEl.textContent = 'Click the map to place "' + label + '"...';
-        cancelBtn.classList.remove('d-none');
-    }
+    /* ── Drag state ─────────────────────────────────────────────── */
+    var dragMode = null;      // 'site' | 'location' | 'tile' | 'marker'
+    var dragItem = null;      // data object being dragged
+    var ghostMarker = null;   // L.marker following cursor
 
     function exitPlacementMode() {
         placementMode = null;
@@ -2323,71 +2420,502 @@
         if (cancelBtn) cancelBtn.classList.add('d-none');
     }
 
-    // Place Site button
-    if (placeSiteBtn) {
-        placeSiteBtn.addEventListener('click', function () {
-            var val = sitesSelect.value;
-            if (!val) return;
-            var site = null;
-            for (var i = 0; i < unplacedSites.length; i++) {
-                if (String(unplacedSites[i].id) === val) { site = unplacedSites[i]; break; }
-            }
-            if (site) enterPlacementMode('site', site);
-        });
-    }
+    /* ── Build "Place on Map" chips (sites + locations only) ────── */
+    function buildPlaceChips() {
+        if (!chipTrayPlace) return;
+        chipTrayPlace.innerHTML = '';
 
-    // Place Location button
-    if (placeLocBtn) {
-        placeLocBtn.addEventListener('click', function () {
-            var val = locationsSelect.value;
-            if (!val) return;
-            var loc = null;
-            for (var i = 0; i < unplacedLocations.length; i++) {
-                if (String(unplacedLocations[i].id) === val) { loc = unplacedLocations[i]; break; }
-            }
-            if (loc) enterPlacementMode('location', loc);
-        });
-    }
+        var hasAny = false;
 
-    // Place Tile button
-    if (placeTileBtn) {
-        placeTileBtn.addEventListener('click', function () {
-            var val = tilesSelect.value;
-            if (!val) return;
-            var tile = null;
-            for (var i = 0; i < unplacedTiles.length; i++) {
-                if (String(unplacedTiles[i].id) === val) { tile = unplacedTiles[i]; break; }
-            }
-            if (tile) {
-                tile.name = tile.label || tile.type;
-                enterPlacementMode('tile', tile);
-            }
-        });
-    }
-
-    // Add Marker button → enters placement mode for new marker
-    if (addMarkerBtn) {
-        addMarkerBtn.addEventListener('click', function () {
-            var mType = newMarkerType.value || 'camera';
-            var mLabel = newMarkerLabel.value.trim();
-            enterPlacementMode('marker', {
-                marker_type: mType,
-                label: mLabel,
-                name: mLabel || (TILE_CONFIG[mType] ? TILE_CONFIG[mType].label : mType)
+        // Sites
+        unplacedSites.forEach(function (s) {
+            hasAny = true;
+            var chip = makeChip('#0d6efd', 'mdi-office-building-outline', s.name + (s.region ? ' (' + s.region + ')' : ''));
+            chip.addEventListener('mousedown', function (e) {
+                if (e.button !== 0) return;
+                startChipDrag('site', s, e);
             });
+            chipTrayPlace.appendChild(chip);
+        });
+
+        // Locations
+        unplacedLocations.forEach(function (l) {
+            hasAny = true;
+            var chip = makeChip('#1a8a7a', 'mdi-map-marker-outline', l.name + (l.site_name ? ' (' + l.site_name + ')' : ''));
+            chip.addEventListener('mousedown', function (e) {
+                if (e.button !== 0) return;
+                startChipDrag('location', l, e);
+            });
+            chipTrayPlace.appendChild(chip);
+        });
+
+        if (!hasAny && unplacedTiles.length === 0) {
+            var empty = document.createElement('span');
+            empty.className = 'chip-tray-empty text-muted small';
+            empty.textContent = 'All items placed';
+            chipTrayPlace.appendChild(empty);
+        }
+
+        // Update tile search placeholder with count
+        updateTileSearchPlaceholder();
+    }
+
+    function makeChip(color, iconClass, label) {
+        var chip = document.createElement('span');
+        chip.className = 'place-chip';
+        chip.innerHTML =
+            '<span class="chip-dot" style="background:' + color + '">' +
+                '<i class="mdi ' + iconClass + '"></i>' +
+            '</span>' +
+            '<span class="chip-label">' + escHtml(label) + '</span>';
+        chip.title = label;
+        return chip;
+    }
+
+    /* ── Tile search dropdown (for 1000s of tiles) ─────────────── */
+    function updateTileSearchPlaceholder() {
+        if (!tileSearchInput) return;
+        var row = document.getElementById('tile-place-row');
+        if (unplacedTiles.length === 0) {
+            if (row) row.style.display = 'none';
+        } else {
+            if (row) row.style.display = '';
+            tileSearchInput.placeholder = 'Search ' + unplacedTiles.length + ' unplaced tiles...';
+        }
+    }
+
+    function buildTileSearchResults(query) {
+        if (!tileSearchResults) return;
+        tileSearchResults.innerHTML = '';
+
+        var q = (query || '').toLowerCase().trim();
+        if (!q) {
+            tileSearchResults.classList.remove('open');
+            return;
+        }
+
+        var matches = [];
+        for (var i = 0; i < unplacedTiles.length && matches.length < 30; i++) {
+            var t = unplacedTiles[i];
+            var text = ((t.label || '') + ' ' + (t.type || '') + ' ' + (t.floorplan_name || '') + ' ' + (t.site_name || '')).toLowerCase();
+            if (text.indexOf(q) !== -1) matches.push(t);
+        }
+
+        if (matches.length === 0) {
+            tileSearchResults.innerHTML = '<div class="tile-search-empty">No matching tiles</div>';
+            tileSearchResults.classList.add('open');
+            return;
+        }
+
+        matches.forEach(function (t) {
+            var cfg = TILE_CONFIG[t.type] || { color: '#888', icon: 'mdi-circle' };
+            var suffix = t.floorplan_name || t.site_name || '';
+
+            var row = document.createElement('div');
+            row.className = 'tile-search-item';
+            row.innerHTML =
+                '<span class="chip-dot" style="background:' + cfg.color + '">' +
+                    '<i class="mdi ' + cfg.icon + '"></i>' +
+                '</span>' +
+                '<span class="tile-search-label">' + escHtml(t.label || t.type) + '</span>' +
+                (suffix ? '<span class="tile-search-meta">' + escHtml(suffix) + '</span>' : '');
+
+            row.addEventListener('mousedown', function (e) {
+                if (e.button !== 0) return;
+                tileSearchResults.classList.remove('open');
+                tileSearchInput.value = '';
+                startChipDrag('tile', t, e);
+            });
+
+            tileSearchResults.appendChild(row);
+        });
+
+        tileSearchResults.classList.add('open');
+    }
+
+    if (tileSearchInput) {
+        tileSearchInput.addEventListener('input', function () {
+            buildTileSearchResults(tileSearchInput.value);
+        });
+        tileSearchInput.addEventListener('focus', function () {
+            if (tileSearchInput.value.trim()) {
+                buildTileSearchResults(tileSearchInput.value);
+            }
+        });
+        // Close dropdown on click outside
+        document.addEventListener('mousedown', function (e) {
+            if (tileSearchResults && !tileSearchResults.contains(e.target) && e.target !== tileSearchInput) {
+                tileSearchResults.classList.remove('open');
+            }
         });
     }
 
-    // Cancel
+    /* ── Build "Create" chips (one per marker type) ────────────── */
+    function buildCreateChips() {
+        if (!chipTrayCreate) return;
+        chipTrayCreate.innerHTML = '';
+
+        TYPE_CONFIGS_RAW.forEach(function (tc) {
+            var cfg = TILE_CONFIG[tc.slug] || { color: '#888', icon: 'mdi-circle' };
+            var chip = document.createElement('span');
+            chip.className = 'create-chip';
+            chip.style.background = cfg.color;
+            chip.innerHTML = '<i class="mdi ' + cfg.icon + '"></i>';
+            chip.title = tc.name + ' — drag to place';
+            chip.addEventListener('mousedown', function (e) {
+                if (e.button !== 0) return;
+                startChipDrag('marker', {
+                    marker_type: tc.slug,
+                    label: '',
+                    name: tc.name
+                }, e);
+            });
+            chipTrayCreate.appendChild(chip);
+        });
+    }
+
+    /* ── Drag start / move / end ───────────────────────────────── */
+    function startChipDrag(mode, item, mouseEvent) {
+        if (cableDrawing) return; // don't start drag during cable drawing
+        dragMode = mode;
+        dragItem = item;
+
+        // Prevent text selection
+        mouseEvent.preventDefault();
+
+        // Build a ghost icon matching the type
+        var ghostHtml, ghostSize, ghostAnchor;
+        if (mode === 'site') {
+            ghostHtml = '<div class="site-marker--office"><i class="mdi mdi-office-building-outline"></i></div>';
+            ghostSize = [32, 32]; ghostAnchor = [16, 16];
+        } else if (mode === 'location') {
+            ghostHtml = '<div class="site-marker--location"><i class="mdi mdi-map-marker-outline"></i></div>';
+            ghostSize = [22, 22]; ghostAnchor = [11, 11];
+        } else if (mode === 'tile') {
+            var cfg = TILE_CONFIG[item.type] || { color: '#888', icon: 'mdi-circle' };
+            ghostHtml = '<div class="site-marker--tile" style="background:' + cfg.color + '"><i class="mdi ' + cfg.icon + '"></i></div>';
+            ghostSize = [20, 20]; ghostAnchor = [10, 10];
+        } else { // marker
+            var cfg = TILE_CONFIG[item.marker_type] || { color: '#888', icon: 'mdi-circle' };
+            ghostHtml = '<div class="site-marker--tile" style="background:' + cfg.color + '"><i class="mdi ' + cfg.icon + '"></i></div>';
+            ghostSize = [20, 20]; ghostAnchor = [10, 10];
+        }
+
+        var ghostIcon = L.divIcon({
+            className: 'drag-ghost-marker',
+            html: ghostHtml,
+            iconSize: ghostSize,
+            iconAnchor: ghostAnchor
+        });
+
+        // Place ghost at map center initially (will update on first move)
+        ghostMarker = L.marker(map.getCenter(), {
+            icon: ghostIcon,
+            interactive: false,
+            zIndexOffset: 10000
+        }).addTo(map);
+
+        container.classList.add('drag-active');
+        map.dragging.disable();
+
+        var label = item.name || item.label || mode;
+        if (statusEl) statusEl.textContent = 'Drop "' + label + '" on the map...';
+        if (cancelBtn) cancelBtn.classList.remove('d-none');
+
+        document.addEventListener('mousemove', onDragMove);
+        document.addEventListener('mouseup', onDragEnd);
+    }
+
+    function onDragMove(e) {
+        if (!ghostMarker) return;
+
+        // Convert page coords to map container coords
+        var rect = container.getBoundingClientRect();
+        var x = e.clientX - rect.left;
+        var y = e.clientY - rect.top;
+
+        // Only update if cursor is over the map
+        if (x >= 0 && y >= 0 && x <= rect.width && y <= rect.height) {
+            var latlng = map.containerPointToLatLng(L.point(x, y));
+            ghostMarker.setLatLng(latlng);
+
+            // Cable highlight for marker drops
+            if (dragMode === 'marker') {
+                var near = findNearestCableAtPoint(latlng, 30);
+                if (near !== hoveredCable) {
+                    if (hoveredCable && hoveredCable.polyline) {
+                        var prevW = getCableDisplayWeight(hoveredCable.data);
+                        hoveredCable.polyline.setStyle({ weight: prevW, dashArray: null });
+                    }
+                    hoveredCable = near;
+                    if (hoveredCable && hoveredCable.polyline) {
+                        hoveredCable.polyline.setStyle({ weight: 6, dashArray: '8 4' });
+                    }
+                }
+            }
+        }
+    }
+
+    function onDragEnd(e) {
+        document.removeEventListener('mousemove', onDragMove);
+        document.removeEventListener('mouseup', onDragEnd);
+
+        // Re-enable map dragging
+        map.dragging.enable();
+        container.classList.remove('drag-active');
+
+        // Was cursor over the map?
+        var rect = container.getBoundingClientRect();
+        var x = e.clientX - rect.left;
+        var y = e.clientY - rect.top;
+        var overMap = (x >= 0 && y >= 0 && x <= rect.width && y <= rect.height);
+
+        // Remove ghost
+        if (ghostMarker) {
+            map.removeLayer(ghostMarker);
+            ghostMarker = null;
+        }
+
+        if (!overMap || !dragMode || !dragItem) {
+            // Cancelled — dropped outside map
+            cancelDrag();
+            return;
+        }
+
+        var latlng = map.containerPointToLatLng(L.point(x, y));
+        var lat = latlng.lat.toFixed(6);
+        var lng = latlng.lng.toFixed(6);
+        var mode = dragMode;
+        var item = dragItem;
+        dragMode = null;
+        dragItem = null;
+
+        if (statusEl) statusEl.textContent = 'Saving...';
+
+        if (mode === 'site') {
+            apiRequest(siteApiUrl + item.id + '/', 'PATCH', {
+                latitude: lat,
+                longitude: lng
+            }).then(function () {
+                item.latitude = parseFloat(lat);
+                item.longitude = parseFloat(lng);
+                createSiteMarker(item);
+                unplacedSites = unplacedSites.filter(function (s) { return s.id !== item.id; });
+                exitPlacementMode();
+                buildPlaceChips();
+                buildToggleButtons();
+                buildSidebarList();
+                setEditMode(editMode);
+            }).catch(function (err) {
+                console.error('Failed to place site:', err);
+                if (statusEl) statusEl.textContent = 'Error: ' + err.message;
+            });
+
+        } else if (mode === 'location') {
+            apiRequest(locCoordsApiUrl, 'POST', {
+                location: item.id,
+                latitude: lat,
+                longitude: lng
+            }).then(function (data) {
+                var locData = {
+                    id: data.id,
+                    location_id: item.id,
+                    name: item.name,
+                    site_name: item.site_name || '',
+                    latitude: parseFloat(lat),
+                    longitude: parseFloat(lng),
+                    url: ''
+                };
+                createLocationMarker(locData);
+                unplacedLocations = unplacedLocations.filter(function (l) { return l.id !== item.id; });
+                exitPlacementMode();
+                buildPlaceChips();
+                buildToggleButtons();
+                buildSidebarList();
+                setEditMode(editMode);
+            }).catch(function (err) {
+                console.error('Failed to place location:', err);
+                if (statusEl) statusEl.textContent = 'Error: ' + err.message;
+            });
+
+        } else if (mode === 'tile') {
+            apiRequest(tileApiUrl + item.id + '/', 'PATCH', {
+                latitude: lat,
+                longitude: lng
+            }).then(function () {
+                item.latitude = parseFloat(lat);
+                item.longitude = parseFloat(lng);
+                createTileMarker(item);
+                unplacedTiles = unplacedTiles.filter(function (t) { return t.id !== item.id; });
+                exitPlacementMode();
+                buildPlaceChips();
+                buildToggleButtons();
+                buildSidebarList();
+                setEditMode(editMode);
+            }).catch(function (err) {
+                console.error('Failed to place tile:', err);
+                if (statusEl) statusEl.textContent = 'Error: ' + err.message;
+            });
+
+        } else if (mode === 'marker') {
+            // Check if dropping on a cable (split)
+            var targetCable = findNearestCableAtPoint(latlng, 30);
+
+            // Clear cable highlight
+            if (hoveredCable && hoveredCable.polyline) {
+                var prevW = getCableDisplayWeight(hoveredCable.data);
+                hoveredCable.polyline.setStyle({ weight: prevW, dashArray: null });
+                hoveredCable = null;
+            }
+
+            // Show label prompt popup, then create
+            showLabelPrompt(item.name || item.marker_type, function (labelText) {
+                createMarkerAtPosition(lat, lng, item.marker_type, labelText, targetCable);
+            }, function () {
+                // Cancelled
+                exitPlacementMode();
+            });
+            return; // don't exit placement yet — prompt is open
+        }
+    }
+
+    /* ── Label prompt popup ──────────────────────────────────────── */
+    function showLabelPrompt(typeName, onConfirm, onCancel) {
+        var overlay = document.createElement('div');
+        overlay.className = 'label-prompt-overlay';
+        overlay.innerHTML =
+            '<div class="label-prompt-box">' +
+                '<div class="label-prompt-title">New ' + escHtml(typeName) + '</div>' +
+                '<input type="text" class="label-prompt-input" placeholder="Label (optional)" autofocus>' +
+                '<div class="label-prompt-actions">' +
+                    '<button class="btn btn-sm btn-outline-secondary label-prompt-cancel">Cancel</button>' +
+                    '<button class="btn btn-sm btn-primary label-prompt-ok">Place</button>' +
+                '</div>' +
+            '</div>';
+        document.body.appendChild(overlay);
+
+        var input = overlay.querySelector('.label-prompt-input');
+        var okBtn = overlay.querySelector('.label-prompt-ok');
+        var cancelBtn2 = overlay.querySelector('.label-prompt-cancel');
+
+        function confirm() {
+            var val = input.value.trim();
+            cleanup();
+            onConfirm(val);
+        }
+
+        function cancel() {
+            cleanup();
+            if (onCancel) onCancel();
+        }
+
+        function cleanup() {
+            document.body.removeChild(overlay);
+        }
+
+        okBtn.addEventListener('click', confirm);
+        cancelBtn2.addEventListener('click', cancel);
+        input.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter') confirm();
+            if (e.key === 'Escape') cancel();
+        });
+        overlay.addEventListener('mousedown', function (e) {
+            if (e.target === overlay) cancel();
+        });
+
+        // Focus input after a tick (autofocus doesn't always work in dynamic elements)
+        setTimeout(function () { input.focus(); }, 50);
+    }
+
+    /* ── Create marker at position (called after label prompt) ── */
+    function createMarkerAtPosition(lat, lng, markerType, label, targetCable) {
+        if (statusEl) statusEl.textContent = 'Saving...';
+
+        var body = {
+            latitude: lat,
+            longitude: lng,
+            marker_type: markerType,
+            label: label || '',
+            status: 'active'
+        };
+
+        apiRequest(markerApiUrl, 'POST', body).then(function (data) {
+            var newMarkerData = {
+                id: data.id,
+                label: data.label || '',
+                type: data.marker_type,
+                status: data.status,
+                latitude: parseFloat(data.latitude),
+                longitude: parseFloat(data.longitude),
+                site_id: data.site ? data.site.id : null,
+                site_name: data.site ? data.site.display : '',
+                primary_ip: null,
+                fov_direction: data.fov_direction || 0,
+                fov_angle: data.fov_angle || 90,
+                fov_distance: data.fov_distance || 5,
+                assigned_object_type: null,
+                assigned_object_id: null,
+                assigned_object_name: null,
+                description: data.description || ''
+            };
+
+            var newItem = createMapMarker(newMarkerData);
+            exitPlacementMode();
+
+            if (targetCable) {
+                splitCableAtMarker(targetCable, data.id).then(function () {
+                    buildToggleButtons();
+                    buildSidebarList();
+                    buildCableSidebar();
+                    selectItem(newItem);
+                    setEditMode(editMode);
+                });
+            } else {
+                buildToggleButtons();
+                buildSidebarList();
+                selectItem(newItem);
+                setEditMode(editMode);
+            }
+        }).catch(function (err) {
+            console.error('Failed to create marker:', err);
+            if (statusEl) statusEl.textContent = 'Error: ' + err.message;
+        });
+    }
+
+    function cancelDrag() {
+        dragMode = null;
+        dragItem = null;
+        if (ghostMarker) {
+            map.removeLayer(ghostMarker);
+            ghostMarker = null;
+        }
+        container.classList.remove('drag-active');
+        if (statusEl) statusEl.textContent = '';
+        if (cancelBtn) cancelBtn.classList.add('d-none');
+        // Clear cable highlight
+        if (hoveredCable && hoveredCable.polyline) {
+            var prevW = getCableDisplayWeight(hoveredCable.data);
+            hoveredCable.polyline.setStyle({ weight: prevW, dashArray: null });
+            hoveredCable = null;
+        }
+    }
+
+    // Cancel button
     if (cancelBtn) {
-        cancelBtn.addEventListener('click', exitPlacementMode);
+        cancelBtn.addEventListener('click', function () {
+            if (cableDrawing) cancelCableDrawing();
+            else cancelDrag();
+            exitPlacementMode();
+        });
     }
 
     // ESC key
     document.addEventListener('keydown', function (e) {
         if (e.key === 'Escape') {
             if (cableDrawing) cancelCableDrawing();
+            else if (dragMode) cancelDrag();
             else if (placementMode) exitPlacementMode();
+            else if (panelDetail && !panelDetail.classList.contains('d-none')) showListPanel();
         }
         if (e.key === 'Enter' && cableDrawing) {
             finishCableDrawing();
@@ -2408,9 +2936,8 @@
         }
     });
 
-    // Map click → cable drawing or place item
+    // Map click → cable drawing only (placement now handled by drag)
     map.on('click', function (e) {
-        // Cable drawing mode: add point
         if (cableDrawing) {
             var clat = parseFloat(e.latlng.lat.toFixed(6));
             var clng = parseFloat(e.latlng.lng.toFixed(6));
@@ -2428,162 +2955,12 @@
             }
 
             if (statusEl) statusEl.textContent = cableDrawCoords.length + ' points. Double-click or Enter to finish.';
-            return;
-        }
-
-        if (!placementMode || !placementItem) return;
-
-        var lat = e.latlng.lat.toFixed(6);
-        var lng = e.latlng.lng.toFixed(6);
-        var item = placementItem;
-        var mode = placementMode;
-
-        statusEl.textContent = 'Saving...';
-
-        if (mode === 'site') {
-            apiRequest(siteApiUrl + item.id + '/', 'PATCH', {
-                latitude: lat,
-                longitude: lng
-            }).then(function () {
-                item.latitude = parseFloat(lat);
-                item.longitude = parseFloat(lng);
-                createSiteMarker(item);
-
-                unplacedSites = unplacedSites.filter(function (s) { return s.id !== item.id; });
-                populateSelect(sitesSelect, unplacedSites, function (s) {
-                    return s.name + (s.region ? ' (' + s.region + ')' : '');
-                });
-                placeSiteBtn.disabled = true;
-                exitPlacementMode();
-                buildToggleButtons();
-                buildSidebarList();
-                // Re-apply edit mode to new marker
-                setEditMode(editMode);
-            }).catch(function (err) {
-                console.error('Failed to place site:', err);
-                statusEl.textContent = 'Error: ' + err.message;
-            });
-
-        } else if (mode === 'location') {
-            apiRequest(locCoordsApiUrl, 'POST', {
-                location: item.id,
-                latitude: lat,
-                longitude: lng
-            }).then(function (data) {
-                var locData = {
-                    id: data.id,
-                    location_id: item.id,
-                    name: item.name,
-                    site_name: item.site_name || '',
-                    latitude: parseFloat(lat),
-                    longitude: parseFloat(lng),
-                    url: ''
-                };
-                createLocationMarker(locData);
-
-                unplacedLocations = unplacedLocations.filter(function (l) { return l.id !== item.id; });
-                populateSelect(locationsSelect, unplacedLocations, function (l) {
-                    return l.name + (l.site_name ? ' (' + l.site_name + ')' : '');
-                });
-                placeLocBtn.disabled = true;
-                exitPlacementMode();
-                buildToggleButtons();
-                buildSidebarList();
-                setEditMode(editMode);
-            }).catch(function (err) {
-                console.error('Failed to place location:', err);
-                statusEl.textContent = 'Error: ' + err.message;
-            });
-
-        } else if (mode === 'tile') {
-            apiRequest(tileApiUrl + item.id + '/', 'PATCH', {
-                latitude: lat,
-                longitude: lng
-            }).then(function () {
-                item.latitude = parseFloat(lat);
-                item.longitude = parseFloat(lng);
-                createTileMarker(item);
-
-                unplacedTiles = unplacedTiles.filter(function (t) { return t.id !== item.id; });
-                populateSelect(tilesSelect, unplacedTiles, function (t) {
-                    var suffix = '';
-                    if (t.floorplan_name) suffix = ' [' + t.floorplan_name + ']';
-                    else if (t.site_name) suffix = ' [' + t.site_name + ']';
-                    return t.label + ' (' + t.type + ')' + suffix;
-                });
-                placeTileBtn.disabled = true;
-                exitPlacementMode();
-                buildToggleButtons();
-                buildSidebarList();
-                setEditMode(editMode);
-            }).catch(function (err) {
-                console.error('Failed to place tile:', err);
-                statusEl.textContent = 'Error: ' + err.message;
-            });
-
-        } else if (mode === 'marker') {
-            // Check if dropping on a cable (split)
-            var targetCable = findNearestCableAtPoint(e.latlng, 30);
-
-            // Create a NEW MapMarker via POST
-            var body = {
-                latitude: lat,
-                longitude: lng,
-                marker_type: item.marker_type,
-                label: item.label || '',
-                status: 'active'
-            };
-
-            apiRequest(markerApiUrl, 'POST', body).then(function (data) {
-                var newMarkerData = {
-                    id: data.id,
-                    label: data.label || '',
-                    type: data.marker_type,
-                    status: data.status,
-                    latitude: parseFloat(data.latitude),
-                    longitude: parseFloat(data.longitude),
-                    site_id: data.site ? data.site.id : null,
-                    site_name: data.site ? data.site.display : '',
-                    primary_ip: null,
-                    fov_direction: data.fov_direction || 0,
-                    fov_angle: data.fov_angle || 90,
-                    fov_distance: data.fov_distance || 5,
-                    assigned_object_type: null,
-                    assigned_object_id: null,
-                    assigned_object_name: null,
-                    description: data.description || ''
-                };
-
-                var newItem = createMapMarker(newMarkerData);
-                exitPlacementMode();
-
-                // If we dropped on a cable, split it
-                if (targetCable) {
-                    if (hoveredCable && hoveredCable.polyline) {
-                        hoveredCable.polyline.setStyle({ weight: 3, dashArray: null });
-                        hoveredCable = null;
-                    }
-                    splitCableAtMarker(targetCable, data.id).then(function () {
-                        buildToggleButtons();
-                        buildSidebarList();
-                        buildCableSidebar();
-                        selectItem(newItem);
-                        setEditMode(editMode);
-                    });
-                } else {
-                    buildToggleButtons();
-                    buildSidebarList();
-                    selectItem(newItem);
-                    setEditMode(editMode);
-                }
-                // Clear label input
-                if (newMarkerLabel) newMarkerLabel.value = '';
-            }).catch(function (err) {
-                console.error('Failed to create marker:', err);
-                statusEl.textContent = 'Error: ' + err.message;
-            });
         }
     });
+
+    // Build chip trays on init
+    buildPlaceChips();
+    buildCreateChips();
 
     /* ── Split cable at marker (POST to backend) ──────────────────── */
     function splitCableAtMarker(cableItem, markerId) {

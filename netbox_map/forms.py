@@ -13,6 +13,7 @@ from utilities.forms.fields import (
 )
 from utilities.forms.rendering import FieldSet
 from .models import FloorPlan, FloorPlanTile, CustomMarkerType, MapMarker, MapSettings, CablePath, ASSIGNABLE_MODELS
+from dcim.choices import CableTypeChoices
 from .choices import (
     FloorPlanTileTypeChoices, FloorPlanTileStatusChoices,
     CablePathStatusChoices,
@@ -745,7 +746,7 @@ class CablePathForm(NetBoxModelForm):
 
     fieldsets = (
         FieldSet(
-            'label', 'status', 'fiber_count', 'tags',
+            'label', 'status', 'cable_type', 'fiber_count', 'tags',
             name=_('Cable Path')
         ),
         FieldSet(
@@ -761,7 +762,7 @@ class CablePathForm(NetBoxModelForm):
     class Meta:
         model = CablePath
         fields = [
-            'label', 'status', 'fiber_count',
+            'label', 'status', 'cable_type', 'fiber_count',
             'color', 'weight',
             'start_marker', 'end_marker',
             'path_coordinates', 'tags',
@@ -779,9 +780,14 @@ class CablePathFilterForm(NetBoxModelFilterSetForm):
         required=False,
         label=_('Status')
     )
+    cable_type = forms.MultipleChoiceField(
+        choices=CableTypeChoices,
+        required=False,
+        label=_('Cable Type')
+    )
 
     fieldsets = (
-        FieldSet('status'),
+        FieldSet('status', 'cable_type'),
     )
 
 
@@ -791,6 +797,11 @@ class CablePathBulkEditForm(NetBoxModelBulkEditForm):
         required=False,
         label=_('Status'),
     )
+    cable_type = forms.ChoiceField(
+        choices=CableTypeChoices,
+        required=False,
+        label=_('Cable Type'),
+    )
     fiber_count = forms.IntegerField(required=False, label=_('Fiber Count'))
 
     model = CablePath
@@ -799,12 +810,18 @@ class CablePathBulkEditForm(NetBoxModelBulkEditForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['status'].choices = [('', '---------')] + list(CablePathStatusChoices)
+        self.fields['cable_type'].choices = [('', '---------')] + list(CableTypeChoices)
 
 
 class CablePathImportForm(NetBoxModelImportForm):
     status = CSVChoiceField(
         choices=CablePathStatusChoices,
         help_text=_('Status'),
+    )
+    cable_type = CSVChoiceField(
+        choices=CableTypeChoices,
+        required=False,
+        help_text=_('Cable type (e.g. cat6a, smf-os2)'),
     )
     start_marker = CSVModelChoiceField(
         queryset=MapMarker.objects.all(),
@@ -822,7 +839,7 @@ class CablePathImportForm(NetBoxModelImportForm):
     class Meta:
         model = CablePath
         fields = (
-            'label', 'status', 'fiber_count', 'start_marker', 'end_marker',
+            'label', 'status', 'cable_type', 'fiber_count', 'start_marker', 'end_marker',
         )
 
 

@@ -236,6 +236,7 @@ class SiteMapView(LoginRequiredMixin, View):
                 'label': cp.label,
                 'path_coordinates': cp.path_coordinates,
                 'fiber_count': cp.fiber_count,
+                'cable_type': cp.cable_type,
                 'status': cp.status,
                 'status_color': cp.get_status_color(),
                 'color': cp.color,

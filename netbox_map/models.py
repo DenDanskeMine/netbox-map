@@ -8,6 +8,7 @@ from django.utils.text import slugify
 from django.utils.translation import gettext_lazy as _
 
 from netbox.models import NetBoxModel
+from dcim.choices import CableTypeChoices
 from .choices import (
     FloorPlanTileStatusChoices, FloorPlanTileTypeChoices,
     CablePathStatusChoices,
@@ -564,6 +565,13 @@ class CablePath(NetBoxModel):
         verbose_name=_('fiber count'),
         default=12,
     )
+    cable_type = models.CharField(
+        max_length=50,
+        choices=CableTypeChoices,
+        blank=True,
+        default='',
+        verbose_name=_('cable type'),
+    )
     start_marker = models.ForeignKey(
         to='netbox_map.MapMarker',
         on_delete=models.SET_NULL,
@@ -605,7 +613,7 @@ class CablePath(NetBoxModel):
         help_text=_('Line thickness on the map (1-10)'),
     )
 
-    clone_fields = ('fiber_count', 'status', 'color', 'weight')
+    clone_fields = ('fiber_count', 'cable_type', 'status', 'color', 'weight')
 
     class Meta:
         ordering = ('label',)
