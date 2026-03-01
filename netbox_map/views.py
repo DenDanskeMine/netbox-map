@@ -248,7 +248,7 @@ class SiteMapView(LoginRequiredMixin, View):
                 'end_marker_label': str(cp.end_marker) if cp.end_marker else '',
             })
 
-        can_edit = request.user.has_perm('dcim.change_site')
+        can_edit = request.user.has_perm('netbox_map.change_mapmarker')
 
         # Support ?q=lat,lng from NetBox's Maps URL setting
         focus_lat = focus_lng = None
