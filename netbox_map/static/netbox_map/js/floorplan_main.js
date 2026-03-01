@@ -33,9 +33,6 @@
     var panels = new App.Panels(state, events);
     var pdf = new App.PDF(state, events, renderer);
 
-    // Initialize sidebar divider
-    sidebar.initDivider();
-
     // ─── Window Resize Handling ───────────────────────────────────
 
     var resizeTimer;
@@ -58,9 +55,6 @@
             if (tile) {
                 state.selectTile(tile);
                 interaction.zoomToTile(tile);
-                // Hide the placeholder directly
-                var placeholder = document.getElementById('sidebar-no-selection');
-                if (placeholder) placeholder.style.display = 'none';
             }
         }
     }

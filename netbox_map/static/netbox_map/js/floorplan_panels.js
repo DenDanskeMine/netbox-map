@@ -66,8 +66,6 @@
         this.events = events;
         this.api = new App.API(state);
 
-        this._initPlaceholderSync();
-
         if (!state.editMode) return;
 
         this._initLinkObjectPanel();
@@ -116,21 +114,6 @@
         if (fpLinkPanel) fpLinkPanel.classList.add('d-none');
     };
 
-    // ─── Placeholder Sync ─────────────────────────────────────────
-
-    Panels.prototype._initPlaceholderSync = function() {
-        var placeholder = document.getElementById('sidebar-no-selection');
-        var detailPanel = document.getElementById('tile-detail-panel');
-        if (!placeholder || !detailPanel) return;
-
-        function sync() {
-            placeholder.style.display = detailPanel.classList.contains('d-none') ? '' : 'none';
-        }
-
-        var observer = new MutationObserver(sync);
-        observer.observe(detailPanel, { attributes: true, attributeFilter: ['class'] });
-        sync();
-    };
 
     // ─── Link Object Panel ────────────────────────────────────────
 
