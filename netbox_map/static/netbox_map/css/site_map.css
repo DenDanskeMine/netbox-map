@@ -1119,3 +1119,154 @@
     box-shadow: 0 0 0 4px rgba(46, 204, 113, 0.9),
                 0 0 16px rgba(46, 204, 113, 0.6) !important;
 }
+
+/* ── Linked Cables section ───────────────────────────────── */
+.linked-cables-list {
+    padding: 4px 8px;
+}
+
+.linked-cable-card {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 6px;
+    padding: 8px 10px;
+    margin-bottom: 6px;
+    font-size: 12px;
+}
+
+.linked-cable-header {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-bottom: 2px;
+}
+
+.linked-cable-label {
+    font-weight: 600;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.linked-cable-unlink {
+    padding: 0 2px !important;
+    line-height: 1;
+    opacity: 0.6;
+}
+
+.linked-cable-unlink:hover {
+    opacity: 1;
+}
+
+.linked-cable-terms {
+    margin: 4px 0;
+    padding: 4px 6px;
+    background: rgba(255,255,255,0.03);
+    border-radius: 4px;
+    font-size: 11px;
+    line-height: 1.5;
+}
+
+.linked-cable-term {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.term-side {
+    font-weight: 600;
+    color: #8ab4f8;
+    margin-right: 2px;
+}
+
+.term-link {
+    color: #8ab4f8;
+    text-decoration: none;
+}
+
+.term-link:hover {
+    text-decoration: underline;
+    color: #aecbfa;
+}
+
+[data-bs-theme="light"] .term-link {
+    color: #0d6efd;
+}
+
+[data-bs-theme="light"] .term-link:hover {
+    color: #0a58ca;
+}
+
+.linked-cable-meta {
+    color: #999;
+    font-size: 11px;
+    line-height: 1.4;
+}
+
+.linked-cable-link {
+    display: inline-block;
+    font-size: 11px;
+    margin-top: 4px;
+    color: #5ba0d0;
+    text-decoration: none;
+}
+
+.linked-cable-link:hover {
+    text-decoration: underline;
+}
+
+/* Link cable search */
+.linked-cable-search-results {
+    max-height: 250px;
+    overflow-y: auto;
+    margin-top: 6px;
+}
+
+.cable-search-item {
+    padding: 6px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.cable-search-item:hover {
+    background: rgba(255,255,255,0.08);
+}
+
+.cable-search-item--linked {
+    opacity: 0.5;
+    cursor: default;
+}
+
+.cable-search-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Light theme overrides */
+[data-bs-theme="light"] .linked-cable-card {
+    background: rgba(0,0,0,0.03);
+    border-color: rgba(0,0,0,0.1);
+}
+
+[data-bs-theme="light"] .linked-cable-meta {
+    color: #666;
+}
+
+[data-bs-theme="light"] .linked-cable-terms {
+    background: rgba(0,0,0,0.03);
+}
+
+[data-bs-theme="light"] .term-side {
+    color: #0d6efd;
+}
+
+[data-bs-theme="light"] .cable-search-item:hover {
+    background: rgba(0,0,0,0.06);
+}

@@ -26,6 +26,8 @@
     var tileApiUrl       = container.getAttribute('data-tile-api-url') || '';
     var markerApiUrl     = container.getAttribute('data-marker-api-url') || '';
     var cableApiUrl      = container.getAttribute('data-cable-api-url') || '';
+    var cableAssignApiUrl = container.getAttribute('data-cable-assignment-api-url') || '';
+    var dcimCableApiUrl  = container.getAttribute('data-dcim-cable-api-url') || '/api/dcim/cables/';
     var cableSplitBaseUrl = container.getAttribute('data-cable-split-base-url') || '/plugins/map/cable-paths/';
     var detailBaseUrl    = container.getAttribute('data-detail-base-url') || '/plugins/map/marker-detail/';
 
@@ -140,13 +142,14 @@
     }
 
     function apiRequest(url, method, body) {
-        var opts = {
-            method: method,
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': csrfToken
-            }
+        var headers = {
+            'X-CSRFToken': csrfToken,
+            'Accept': 'application/json'
         };
+        if (method !== 'GET' && method !== 'HEAD') {
+            headers['Content-Type'] = 'application/json';
+        }
+        var opts = { method: method, headers: headers };
         if (body) opts.body = JSON.stringify(body);
         return fetch(url, opts).then(function (r) {
             if (!r.ok) {
@@ -740,8 +743,10 @@
     var CABLE_STATUS_COLORS = {
         planned: '#95a5a6',
         active: '#2ecc71',
+        connected: '#2ecc71',
         in_progress: '#f39c12',
-        inactive: '#e74c3c'
+        inactive: '#e74c3c',
+        decommissioning: '#e74c3c'
     };
 
     function getCableColor(status) {
@@ -820,6 +825,47 @@
         return Math.round(meters) + ' m';
     }
 
+    /* ── TIA-598 fiber colors for tooltip visualization ────── */
+    var FIBER_COLORS = [
+        '#2196F3', '#FF9800', '#4CAF50', '#F5F5F5', '#9C27B0', '#FF5722',
+        '#FFEB3B', '#795548', '#9E9E9E', '#E91E63', '#00BCD4', '#8BC34A',
+    ];
+
+    function buildCableTooltip(cp) {
+        var label = escHtml(cp.label || 'Cable #' + cp.id);
+        var typeLabel = getCableTypeLabel(cp.cable_type);
+        var countLabel = formatCableCount(cp.cable_type, cp.fiber_count);
+        var linkedCount = (cp.linked_cables || []).length;
+
+        var html = '<div style="font-weight:600;margin-bottom:2px">' + label + '</div>';
+
+        var meta = [typeLabel, countLabel].filter(Boolean).join(' \u00b7 ');
+        if (meta) html += '<div style="font-size:11px;opacity:0.8">' + meta + '</div>';
+
+        // Mini fiber visualization for fiber-type cables
+        if (isFiberType(cp.cable_type) && cp.fiber_count > 0) {
+            var fiberCount = Math.min(cp.fiber_count, 96); // cap visual at 96
+            var tubeSize = 12;
+            var tubes = Math.ceil(fiberCount / tubeSize);
+            html += '<div style="margin-top:4px;display:flex;flex-wrap:wrap;gap:2px;max-width:180px">';
+            for (var f = 0; f < fiberCount; f++) {
+                var fColor = FIBER_COLORS[f % 12];
+                var border = (f > 0 && f % tubeSize === 0) ? 'margin-left:4px;' : '';
+                html += '<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:' + fColor + ';' + border + '"></span>';
+            }
+            html += '</div>';
+            if (tubes > 1) {
+                html += '<div style="font-size:10px;opacity:0.6;margin-top:1px">' + tubes + ' tubes \u00d7 ' + tubeSize + 'F</div>';
+            }
+        }
+
+        if (linkedCount > 0) {
+            html += '<div style="font-size:10px;margin-top:3px;color:#8ab4f8">' + linkedCount + ' cable' + (linkedCount > 1 ? 's' : '') + ' linked</div>';
+        }
+
+        return html;
+    }
+
     function createCablePolyline(cp) {
         if (!cp.path_coordinates || cp.path_coordinates.length < 2) return null;
 
@@ -844,14 +890,8 @@
             opacity: 0.8
         }).addTo(map);
 
-        var tooltipParts = [cp.label || 'Cable #' + cp.id];
-        var typeLabel = getCableTypeLabel(cp.cable_type);
-        var countLabel = formatCableCount(cp.cable_type, cp.fiber_count);
-        if (typeLabel || countLabel) {
-            var sub = [typeLabel, countLabel].filter(Boolean).join(' \u00b7 ');
-            tooltipParts.push('(' + sub + ')');
-        }
-        polyline.bindTooltip(tooltipParts.join(' '), { sticky: true });
+        var tooltipHtml = buildCableTooltip(cp);
+        polyline.bindTooltip(tooltipHtml, { sticky: true });
 
         var cableItem = {
             kind: 'cable',
@@ -1288,6 +1328,77 @@
         }
         html += '</div>';
 
+        // ── Linked Cables section ──
+        var linkedCables = d.linked_cables || [];
+        html += '<div class="sidebar-section-title">Linked Cables';
+        if (linkedCables.length > 0) {
+            html += ' <span class="badge" style="font-size:10px;margin-left:4px;background:#0d6efd;color:#fff">' + linkedCables.length + '</span>';
+        }
+        html += '</div>';
+        if (linkedCables.length === 0) {
+            html += '<div class="linked-cables-empty text-muted small" style="padding:6px 12px">No cables linked to this path.</div>';
+        } else {
+            html += '<div class="linked-cables-list">';
+            linkedCables.forEach(function (lc) {
+                var statusColor = getCableColor(lc.status);
+                html += '<div class="linked-cable-card" data-assignment-id="' + lc.assignment_id + '">';
+                html += '<div class="linked-cable-header">';
+                html += '<span class="linked-cable-label">' + escHtml(lc.label) + '</span>';
+                html += '<span class="badge" style="background:' + statusColor + ';color:#fff;font-size:10px;margin-left:4px">' + escHtml(lc.status) + '</span>';
+                if (editMode) {
+                    html += '<button class="btn btn-sm btn-link linked-cable-unlink" data-assignment-id="' + lc.assignment_id + '" title="Unlink cable">';
+                    html += '<i class="mdi mdi-link-off text-danger"></i></button>';
+                }
+                html += '</div>';
+                // Terminations (A ↔ B)
+                var aTerms = lc.a_terminations || [];
+                var bTerms = lc.b_terminations || [];
+                if (aTerms.length > 0 || bTerms.length > 0) {
+                    html += '<div class="linked-cable-terms">';
+                    if (aTerms.length > 0) {
+                        var aStr = aTerms.map(function (t) {
+                            var parts = [];
+                            if (t.device) {
+                                parts.push(t.device_url ? '<a href="' + escHtml(t.device_url) + '" class="term-link" target="_blank">' + escHtml(t.device) + '</a>' : escHtml(t.device));
+                            }
+                            parts.push(t.url ? '<a href="' + escHtml(t.url) + '" class="term-link" target="_blank">' + escHtml(t.label) + '</a>' : escHtml(t.label));
+                            return parts.join(' / ');
+                        }).join(', ');
+                        html += '<div class="linked-cable-term"><span class="term-side">A:</span> ' + aStr + '</div>';
+                    }
+                    if (bTerms.length > 0) {
+                        var bStr = bTerms.map(function (t) {
+                            var parts = [];
+                            if (t.device) {
+                                parts.push(t.device_url ? '<a href="' + escHtml(t.device_url) + '" class="term-link" target="_blank">' + escHtml(t.device) + '</a>' : escHtml(t.device));
+                            }
+                            parts.push(t.url ? '<a href="' + escHtml(t.url) + '" class="term-link" target="_blank">' + escHtml(t.label) + '</a>' : escHtml(t.label));
+                            return parts.join(' / ');
+                        }).join(', ');
+                        html += '<div class="linked-cable-term"><span class="term-side">B:</span> ' + bStr + '</div>';
+                    }
+                    html += '</div>';
+                }
+                if (lc.type) {
+                    html += '<div class="linked-cable-meta">' + escHtml(getCableTypeLabel(lc.type)) + '</div>';
+                }
+                if (lc.length != null) {
+                    html += '<div class="linked-cable-meta">Length: ' + lc.length + ' ' + escHtml(lc.length_unit) + '</div>';
+                }
+                if (lc.color) {
+                    html += '<div class="linked-cable-meta"><span class="cable-color-swatch" style="background:' + escHtml(lc.color) + '"></span> ' + escHtml(lc.color) + '</div>';
+                }
+                html += '<a href="' + escHtml(lc.url) + '" class="linked-cable-link" target="_blank">View in NetBox <i class="mdi mdi-open-in-new"></i></a>';
+                html += '</div>';
+            });
+            html += '</div>';
+        }
+        if (editMode) {
+            html += '<div class="linked-cable-actions" style="padding:4px 12px">';
+            html += '<button class="btn btn-sm btn-outline-info" id="link-cable-btn"><i class="mdi mdi-link-plus"></i> Link Cable</button>';
+            html += '</div>';
+        }
+
         if (editMode) {
             html += '<div class="sidebar-section-title">Edit Cable</div>';
             html += '<div class="sidebar-detail-list">';
@@ -1406,12 +1517,8 @@
                         if (cableItem.polyline) {
                             var displayColor = getCableDisplayColor(d);
                             cableItem.polyline.setStyle({ color: displayColor, weight: newWeight });
-                            var tParts = [newLabel || 'Cable #' + d.id];
-                            var tType = getCableTypeLabel(newType);
-                            var tCount = formatCableCount(newType, newFibers);
-                            if (tType || tCount) tParts.push('(' + [tType, tCount].filter(Boolean).join(' \u00b7 ') + ')');
                             cableItem.polyline.unbindTooltip();
-                            cableItem.polyline.bindTooltip(tParts.join(' '), { sticky: true });
+                            cableItem.polyline.bindTooltip(buildCableTooltip(d), { sticky: true });
                         }
                         // Update path label
                         removeCableLabel(cableItem);
@@ -1465,7 +1572,196 @@
                     showCableDetail(cableItem);
                 });
             }
+
+            // ── Linked cable: unlink buttons ──
+            sidebarDetail.querySelectorAll('.linked-cable-unlink').forEach(function (btn) {
+                btn.addEventListener('click', function (e) {
+                    e.stopPropagation();
+                    var assignId = btn.getAttribute('data-assignment-id');
+                    if (!confirm('Unlink this cable from the path?')) return;
+                    apiRequest(cableAssignApiUrl + assignId + '/', 'DELETE').then(function () {
+                        d.linked_cables = (d.linked_cables || []).filter(function (lc) {
+                            return String(lc.assignment_id) !== String(assignId);
+                        });
+                        showCableDetail(cableItem);
+                    }).catch(function (err) {
+                        alert('Error unlinking: ' + err.message);
+                    });
+                });
+            });
+
+            // ── Linked cable: link button ──
+            var linkBtn = document.getElementById('link-cable-btn');
+            if (linkBtn) {
+                linkBtn.addEventListener('click', function () {
+                    showLinkCableDialog(cableItem);
+                });
+            }
         }
+    }
+
+    /* ── Link Cable dialog ─────────────────────────────────────── */
+    function showLinkCableDialog(cableItem) {
+        var d = cableItem.data;
+        var existingIds = (d.linked_cables || []).map(function (lc) { return lc.cable_id; });
+
+        // Replace detail content with search + dropdown UI
+        var html = '<div class="sidebar-section-title">Link a Cable</div>';
+        html += '<div style="padding:8px 12px">';
+        html += '<input type="text" id="cable-search-input" class="form-control form-control-sm" placeholder="Filter by ID, label, or device..." autofocus>';
+        html += '<div id="cable-search-results" class="linked-cable-search-results">';
+        html += '<div class="text-muted small" style="padding:12px 0;text-align:center"><i class="mdi mdi-loading mdi-spin"></i> Loading cables...</div>';
+        html += '</div>';
+        html += '<button class="btn btn-sm btn-outline-secondary mt-2" id="cable-search-cancel">Cancel</button>';
+        html += '</div>';
+        sidebarDetail.innerHTML = html;
+
+        var searchInput = document.getElementById('cable-search-input');
+        var resultsDiv = document.getElementById('cable-search-results');
+        var cancelBtn = document.getElementById('cable-search-cancel');
+        var allCablesCache = [];
+
+        cancelBtn.addEventListener('click', function () {
+            showCableDetail(cableItem);
+        });
+
+        // Fetch all cables (paginated — fetch up to 500)
+        fetchAllCables(dcimCableApiUrl + '?limit=250', []).then(function (cables) {
+            allCablesCache = cables;
+            renderCableList(cables, '', existingIds, resultsDiv, cableItem);
+            searchInput.focus();
+        }).catch(function (err) {
+            resultsDiv.innerHTML = '<div class="text-danger small" style="padding:6px 0">Failed to load cables: ' + escHtml(err.message) + '</div>';
+        });
+
+        // Client-side filter on input
+        searchInput.addEventListener('input', function () {
+            var q = searchInput.value.trim().toLowerCase();
+            renderCableList(allCablesCache, q, existingIds, resultsDiv, cableItem);
+        });
+
+        searchInput.focus();
+    }
+
+    function fetchAllCables(url, acc) {
+        return apiRequest(url, 'GET').then(function (data) {
+            var results = data.results || [];
+            var all = acc.concat(results);
+            // Follow pagination if there's a next page and we haven't fetched too many
+            if (data.next && all.length < 500) {
+                return fetchAllCables(data.next, all);
+            }
+            return all;
+        });
+    }
+
+    function getCableDisplayName(cable) {
+        // Build a useful display: label or "#ID", plus termination info
+        var name = cable.label || ('#' + cable.id);
+        var parts = [];
+        if (cable.a_terminations && cable.a_terminations.length > 0) {
+            var a = cable.a_terminations[0];
+            parts.push(a.object ? (a.object.device ? a.object.device.display || a.object.device.name : a.object.display || '') : '');
+        }
+        if (cable.b_terminations && cable.b_terminations.length > 0) {
+            var b = cable.b_terminations[0];
+            parts.push(b.object ? (b.object.device ? b.object.device.display || b.object.device.name : b.object.display || '') : '');
+        }
+        parts = parts.filter(Boolean);
+        if (parts.length > 0) {
+            name += ' (' + parts.join(' \u2194 ') + ')';
+        }
+        return name;
+    }
+
+    function renderCableList(cables, query, existingIds, container, cableItem) {
+        var filtered = cables;
+        if (query) {
+            filtered = cables.filter(function (c) {
+                var displayName = getCableDisplayName(c).toLowerCase();
+                var idStr = String(c.id);
+                return displayName.indexOf(query) !== -1 || idStr.indexOf(query) !== -1;
+            });
+        }
+
+        if (filtered.length === 0) {
+            container.innerHTML = '<div class="text-muted small" style="padding:8px 0;text-align:center">No cables found.</div>';
+            return;
+        }
+
+        var rhtml = '';
+        filtered.forEach(function (cable) {
+            var already = existingIds.indexOf(cable.id) !== -1;
+            var displayName = getCableDisplayName(cable);
+            var statusVal = cable.status ? (cable.status.value || cable.status) : '';
+            var statusLabel = cable.status ? (cable.status.label || cable.status) : '';
+
+            rhtml += '<div class="cable-search-item' + (already ? ' cable-search-item--linked' : '') + '" data-cable-id="' + cable.id + '">';
+            rhtml += '<span class="cable-search-name">' + escHtml(displayName) + '</span>';
+            if (statusVal) {
+                rhtml += ' <span class="badge" style="background:' + getCableColor(statusVal) + ';color:#fff;font-size:9px">' + escHtml(statusLabel) + '</span>';
+            }
+            if (already) {
+                rhtml += ' <span class="text-muted small">(linked)</span>';
+            }
+            rhtml += '</div>';
+        });
+        container.innerHTML = rhtml;
+
+        // Wire click handlers
+        container.querySelectorAll('.cable-search-item:not(.cable-search-item--linked)').forEach(function (el) {
+            el.addEventListener('click', function () {
+                if (el.classList.contains('cable-search-item--linking')) return;
+                el.classList.add('cable-search-item--linking');
+                el.style.opacity = '0.5';
+                el.style.pointerEvents = 'none';
+                var cableId = parseInt(el.getAttribute('data-cable-id'));
+                linkCableToCablePath(cableItem, cableId, el);
+            });
+        });
+    }
+
+    function linkCableToCablePath(cableItem, cableId, clickedEl) {
+        var d = cableItem.data;
+        // Check if already linked locally (prevent double-click race)
+        var alreadyLinked = (d.linked_cables || []).some(function (lc) { return lc.cable_id === cableId; });
+        if (alreadyLinked) {
+            showCableDetail(cableItem);
+            return;
+        }
+        var seq = (d.linked_cables || []).length;
+        apiRequest(cableAssignApiUrl, 'POST', {
+            cable_path: d.id,
+            cable: cableId,
+            sequence: seq
+        }).then(function (resp) {
+            if (!d.linked_cables) d.linked_cables = [];
+            d.linked_cables.push({
+                assignment_id: resp.id,
+                cable_id: cableId,
+                label: resp.cable_label || 'Cable #' + cableId,
+                status: resp.cable_status || '',
+                type: resp.cable_type || '',
+                color: resp.cable_color || '',
+                length: resp.cable_length,
+                length_unit: resp.cable_length_unit || '',
+                url: resp.cable_url || '/dcim/cables/' + cableId + '/',
+                sequence: seq,
+            });
+            showCableDetail(cableItem);
+        }).catch(function (err) {
+            // Handle duplicate gracefully — already linked
+            if (err.message && err.message.indexOf('duplicate') !== -1) {
+                showCableDetail(cableItem);
+                return;
+            }
+            if (clickedEl) {
+                clickedEl.classList.remove('cable-search-item--linking');
+                clickedEl.style.opacity = '';
+                clickedEl.style.pointerEvents = '';
+            }
+            alert('Error linking cable: ' + err.message);
+        });
     }
 
     /* ── Vertex editing — drag cable vertices on the map ─────────── */
@@ -2365,6 +2661,14 @@
                 }
                 html += detailRow(escHtml(f.label), escHtml(f.value));
             });
+            html += '</div>';
+        }
+
+        // Fiber Splicer link for devices with rear ports
+        if (detail.has_rear_ports && detail.device_id) {
+            html += '<div style="padding:6px 0">';
+            html += '<a href="/plugins/map/splicer/' + detail.device_id + '/" class="btn btn-sm btn-outline-info" target="_blank">';
+            html += '<i class="mdi mdi-connection"></i> Fiber Splicer</a>';
             html += '</div>';
         }
 

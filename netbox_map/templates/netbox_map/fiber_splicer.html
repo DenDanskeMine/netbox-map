@@ -1,0 +1,70 @@
+{% extends 'base/layout.html' %}
+{% load static %}
+{% load i18n %}
+
+{% block title %}{% trans "Fiber Splicer" %} — {{ device }}{% endblock %}
+
+{% block header %}
+  <div class="splicer-page-header">
+    <h1><span class="mdi mdi-connection"></span> {% trans "Fiber Splicer" %}</h1>
+    <div class="splicer-device-info">
+      <a href="{{ device.get_absolute_url }}" class="btn btn-sm btn-outline-secondary">
+        <i class="mdi mdi-arrow-left"></i> {{ device }}
+      </a>
+      <span class="text-muted small ms-2">{{ device.device_type }} &middot; {{ device.role }}</span>
+    </div>
+  </div>
+{% endblock %}
+
+{% block head %}
+  <link rel="stylesheet" href="{% static 'netbox_map/css/fiber_splicer.css' %}">
+{% endblock %}
+
+{% block content %}
+<div id="splicer-container"
+     data-trays='{{ trays_json }}'
+     data-splices='{{ splices_json }}'
+     data-fiber-labels='{{ fiber_labels_json }}'
+     data-can-edit="{{ can_edit|yesno:'true,false' }}"
+     data-csrf-token="{{ csrf_token }}"
+     data-device-id="{{ device.pk }}"
+     data-splice-api-url="{% url 'plugins-api:netbox_map-api:fibersplice-list' %}"
+     data-tray-label-api-url="{% url 'plugins-api:netbox_map-api:traylabel-list' %}"
+     data-fiber-label-api-url="{% url 'plugins-api:netbox_map-api:fiberlabel-list' %}"
+     data-rear-port-api-url="/api/dcim/rear-ports/">
+
+  <div class="splicer-toolbar">
+    <div class="splicer-stats" id="splicer-stats"></div>
+    {% if can_edit %}
+    <div class="splicer-actions">
+      <button class="btn btn-sm btn-outline-info" id="bulk-splice-btn" title="Auto-splice selected trays 1:1">
+        <i class="mdi mdi-link-variant"></i> {% trans "Bulk Splice 1:1" %}
+      </button>
+      <button class="btn btn-sm btn-outline-warning" id="edit-toggle-btn">
+        <i class="mdi mdi-pencil-lock-outline"></i> {% trans "Edit Mode" %}
+      </button>
+    </div>
+    {% endif %}
+  </div>
+
+  <div class="splicer-layout">
+    <div class="splicer-tray-panel splicer-tray-panel--left" id="left-panel">
+      <div class="splicer-panel-title">{% trans "Side A (Rear Ports)" %}</div>
+      <div class="splicer-tray-list" id="left-tray-list"></div>
+    </div>
+
+    <div class="splicer-canvas-wrap">
+      <svg id="splicer-svg" class="splicer-svg"></svg>
+    </div>
+
+    <div class="splicer-tray-panel splicer-tray-panel--right" id="right-panel">
+      <div class="splicer-panel-title">{% trans "Side B (Rear Ports)" %}</div>
+      <div class="splicer-tray-list" id="right-tray-list"></div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block javascript %}
+  <script src="{% static 'netbox_map/js/fiber_splicer.js' %}"></script>
+{% endblock %}

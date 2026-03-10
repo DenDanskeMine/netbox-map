@@ -69,4 +69,7 @@ urlpatterns = (
     path('map-markers/<int:pk>/edit/', views.MapMarkerEditView.as_view(), name='mapmarker_edit'),
     path('map-markers/<int:pk>/delete/', views.MapMarkerDeleteView.as_view(), name='mapmarker_delete'),
     path('map-markers/<int:pk>/changelog/', ObjectChangeLogView.as_view(), name='mapmarker_changelog', kwargs={'model': models.MapMarker}),
+
+    # Fiber Splicer
+    path('splicer/<int:pk>/', views.FiberSplicerView.as_view(), name='fiber_splicer'),
 )

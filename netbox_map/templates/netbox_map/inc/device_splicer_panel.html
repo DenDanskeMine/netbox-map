@@ -1,0 +1,10 @@
+{% load i18n %}
+<div class="card">
+  <h5 class="card-header"><i class="mdi mdi-connection"></i> {% trans "Fiber Splicer" %}</h5>
+  <div class="card-body">
+    <p class="text-muted small mb-2">{% trans "This device has rear ports that can be used for fiber splicing." %}</p>
+    <a href="{% url 'plugins:netbox_map:fiber_splicer' pk=device.pk %}" class="btn btn-sm btn-primary">
+      <i class="mdi mdi-connection"></i> {% trans "Open Fiber Splicer" %}
+    </a>
+  </div>
+</div>

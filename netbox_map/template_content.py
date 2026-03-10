@@ -1,5 +1,6 @@
 from django.contrib.contenttypes.models import ContentType
 
+from dcim.models import RearPort
 from netbox.plugins import PluginTemplateExtension
 from .models import FloorPlan, FloorPlanTile
 
@@ -38,4 +39,17 @@ class DeviceFloorPlanLink(PluginTemplateExtension):
         )
 
 
-template_extensions = [SiteFloorPlanLink, DeviceFloorPlanLink]
+class DeviceFiberSplicerLink(PluginTemplateExtension):
+    models = ['dcim.device']
+
+    def right_page(self):
+        device = self.context['object']
+        if not RearPort.objects.filter(device=device).exists():
+            return ''
+        return self.render(
+            'netbox_map/inc/device_splicer_panel.html',
+            extra_context={'device': device}
+        )
+
+
+template_extensions = [SiteFloorPlanLink, DeviceFloorPlanLink, DeviceFiberSplicerLink]

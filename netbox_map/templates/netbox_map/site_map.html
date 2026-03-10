@@ -72,6 +72,8 @@
        data-tile-api-url="{% url 'plugins-api:netbox_map-api:floorplantile-list' %}"
        data-marker-api-url="{% url 'plugins-api:netbox_map-api:mapmarker-list' %}"
        data-cable-api-url="{% url 'plugins-api:netbox_map-api:cablepath-list' %}"
+       data-cable-assignment-api-url="{% url 'plugins-api:netbox_map-api:cablepathassignment-list' %}"
+       data-dcim-cable-api-url="/api/dcim/cables/"
        data-cable-split-base-url="/plugins/map/cable-paths/"
        data-detail-base-url="/plugins/map/marker-detail/"
        {% if focus_lat %}data-focus-lat="{{ focus_lat }}" data-focus-lng="{{ focus_lng }}"{% endif %}>

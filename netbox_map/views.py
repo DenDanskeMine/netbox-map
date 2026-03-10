@@ -9,13 +9,13 @@ from django.shortcuts import redirect, render
 from django.utils.translation import gettext_lazy as _
 from django.views import View
 
-from dcim.models import Device, Location, Site
+from dcim.models import Device, FrontPort, Location, RearPort, Site
 from netbox.views import generic
 from utilities.views import ViewTab, register_model_view
 
 from . import filtersets, forms, tables
 from .choices import get_all_type_configs
-from .models import FloorPlan, FloorPlanTile, CustomMarkerType, LocationCoordinates, MapMarker, MapSettings, TilePortAssignment, CablePath
+from .models import FloorPlan, FloorPlanTile, CustomMarkerType, LocationCoordinates, MapMarker, MapSettings, TilePortAssignment, CablePath, FiberSplice, TrayLabel, FiberLabel
 
 
 #
@@ -228,9 +228,44 @@ class SiteMapView(LoginRequiredMixin, View):
             })
 
         # Cable paths
-        all_cable_paths = CablePath.objects.select_related('start_marker', 'end_marker')
+        all_cable_paths = CablePath.objects.select_related(
+            'start_marker', 'end_marker',
+        ).prefetch_related(
+            'cable_assignments__cable',
+        )
         cable_paths_data = []
         for cp in all_cable_paths:
+            linked = []
+            for ca in cp.cable_assignments.all():
+                c = ca.cable
+                def _fmt_terms(terminations):
+                    result = []
+                    for t in (terminations or []):
+                        entry = {
+                            'label': str(t),
+                            'type': t._meta.model_name,
+                            'url': t.get_absolute_url() if hasattr(t, 'get_absolute_url') else '',
+                        }
+                        if hasattr(t, 'device') and t.device:
+                            entry['device'] = str(t.device)
+                            entry['device_url'] = t.device.get_absolute_url()
+                        result.append(entry)
+                    return result
+
+                linked.append({
+                    'assignment_id': ca.pk,
+                    'cable_id': c.pk,
+                    'label': c.label or f'Cable #{c.pk}',
+                    'status': c.status,
+                    'type': c.type,
+                    'color': c.color or '',
+                    'length': c.length,
+                    'length_unit': c.length_unit or '',
+                    'url': c.get_absolute_url(),
+                    'sequence': ca.sequence,
+                    'a_terminations': _fmt_terms(c.a_terminations),
+                    'b_terminations': _fmt_terms(c.b_terminations),
+                })
             cable_paths_data.append({
                 'id': cp.pk,
                 'label': cp.label,
@@ -246,6 +281,7 @@ class SiteMapView(LoginRequiredMixin, View):
                 'end_marker_id': cp.end_marker_id,
                 'start_marker_label': str(cp.start_marker) if cp.start_marker else '',
                 'end_marker_label': str(cp.end_marker) if cp.end_marker else '',
+                'linked_cables': linked,
             })
 
         can_edit = request.user.has_perm('netbox_map.change_mapmarker')
@@ -807,11 +843,20 @@ class MarkerDetailView(LoginRequiredMixin, View):
         except Exception:
             interfaces = []
 
+        # Check for rear ports (show splicer link)
+        has_rear_ports = False
+        device_id = None
+        if object_type == 'device':
+            has_rear_ports = RearPort.objects.filter(device=obj).exists()
+            device_id = obj.pk
+
         return JsonResponse({
             'standard_fields': standard_fields,
             'mac_address': mac_address,
             'custom_fields': custom_fields,
             'interfaces': interfaces,
+            'has_rear_ports': has_rear_ports,
+            'device_id': device_id,
         })
 
     def _get_cable_traces(self, obj, object_type):
@@ -1257,3 +1302,72 @@ class DeviceMapLocationsView(generic.ObjectView):
             'tiles': tiles,
             'markers': markers,
         }
+
+
+#
+# Fiber Splicer GUI
+#
+
+class FiberSplicerView(LoginRequiredMixin, View):
+    """Interactive fiber splicer GUI for a device with rear ports (splice trays)."""
+
+    def get(self, request, pk):
+        device = Device.objects.get(pk=pk)
+        rear_ports = RearPort.objects.filter(device=device).order_by('name')
+        splices = FiberSplice.objects.filter(device=device).select_related(
+            'port_a', 'port_b',
+        )
+
+        # Build tray label lookup (rear_port_id -> TrayLabel)
+        tray_labels = {
+            tl.rear_port_id: tl
+            for tl in TrayLabel.objects.filter(rear_port__device=device).select_related('cable')
+        }
+
+        # Build fiber label lookup: {rear_port_id: {position: {label, color}}}
+        fiber_labels = {}
+        for fl in FiberLabel.objects.filter(rear_port__device=device):
+            fiber_labels.setdefault(fl.rear_port_id, {})[fl.position] = {
+                'id': fl.pk,
+                'label': fl.label,
+                'color': fl.color,
+            }
+
+        # Build tray data: each RearPort is a "tray" with N positions (fibers)
+        trays = []
+        for rp in rear_ports:
+            tl = tray_labels.get(rp.pk)
+            trays.append({
+                'id': rp.pk,
+                'name': rp.name,
+                'label': (tl.label if tl and tl.label else '') or rp.label or rp.name,
+                'positions': rp.positions,
+                'type': rp.type,
+                'color': (tl.tube_color if tl else '') or rp.color or '',
+                'cable_id': tl.cable_id if tl else None,
+                'cable_label': (tl.cable.label or f'Cable #{tl.cable.pk}') if tl and tl.cable else '',
+                'tray_label_id': tl.pk if tl else None,
+                'description': tl.description if tl else '',
+            })
+
+        # Build existing splices
+        splice_list = []
+        for s in splices:
+            splice_list.append({
+                'id': s.pk,
+                'port_a': s.port_a_id,
+                'position_a': s.position_a,
+                'port_b': s.port_b_id,
+                'position_b': s.position_b,
+            })
+
+        can_edit = request.user.has_perm('netbox_map.change_fibersplice')
+
+        return render(request, 'netbox_map/fiber_splicer.html', {
+            'object': device,
+            'device': device,
+            'trays_json': json.dumps(trays),
+            'splices_json': json.dumps(splice_list),
+            'fiber_labels_json': json.dumps(fiber_labels),
+            'can_edit': can_edit,
+        })

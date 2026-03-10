@@ -644,11 +644,274 @@ class CablePath(NetBoxModel):
             'inactive': '#e74c3c',
         }.get(self.status, '#95a5a6')
 
+    cables = models.ManyToManyField(
+        to='dcim.Cable',
+        through='CablePathAssignment',
+        related_name='map_paths',
+        blank=True,
+        verbose_name=_('linked cables'),
+    )
+
     def get_display_color(self):
         """Return the effective display color: custom override or status-based."""
         if self.color:
             return self.color
         return self.get_status_color()
+
+
+class CablePathAssignment(NetBoxModel):
+    """Links a dcim.Cable to a CablePath on the site map."""
+    cable_path = models.ForeignKey(
+        to='netbox_map.CablePath',
+        on_delete=models.CASCADE,
+        related_name='cable_assignments',
+        verbose_name=_('cable path'),
+    )
+    cable = models.ForeignKey(
+        to='dcim.Cable',
+        on_delete=models.CASCADE,
+        related_name='+',
+        verbose_name=_('cable'),
+    )
+    sequence = models.PositiveSmallIntegerField(
+        default=0,
+        verbose_name=_('sequence'),
+        help_text=_('Order of this cable within the path'),
+    )
+
+    class Meta:
+        ordering = ('cable_path', 'sequence')
+        unique_together = ('cable_path', 'cable')
+        verbose_name = _('cable path assignment')
+        verbose_name_plural = _('cable path assignments')
+
+    def __str__(self):
+        return f'{self.cable} on {self.cable_path}'
+
+
+class FiberSplice(NetBoxModel):
+    """A splice connection between two rear port positions within a device."""
+    device = models.ForeignKey(
+        to='dcim.Device',
+        on_delete=models.CASCADE,
+        related_name='fiber_splices',
+        verbose_name=_('device'),
+    )
+    port_a = models.ForeignKey(
+        to='dcim.RearPort',
+        on_delete=models.CASCADE,
+        related_name='+',
+        verbose_name=_('port A'),
+    )
+    position_a = models.PositiveSmallIntegerField(
+        verbose_name=_('position A'),
+        help_text=_('Fiber position on port A'),
+    )
+    port_b = models.ForeignKey(
+        to='dcim.RearPort',
+        on_delete=models.CASCADE,
+        related_name='+',
+        verbose_name=_('port B'),
+    )
+    position_b = models.PositiveSmallIntegerField(
+        verbose_name=_('position B'),
+        help_text=_('Fiber position on port B'),
+    )
+
+    class Meta:
+        ordering = ('device', 'port_a', 'position_a')
+        unique_together = ('device', 'port_a', 'position_a', 'port_b', 'position_b')
+        verbose_name = _('fiber splice')
+        verbose_name_plural = _('fiber splices')
+
+    def __str__(self):
+        return f'{self.port_a}[{self.position_a}] ↔ {self.port_b}[{self.position_b}]'
+
+    def clean(self):
+        super().clean()
+        if self.port_a_id and self.port_b_id and self.port_a_id == self.port_b_id and self.position_a == self.position_b:
+            raise ValidationError(_('Cannot splice a fiber to itself.'))
+
+
+class TrayLabel(NetBoxModel):
+    """Per-tray (RearPort) metadata: cable association, label, buffer tube color."""
+    rear_port = models.OneToOneField(
+        to='dcim.RearPort',
+        on_delete=models.CASCADE,
+        related_name='tray_label',
+        verbose_name=_('rear port'),
+    )
+    cable = models.ForeignKey(
+        to='dcim.Cable',
+        on_delete=models.SET_NULL,
+        related_name='+',
+        blank=True,
+        null=True,
+        verbose_name=_('source cable'),
+        help_text=_('Cable whose fibers are in this tray'),
+    )
+    label = models.CharField(
+        max_length=100,
+        blank=True,
+        verbose_name=_('tray label'),
+    )
+    tube_color = models.CharField(
+        max_length=7,
+        blank=True,
+        verbose_name=_('buffer tube color'),
+        help_text=_('Hex color (e.g. #3498db)'),
+        validators=[
+            RegexValidator(
+                regex=r'^#[0-9a-fA-F]{6}$',
+                message=_('Enter a valid hex color.'),
+            ),
+        ],
+    )
+    description = models.CharField(
+        max_length=200,
+        blank=True,
+    )
+
+    class Meta:
+        ordering = ('rear_port',)
+        verbose_name = _('tray label')
+        verbose_name_plural = _('tray labels')
+
+    def __str__(self):
+        return self.label or str(self.rear_port)
+
+    def get_absolute_url(self):
+        return reverse('plugins:netbox_map:traylabel', args=[self.pk])
+
+
+class FiberLabel(NetBoxModel):
+    """Per-fiber label for a specific RearPort position."""
+    rear_port = models.ForeignKey(
+        to='dcim.RearPort',
+        on_delete=models.CASCADE,
+        related_name='fiber_labels',
+        verbose_name=_('rear port'),
+    )
+    position = models.PositiveSmallIntegerField(
+        verbose_name=_('position'),
+        validators=[MinValueValidator(1)],
+    )
+    label = models.CharField(
+        max_length=100,
+        verbose_name=_('label'),
+    )
+    color = models.CharField(
+        max_length=7,
+        blank=True,
+        verbose_name=_('fiber color'),
+        validators=[
+            RegexValidator(
+                regex=r'^#[0-9a-fA-F]{6}$',
+                message=_('Enter a valid hex color.'),
+            ),
+        ],
+    )
+
+    class Meta:
+        ordering = ('rear_port', 'position')
+        verbose_name = _('fiber label')
+        verbose_name_plural = _('fiber labels')
+        constraints = (
+            models.UniqueConstraint(
+                fields=('rear_port', 'position'),
+                name='%(app_label)s_%(class)s_unique_port_position',
+            ),
+        )
+
+    def __str__(self):
+        return f'{self.rear_port}[{self.position}]: {self.label}'
+
+    def get_absolute_url(self):
+        return reverse('plugins:netbox_map:fiberlabel', args=[self.pk])
+
+    def clean(self):
+        super().clean()
+        if self.rear_port_id and self.position:
+            if self.position > self.rear_port.positions:
+                raise ValidationError({
+                    'position': _(
+                        f'Position {self.position} exceeds port capacity '
+                        f'({self.rear_port.positions}).'
+                    )
+                })
+
+
+class FiberSplit(NetBoxModel):
+    """A 1:N passive optical splitter connection within a device.
+
+    Multiple rows share the same input_port + input_position but each has
+    a unique output_port + output_position, modelling the 1:N fan-out.
+    """
+    device = models.ForeignKey(
+        to='dcim.Device',
+        on_delete=models.CASCADE,
+        related_name='fiber_splits',
+        verbose_name=_('device'),
+    )
+    input_port = models.ForeignKey(
+        to='dcim.RearPort',
+        on_delete=models.CASCADE,
+        related_name='split_inputs',
+        verbose_name=_('input port'),
+    )
+    input_position = models.PositiveSmallIntegerField(
+        verbose_name=_('input position'),
+        validators=[MinValueValidator(1)],
+        help_text=_('Fiber position on the input port'),
+    )
+    output_port = models.ForeignKey(
+        to='dcim.RearPort',
+        on_delete=models.CASCADE,
+        related_name='split_outputs',
+        verbose_name=_('output port'),
+    )
+    output_position = models.PositiveSmallIntegerField(
+        verbose_name=_('output position'),
+        validators=[MinValueValidator(1)],
+        help_text=_('Fiber position on the output port'),
+    )
+    split_ratio = models.CharField(
+        max_length=10,
+        blank=True,
+        verbose_name=_('split ratio'),
+        help_text=_('e.g. 1:8, 1:16, 1:32'),
+    )
+    loss_db = models.DecimalField(
+        max_digits=4,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        verbose_name=_('insertion loss (dB)'),
+    )
+
+    class Meta:
+        ordering = ('device', 'input_port', 'input_position')
+        verbose_name = _('fiber split')
+        verbose_name_plural = _('fiber splits')
+        constraints = (
+            models.UniqueConstraint(
+                fields=('device', 'output_port', 'output_position'),
+                name='%(app_label)s_%(class)s_unique_output',
+            ),
+        )
+
+    def __str__(self):
+        return f'{self.input_port}[{self.input_position}] → {self.output_port}[{self.output_position}]'
+
+    def clean(self):
+        super().clean()
+        if (self.input_port_id and self.output_port_id
+                and self.input_port_id == self.output_port_id
+                and self.input_position == self.output_position):
+            raise ValidationError(_('Cannot split a fiber to itself.'))
+
+    def get_absolute_url(self):
+        return reverse('plugins:netbox_map:fibersplit', args=[self.pk])
 
 
 class MapSettings(models.Model):

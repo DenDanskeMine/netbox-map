@@ -1,0 +1,491 @@
+/* ── Fiber Splicer GUI ──────────────────────────────────── */
+
+.splicer-page-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.splicer-page-header h1 {
+    margin: 0;
+}
+
+.splicer-device-info {
+    display: flex;
+    align-items: center;
+}
+
+/* ── Toolbar ─────────────────────────────────────────────── */
+
+.splicer-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    margin-bottom: 12px;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 8px;
+}
+
+.splicer-stats {
+    font-size: 13px;
+    color: #aaa;
+}
+
+.splicer-stats .stat-number {
+    font-weight: 700;
+    color: #fff;
+}
+
+.splicer-actions {
+    display: flex;
+    gap: 8px;
+}
+
+/* ── Main layout ─────────────────────────────────────────── */
+
+.splicer-layout {
+    display: flex;
+    gap: 0;
+    min-height: 500px;
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 8px;
+    overflow: hidden;
+    background: rgba(0,0,0,0.15);
+}
+
+.splicer-tray-panel {
+    width: 240px;
+    min-width: 200px;
+    flex-shrink: 0;
+    overflow-y: auto;
+    background: rgba(255,255,255,0.02);
+    border-right: 1px solid rgba(255,255,255,0.06);
+}
+
+.splicer-tray-panel--right {
+    border-right: none;
+    border-left: 1px solid rgba(255,255,255,0.06);
+}
+
+.splicer-panel-title {
+    padding: 10px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #888;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    position: sticky;
+    top: 0;
+    background: inherit;
+    z-index: 2;
+}
+
+.splicer-canvas-wrap {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+}
+
+.splicer-svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+/* ── Tray items ──────────────────────────────────────────── */
+
+.splicer-tray {
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+
+.splicer-tray-header {
+    display: flex;
+    align-items: center;
+    padding: 8px 12px;
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.1s;
+}
+
+.splicer-tray-header:hover {
+    background: rgba(255,255,255,0.04);
+}
+
+.splicer-tray-header.selected {
+    background: rgba(13, 110, 253, 0.15);
+}
+
+.tray-color-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    margin-right: 8px;
+    flex-shrink: 0;
+}
+
+.tray-name {
+    font-size: 13px;
+    font-weight: 500;
+    flex: 1;
+}
+
+.tray-count {
+    font-size: 11px;
+    color: #888;
+}
+
+.tray-expand-icon {
+    font-size: 14px;
+    color: #666;
+    margin-left: 4px;
+    transition: transform 0.15s;
+}
+
+.splicer-tray.expanded .tray-expand-icon {
+    transform: rotate(90deg);
+}
+
+/* ── Fiber list inside a tray ────────────────────────────── */
+
+.splicer-fiber-list {
+    display: none;
+    padding: 0 0 4px 0;
+}
+
+.splicer-tray.expanded .splicer-fiber-list {
+    display: block;
+}
+
+.splicer-fiber {
+    display: flex;
+    align-items: center;
+    padding: 3px 12px 3px 30px;
+    font-size: 12px;
+    cursor: default;
+    transition: background 0.1s;
+}
+
+.splicer-fiber:hover {
+    background: rgba(255,255,255,0.03);
+}
+
+.fiber-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-right: 8px;
+    flex-shrink: 0;
+    border: 1.5px solid rgba(255,255,255,0.3);
+    transition: all 0.15s;
+}
+
+.fiber-dot.connected {
+    border-color: transparent;
+}
+
+.fiber-dot.drag-source {
+    transform: scale(1.5);
+    box-shadow: 0 0 6px rgba(13, 110, 253, 0.6);
+}
+
+.splicer-fiber.edit-mode {
+    cursor: pointer;
+}
+
+.splicer-fiber.edit-mode:hover .fiber-dot {
+    transform: scale(1.3);
+    box-shadow: 0 0 4px rgba(255,255,255,0.3);
+}
+
+.fiber-label {
+    flex: 1;
+    color: #bbb;
+}
+
+.fiber-status {
+    font-size: 10px;
+    color: #666;
+}
+
+.fiber-status.spliced {
+    color: #2ecc71;
+}
+
+/* ── SVG splice lines ────────────────────────────────────── */
+
+.splice-line {
+    fill: none;
+    stroke-width: 2;
+    opacity: 0.7;
+    transition: opacity 0.15s, stroke-width 0.15s;
+    cursor: pointer;
+}
+
+.splice-line:hover {
+    opacity: 1;
+    stroke-width: 3;
+}
+
+.splice-line.highlight {
+    opacity: 1;
+    stroke-width: 3;
+}
+
+.splice-line-temp {
+    fill: none;
+    stroke: #0d6efd;
+    stroke-width: 2;
+    stroke-dasharray: 6 3;
+    opacity: 0.8;
+    pointer-events: none;
+}
+
+/* ── Fiber connector dots in SVG ─────────────────────────── */
+
+.svg-fiber-dot {
+    cursor: pointer;
+    transition: r 0.15s;
+}
+
+.svg-fiber-dot:hover {
+    r: 6;
+}
+
+.svg-fiber-dot.connected {
+    stroke-width: 0;
+}
+
+/* ── Bulk splice select state ────────────────────────────── */
+
+.splicer-tray-header.bulk-left {
+    outline: 2px solid #0d6efd;
+    outline-offset: -2px;
+}
+
+.splicer-tray-header.bulk-right {
+    outline: 2px solid #2ecc71;
+    outline-offset: -2px;
+}
+
+/* ── Tube color palette (industry standard) ──────────────── */
+
+.tube-color-1  { background: #e74c3c; } /* Red */
+.tube-color-2  { background: #2ecc71; } /* Green */
+.tube-color-3  { background: #3498db; } /* Blue */
+.tube-color-4  { background: #ecf0f1; } /* White */
+.tube-color-5  { background: #9b59b6; } /* Purple */
+.tube-color-6  { background: #e67e22; } /* Orange */
+.tube-color-7  { background: #f1c40f; } /* Yellow */
+.tube-color-8  { background: #795548; } /* Brown */
+.tube-color-9  { background: #95a5a6; } /* Gray */
+.tube-color-10 { background: #8e44ad; } /* Violet */
+.tube-color-11 { background: #e91e63; } /* Pink */
+.tube-color-12 { background: #00bcd4; } /* Aqua */
+
+/* ── Light theme ─────────────────────────────────────────── */
+
+[data-bs-theme="light"] .splicer-toolbar {
+    background: rgba(0,0,0,0.03);
+    border-color: rgba(0,0,0,0.1);
+}
+
+[data-bs-theme="light"] .splicer-stats {
+    color: #666;
+}
+
+[data-bs-theme="light"] .splicer-stats .stat-number {
+    color: #333;
+}
+
+[data-bs-theme="light"] .splicer-layout {
+    border-color: rgba(0,0,0,0.1);
+    background: #fafafa;
+}
+
+[data-bs-theme="light"] .splicer-tray-panel {
+    background: #fff;
+    border-color: rgba(0,0,0,0.08);
+}
+
+[data-bs-theme="light"] .splicer-tray-header:hover {
+    background: rgba(0,0,0,0.04);
+}
+
+[data-bs-theme="light"] .fiber-label {
+    color: #555;
+}
+
+[data-bs-theme="light"] .fiber-dot {
+    border-color: rgba(0,0,0,0.2);
+}
+
+[data-bs-theme="light"] .splicer-panel-title {
+    border-color: rgba(0,0,0,0.08);
+}
+
+[data-bs-theme="light"] .splicer-tray {
+    border-color: rgba(0,0,0,0.06);
+}
+
+[data-bs-theme="light"] .splicer-fiber:hover {
+    background: rgba(0,0,0,0.03);
+}
+
+[data-bs-theme="light"] .tray-cable-badge {
+    background: rgba(0,0,0,0.06);
+    color: #555;
+}
+
+[data-bs-theme="light"] .fiber-label-input {
+    background: #fff;
+    color: #333;
+    border-color: #0d6efd;
+}
+
+[data-bs-theme="light"] .splicer-dialog {
+    background: #fff;
+    border-color: rgba(0,0,0,0.15);
+    color: #333;
+}
+
+[data-bs-theme="light"] .splicer-dialog input[type="text"] {
+    background: #fff;
+    color: #333;
+    border-color: rgba(0,0,0,0.2);
+}
+
+/* ── Cable badge on tray header ──────────────────────────── */
+
+.tray-cable-badge {
+    font-size: 10px;
+    padding: 1px 6px;
+    border-radius: 3px;
+    background: rgba(255,255,255,0.1);
+    color: #aaa;
+    margin-left: 4px;
+    margin-right: auto;
+}
+
+/* ── Tray edit icon ──────────────────────────────────────── */
+
+.tray-edit-icon {
+    font-size: 13px;
+    color: #666;
+    margin-left: 6px;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.15s;
+}
+
+.splicer-tray-header:hover .tray-edit-icon {
+    opacity: 1;
+}
+
+.tray-edit-icon:hover {
+    color: #0d6efd;
+}
+
+/* ── Inline fiber label input ────────────────────────────── */
+
+.fiber-label-input {
+    width: 100%;
+    border: 1px solid #0d6efd;
+    background: rgba(0,0,0,0.3);
+    color: #fff;
+    font-size: 12px;
+    padding: 1px 4px;
+    border-radius: 3px;
+    outline: none;
+}
+
+/* ── Tray edit dialog ────────────────────────────────────── */
+
+.splicer-dialog-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+}
+
+.splicer-dialog {
+    background: #1e1e2e;
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 8px;
+    padding: 20px;
+    min-width: 320px;
+    max-width: 450px;
+    color: #ddd;
+}
+
+.splicer-dialog h4 {
+    margin: 0 0 16px;
+    font-size: 15px;
+}
+
+.splicer-dialog-field {
+    margin-bottom: 12px;
+}
+
+.splicer-dialog-field label {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    margin-bottom: 4px;
+    color: #999;
+}
+
+.splicer-dialog-field input[type="text"] {
+    width: 100%;
+    padding: 6px 8px;
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 4px;
+    background: rgba(0,0,0,0.3);
+    color: #fff;
+    font-size: 13px;
+}
+
+.splicer-dialog-field input[type="color"] {
+    width: 40px;
+    height: 28px;
+    padding: 2px;
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 4px;
+    background: transparent;
+    cursor: pointer;
+}
+
+.splicer-dialog-select {
+    width: 100%;
+    padding: 6px 8px;
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 4px;
+    background: rgba(0,0,0,0.3);
+    color: #fff;
+    font-size: 13px;
+}
+
+[data-bs-theme="light"] .splicer-dialog-select {
+    background: #fff;
+    color: #333;
+    border-color: rgba(0,0,0,0.2);
+}
+
+.splicer-dialog-hint {
+    font-size: 11px;
+    color: #888;
+    margin-top: 2px;
+}
+
+.splicer-dialog-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+    margin-top: 16px;
+}
