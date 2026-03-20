@@ -204,7 +204,7 @@
             // Both min and max scale with tile size so text fits at any zoom level.
             var maxLabelH = hasSecondary ? textH * 0.55 : textH * 0.8;
             var minFontSize = Math.max(1, Math.floor(ts * 0.08));
-            var maxFontSize = Math.max(minFontSize, Math.floor(ts / 2));
+            var maxFontSize = Math.max(minFontSize, Math.floor(maxLabelH));
             var fit = App.autoFontSize(ctx, label, textW, maxLabelH, minFontSize, maxFontSize);
 
             if (!fit.fits) {
