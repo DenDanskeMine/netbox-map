@@ -200,9 +200,12 @@
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
 
-            // Auto-size: find largest font that fits the effective text width
+            // Auto-size: find largest font that fits the effective text width.
+            // Both min and max scale with tile size so text fits at any zoom level.
             var maxLabelH = hasSecondary ? textH * 0.55 : textH * 0.8;
-            var fit = App.autoFontSize(ctx, label, textW, maxLabelH, 6, ts / 2.5);
+            var minFontSize = Math.max(1, Math.floor(ts * 0.08));
+            var maxFontSize = Math.max(minFontSize, Math.floor(ts / 2));
+            var fit = App.autoFontSize(ctx, label, textW, maxLabelH, minFontSize, maxFontSize);
 
             if (!fit.fits) {
                 // Text too long even at min size — truncate with ellipsis
