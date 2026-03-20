@@ -2,18 +2,20 @@ from django import forms
 from django.contrib.contenttypes.models import ContentType
 from django.utils.translation import gettext_lazy as _
 
-from dcim.models import Site, Location, Rack, Device, PowerPanel, PowerFeed, RearPort, FrontPort
+from dcim.models import Site, Location, Rack, Device, DeviceRole, PowerPanel, PowerFeed, RearPort, FrontPort, Region, SiteGroup
+from tenancy.models import Tenant
 from netbox.forms import NetBoxModelForm, NetBoxModelFilterSetForm, NetBoxModelBulkEditForm, NetBoxModelImportForm
 from utilities.forms.fields import (
     ContentTypeChoiceField,
     CSVChoiceField,
     CSVModelChoiceField,
     DynamicModelChoiceField,
+    DynamicModelMultipleChoiceField,
     CommentField,
 )
 from utilities.forms.rendering import FieldSet
 from .models import FloorPlan, FloorPlanTile, CustomMarkerType, MapMarker, MapSettings, CablePath, ASSIGNABLE_MODELS
-from dcim.choices import CableTypeChoices
+from dcim.choices import CableTypeChoices, SiteStatusChoices
 from .choices import (
     FloorPlanTileTypeChoices, FloorPlanTileStatusChoices,
     CablePathStatusChoices,
@@ -261,6 +263,18 @@ class FloorPlanTileForm(NetBoxModelForm):
         label=_('Floor Plan'),
         queryset=FloorPlan.objects.all()
     )
+    # Hidden field — auto-populated via JS when floorplan is selected.
+    # Used as the site_id source for dependent rack/device/powerpanel dropdowns.
+    site = forms.IntegerField(
+        required=False,
+        widget=forms.HiddenInput(),
+    )
+    # Resolved in clean() from the per-type selector (rack/device/etc.).
+    # Must be declared so Django's _post_clean() can find it in self.fields.
+    assigned_object_id = forms.IntegerField(
+        required=False,
+        widget=forms.HiddenInput(),
+    )
     linked_floorplan = DynamicModelChoiceField(
         label=_('Linked Floor Plan'),
         queryset=FloorPlan.objects.all(),
@@ -277,7 +291,7 @@ class FloorPlanTileForm(NetBoxModelForm):
         queryset=Rack.objects.all(),
         required=False,
         query_params={
-            'site_id': '$floorplan',
+            'site_id': '$site',
         }
     )
     device = DynamicModelChoiceField(
@@ -285,7 +299,7 @@ class FloorPlanTileForm(NetBoxModelForm):
         queryset=Device.objects.all(),
         required=False,
         query_params={
-            'site_id': '$floorplan',
+            'site_id': '$site',
         }
     )
     powerpanel = DynamicModelChoiceField(
@@ -293,7 +307,7 @@ class FloorPlanTileForm(NetBoxModelForm):
         queryset=PowerPanel.objects.all(),
         required=False,
         query_params={
-            'site_id': '$floorplan',
+            'site_id': '$site',
         }
     )
     powerfeed = DynamicModelChoiceField(
@@ -340,8 +354,11 @@ class FloorPlanTileForm(NetBoxModelForm):
             'label', 'tile_type', 'status', 'orientation',
             'linked_floorplan',
             'fov_direction', 'fov_angle', 'fov_distance',
-            'assigned_object_type', 'tags',
+            'assigned_object_type', 'assigned_object_id', 'tags',
         ]
+
+    class Media:
+        js = ('netbox_map/js/floorplan_tile_form.js',)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -349,13 +366,20 @@ class FloorPlanTileForm(NetBoxModelForm):
         # Dynamic tile_type choices (built-in + custom)
         self.fields['tile_type'].choices = get_all_tile_type_choices()
 
-        # Pre-populate the object selector if editing an existing tile
-        if self.instance.pk and self.instance.assigned_object_type:
-            model_name = self.instance.assigned_object_type.model
-            if model_name in ('rack', 'device', 'powerpanel', 'powerfeed', 'rearport', 'frontport'):
-                field = self.fields.get(model_name)
-                if field and self.instance.assigned_object_id:
-                    field.initial = self.instance.assigned_object_id
+        # Pre-populate the hidden site field and object selector when editing
+        if self.instance.pk:
+            if hasattr(self.instance, 'floorplan') and self.instance.floorplan_id:
+                try:
+                    self.fields['site'].initial = self.instance.floorplan.site_id
+                except Exception:
+                    pass
+
+            if self.instance.assigned_object_type:
+                model_name = self.instance.assigned_object_type.model
+                if model_name in ('rack', 'device', 'powerpanel', 'powerfeed', 'rearport', 'frontport'):
+                    field = self.fields.get(model_name)
+                    if field and self.instance.assigned_object_id:
+                        field.initial = self.instance.assigned_object_id
 
     def clean(self):
         super().clean()
@@ -460,6 +484,17 @@ class FloorPlanTileImportForm(NetBoxModelImportForm):
     fov_angle = forms.IntegerField(required=False)
     fov_distance = forms.IntegerField(required=False)
 
+    # Accept assigned_object_type as "app_label.model" string (e.g. "dcim.rack").
+    # Resolved to a ContentType in clean() and set directly on the instance.
+    assigned_object_type = forms.CharField(
+        required=False,
+        help_text=_('Object type in app_label.model format (e.g. dcim.rack)'),
+    )
+    assigned_object_id = forms.IntegerField(
+        required=False,
+        help_text=_('Primary key of the assigned object'),
+    )
+
     class Meta:
         model = FloorPlanTile
         fields = (
@@ -531,6 +566,41 @@ class FloorPlanTileImportForm(NetBoxModelImportForm):
                 normalized[k] = v
 
         return normalized
+
+    def clean(self):
+        super().clean()
+
+        type_str = self.cleaned_data.pop('assigned_object_type', None)
+        obj_id = self.cleaned_data.pop('assigned_object_id', None)
+
+        if type_str and obj_id:
+            try:
+                app_label, model = type_str.strip().split('.')
+            except ValueError:
+                self.add_error('assigned_object_type', _(
+                    'Invalid format. Use app_label.model (e.g. dcim.rack).'
+                ))
+                return self.cleaned_data
+
+            try:
+                ct = ContentType.objects.get(app_label=app_label, model=model)
+            except ContentType.DoesNotExist:
+                self.add_error('assigned_object_type', _(
+                    f'Unknown content type: {type_str}'
+                ))
+                return self.cleaned_data
+
+            model_class = ct.model_class()
+            if not model_class.objects.filter(pk=obj_id).exists():
+                self.add_error('assigned_object_id', _(
+                    f'No {type_str} object found with id {obj_id}.'
+                ))
+                return self.cleaned_data
+
+            self.instance.assigned_object_type = ct
+            self.instance.assigned_object_id = obj_id
+
+        return self.cleaned_data
 
 
 #
@@ -1055,3 +1125,37 @@ class MapMarkerFilterForm(NetBoxModelFilterSetForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['marker_type'].choices = get_all_tile_type_choices()
+
+
+#
+# Site Map filter form (#26)
+#
+
+class SiteMapFilterForm(forms.Form):
+    status = forms.MultipleChoiceField(
+        choices=SiteStatusChoices,
+        required=False,
+        label=_('Status'),
+        widget=forms.CheckboxSelectMultiple(),
+    )
+    region_id = DynamicModelMultipleChoiceField(
+        queryset=Region.objects.all(),
+        required=False,
+        label=_('Region'),
+    )
+    group_id = DynamicModelMultipleChoiceField(
+        queryset=SiteGroup.objects.all(),
+        required=False,
+        label=_('Site Group'),
+    )
+    tenant_id = DynamicModelMultipleChoiceField(
+        queryset=Tenant.objects.all(),
+        required=False,
+        label=_('Tenant'),
+    )
+    device_role_id = DynamicModelMultipleChoiceField(
+        queryset=DeviceRole.objects.all(),
+        required=False,
+        label=_('Device Role'),
+        help_text=_('Only show sites that have devices with these roles'),
+    )

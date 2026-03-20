@@ -92,6 +92,12 @@ class FloorPlanTileTable(NetBoxTable):
         accessor='assigned_object_type',
         orderable=False
     )
+    assigned_object_id = tables.Column(
+        verbose_name=_('Assigned Object ID'),
+        accessor='assigned_object_id',
+        orderable=False,
+        visible=False,
+    )
     assigned_object = tables.Column(
         verbose_name=_('Assigned Object'),
         accessor='assigned_object',
@@ -117,7 +123,8 @@ class FloorPlanTileTable(NetBoxTable):
         model = FloorPlanTile
         fields = (
             'pk', 'id', 'floorplan', 'position', 'x_position', 'y_position',
-            'assigned_object_type', 'assigned_object', 'label', 'tile_type', 'status',
+            'assigned_object_type', 'assigned_object_id', 'assigned_object',
+            'label', 'tile_type', 'status',
             'linked_floorplan',
             'width', 'height', 'orientation',
             'fov_direction', 'fov_angle', 'fov_distance',
@@ -153,8 +160,12 @@ class FloorPlanTileTable(NetBoxTable):
 
     def value_assigned_object_type(self, value, record):
         if record.assigned_object_type:
-            return record.assigned_object_type.model
+            # Export as app_label.model so it can be re-imported (closes #2)
+            return f'{record.assigned_object_type.app_label}.{record.assigned_object_type.model}'
         return ''
+
+    def value_assigned_object_id(self, value, record):
+        return record.assigned_object_id or ''
 
     def value_assigned_object(self, value, record):
         if record.assigned_object:

@@ -108,7 +108,28 @@
         attributionControl: true
     });
 
-    var streets = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    // Custom tile layer that fetches tiles via fetch() so the browser sends a
+    // Referer header — required by the OSM tile usage policy (#25).
+    var ReferrerTileLayer = L.TileLayer.extend({
+        createTile: function (coords, done) {
+            var tile = document.createElement('img');
+            tile.alt = '';
+            tile.setAttribute('role', 'presentation');
+            var url = this.getTileUrl(coords);
+            fetch(url, { referrerPolicy: 'origin' })
+                .then(function (r) { return r.blob(); })
+                .then(function (blob) {
+                    var objectUrl = URL.createObjectURL(blob);
+                    tile.onload = function () { URL.revokeObjectURL(objectUrl); };
+                    tile.src = objectUrl;
+                    done(null, tile);
+                })
+                .catch(function (err) { done(err, tile); });
+            return tile;
+        }
+    });
+
+    var streets = new ReferrerTileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
         maxZoom: 19
     });
@@ -2010,6 +2031,12 @@
             if (item.data.site_name) html += detailRow('Site', escHtml(item.data.site_name));
             html += detailRow('Position', item.data.latitude.toFixed(6) + ', ' + item.data.longitude.toFixed(6));
             html += '</div>';
+            if (editMode) {
+                html += '<div class="sidebar-detail-actions">';
+                html += '<button class="btn btn-sm btn-outline-danger" id="remove-location-btn">' +
+                        '<i class="mdi mdi-map-marker-remove-outline"></i> Remove from Map</button>';
+                html += '</div>';
+            }
 
         } else if (item.kind === 'tile') {
             html += '<div class="sidebar-section-title">Tile</div>';
@@ -2299,6 +2326,27 @@
                     showListPanel();
                 }).catch(function (err) {
                     console.error('Failed to remove tile from map:', err);
+                    alert('Failed to remove: ' + err.message);
+                });
+            });
+        }
+
+        // Wire up remove-from-map button for location markers (#21)
+        var removeLocationBtn = document.getElementById('remove-location-btn');
+        if (removeLocationBtn && item.kind === 'location') {
+            removeLocationBtn.addEventListener('click', function () {
+                if (!confirm('Remove "' + escHtml(item.data.name) + '" from the map? (The location still exists in NetBox.)')) return;
+
+                apiRequest(locCoordsApiUrl + item.data.id + '/', 'DELETE').then(function () {
+                    if (item.marker) map.removeLayer(item.marker);
+                    var idx = allItems.indexOf(item);
+                    if (idx !== -1) allItems.splice(idx, 1);
+                    selectedItem = null;
+                    buildToggleButtons();
+                    buildSidebarList();
+                    showListPanel();
+                }).catch(function (err) {
+                    console.error('Failed to remove location from map:', err);
                     alert('Failed to remove: ' + err.message);
                 });
             });

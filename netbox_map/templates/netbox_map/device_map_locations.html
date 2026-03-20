@@ -4,7 +4,7 @@
 {% block content %}
 <div class="row mb-3">
   <div class="col">
-    {% if tiles or markers %}
+    {% if tiles or rack_tiles or markers %}
     <div class="card">
       <h5 class="card-header">{% trans "Map Locations" %}</h5>
       <div class="table-responsive">
@@ -22,6 +22,22 @@
             <tr>
               <td><span class="badge text-bg-primary">{% trans "Floor Plan" %}</span></td>
               <td>{{ tile.floorplan.name }}</td>
+              <td>{{ tile.floorplan.site }}</td>
+              <td>
+                <a href="/plugins/map/floorplans/{{ tile.floorplan.pk }}/visualization/?tile={{ tile.pk }}"
+                   class="btn btn-sm btn-outline-primary">
+                  <i class="mdi mdi-floor-plan"></i> {% trans "View" %}
+                </a>
+              </td>
+            </tr>
+            {% endfor %}
+            {% for tile in rack_tiles %}
+            <tr>
+              <td><span class="badge text-bg-primary">{% trans "Floor Plan" %}</span></td>
+              <td>
+                {{ tile.floorplan.name }}
+                <span class="text-muted small ms-1">{% trans "via rack" %} <a href="{{ rack.get_absolute_url }}">{{ rack.name }}</a></span>
+              </td>
               <td>{{ tile.floorplan.site }}</td>
               <td>
                 <a href="/plugins/map/floorplans/{{ tile.floorplan.pk }}/visualization/?tile={{ tile.pk }}"

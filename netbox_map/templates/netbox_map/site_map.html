@@ -15,6 +15,62 @@
 {% endblock %}
 
 {% block content %}
+{# Site filter bar (#26) #}
+<div class="site-map-filter-bar mb-2">
+  <form method="get" action="">
+    <div class="d-flex align-items-center gap-2 flex-wrap">
+      <button class="btn btn-sm {% if active_filters %}btn-primary{% else %}btn-outline-secondary{% endif %}"
+              type="button" data-bs-toggle="collapse" data-bs-target="#site-filter-collapse">
+        <i class="mdi mdi-filter-outline"></i> {% trans "Filter Sites" %}
+        {% if active_filters %}<span class="badge bg-white text-primary ms-1">ON</span>{% endif %}
+      </button>
+      {% if active_filters %}
+      <a href="?" class="btn btn-sm btn-outline-danger"><i class="mdi mdi-close"></i> {% trans "Clear" %}</a>
+      {% endif %}
+    </div>
+    <div class="collapse {% if active_filters %}show{% endif %} mt-2" id="site-filter-collapse">
+      <div class="card card-body py-2 px-3" style="max-width:800px;">
+        <div class="row g-3">
+          <div class="col-12">
+            <label class="form-label fw-semibold mb-1">{% trans "Status" %}</label>
+            <div class="d-flex flex-wrap gap-2">
+              {% for value, label in filter_form.fields.status.choices %}
+              <div class="form-check form-check-inline">
+                <input class="form-check-input" type="checkbox" name="status" value="{{ value }}"
+                       id="filter-status-{{ value }}"
+                       {% if value in active_statuses %}checked{% endif %}>
+                <label class="form-check-label" for="filter-status-{{ value }}">{{ label }}</label>
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label fw-semibold mb-1">{% trans "Region" %}</label>
+            {{ filter_form.region_id }}
+          </div>
+          <div class="col-md-4">
+            <label class="form-label fw-semibold mb-1">{% trans "Site Group" %}</label>
+            {{ filter_form.group_id }}
+          </div>
+          <div class="col-md-4">
+            <label class="form-label fw-semibold mb-1">{% trans "Tenant" %}</label>
+            {{ filter_form.tenant_id }}
+          </div>
+          <div class="col-md-4">
+            <label class="form-label fw-semibold mb-1">{% trans "Device Role" %}</label>
+            {{ filter_form.device_role_id }}
+            <div class="form-text">{% trans "Sites with devices of these roles" %}</div>
+          </div>
+        </div>
+        <div class="d-flex gap-2 mt-3">
+          <button type="submit" class="btn btn-sm btn-primary">{% trans "Apply" %}</button>
+          <a href="?" class="btn btn-sm btn-outline-secondary">{% trans "Reset" %}</a>
+        </div>
+      </div>
+    </div>
+  </form>
+</div>
+
 {# Toolbar: edit toggle + controls #}
 <div class="site-map-header mb-3">
   {% if can_edit %}

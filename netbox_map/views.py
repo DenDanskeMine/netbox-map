@@ -9,6 +9,7 @@ from django.shortcuts import redirect, render
 from django.utils.translation import gettext_lazy as _
 from django.views import View
 
+from dcim.filtersets import SiteFilterSet
 from dcim.models import Device, Location, Site
 from netbox.views import generic
 from utilities.views import ViewTab, register_model_view
@@ -71,13 +72,25 @@ class SiteMapView(LoginRequiredMixin, View):
     """Interactive map of all sites, locations, and geo-placed tiles."""
 
     def get(self, request):
-        all_sites = (
+        base_qs = (
             Site.objects.select_related('region')
             .annotate(floorplan_count=Count('floorplans'))
             .prefetch_related(
                 Prefetch('floorplans', queryset=FloorPlan.objects.only('id', 'name', 'site_id'))
             )
         )
+        # Apply filters from GET params (status, region, cf_* custom fields, etc.)
+        filter_params = request.GET.copy()
+        filter_params.pop('q', None)  # q is used for lat/lng focus — don't pass to filterset
+        site_filterset = SiteFilterSet(data=filter_params or None, queryset=base_qs)
+        all_sites = site_filterset.qs
+
+        # Device role filter — not in SiteFilterSet, applied separately
+        device_role_ids = request.GET.getlist('device_role_id')
+        if device_role_ids:
+            all_sites = all_sites.filter(devices__role__id__in=device_role_ids).distinct()
+
+        filter_form = forms.SiteMapFilterForm(data=request.GET or None)
 
         placed_sites = []
         unplaced_sites = []
@@ -278,6 +291,9 @@ class SiteMapView(LoginRequiredMixin, View):
             'focus_lng': focus_lng,
             'type_configs': type_configs,
             'type_configs_json': json.dumps(type_configs),
+            'filter_form': filter_form,
+            'active_filters': bool(filter_params),
+            'active_statuses': request.GET.getlist('status'),
         })
 
 
@@ -1221,11 +1237,18 @@ class MapSettingsView(LoginRequiredMixin, PermissionRequiredMixin, View):
 #
 
 def _count_device_locations(device):
+    from dcim.models import Rack as _Rack
     device_ct = ContentType.objects.get_for_model(device)
     tile_count = FloorPlanTile.objects.filter(
         assigned_object_type=device_ct,
         assigned_object_id=device.pk,
     ).count()
+    if not tile_count and device.rack_id:
+        rack_ct = ContentType.objects.get_for_model(_Rack)
+        tile_count += FloorPlanTile.objects.filter(
+            assigned_object_type=rack_ct,
+            assigned_object_id=device.rack_id,
+        ).count()
     marker_count = MapMarker.objects.filter(
         assigned_object_type=device_ct,
         assigned_object_id=device.pk,
@@ -1244,6 +1267,7 @@ class DeviceMapLocationsView(generic.ObjectView):
     )
 
     def get_extra_context(self, request, instance):
+        from dcim.models import Rack as _Rack
         device_ct = ContentType.objects.get_for_model(Device)
         tiles = FloorPlanTile.objects.filter(
             assigned_object_type=device_ct,
@@ -1253,7 +1277,18 @@ class DeviceMapLocationsView(generic.ObjectView):
             assigned_object_type=device_ct,
             assigned_object_id=instance.pk,
         ).select_related('site')
+        rack_tiles = []
+        if instance.rack_id:
+            rack_ct = ContentType.objects.get_for_model(_Rack)
+            rack_tiles = list(
+                FloorPlanTile.objects.filter(
+                    assigned_object_type=rack_ct,
+                    assigned_object_id=instance.rack_id,
+                ).select_related('floorplan__site')
+            )
         return {
             'tiles': tiles,
             'markers': markers,
+            'rack_tiles': rack_tiles,
+            'rack': instance.rack if instance.rack_id else None,
         }
