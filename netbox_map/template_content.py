@@ -1,5 +1,6 @@
 from django.contrib.contenttypes.models import ContentType
 
+from dcim.models import Rack
 from netbox.plugins import PluginTemplateExtension
 from .models import FloorPlan, FloorPlanTile
 
@@ -30,11 +31,26 @@ class DeviceFloorPlanLink(PluginTemplateExtension):
             .select_related('floorplan__site')
             .first()
         )
+        via_rack = False
+        if not tile and device.rack_id:
+            rack_ct = ContentType.objects.get_for_model(Rack)
+            tile = (
+                FloorPlanTile.objects
+                .filter(assigned_object_type=rack_ct, assigned_object_id=device.rack_id)
+                .select_related('floorplan__site')
+                .first()
+            )
+            via_rack = bool(tile)
         if not tile:
             return ''
         return self.render(
             'netbox_map/inc/device_floorplan_panel.html',
-            extra_context={'tile': tile, 'floorplan': tile.floorplan}
+            extra_context={
+                'tile': tile,
+                'floorplan': tile.floorplan,
+                'via_rack': via_rack,
+                'rack': device.rack if via_rack else None,
+            }
         )
 
 
