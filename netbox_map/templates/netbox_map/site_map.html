@@ -141,11 +141,18 @@
           <input type="text" id="sidebar-search" class="form-control form-control-sm" placeholder="{% trans 'Search markers...' %}">
         </div>
       </div>
-      <div class="sidebar-toggles" id="sidebar-toggles"></div>
-      <div class="sidebar-filter-row">
-        <span id="sidebar-count" class="text-muted" style="font-size:11px"></span>
+      <div class="sidebar-tabs" id="sidebar-tabs">
+        <button class="sidebar-tab active" data-tab="markers"><i class="mdi mdi-map-marker"></i> {% trans "Markers" %}</button>
+        <button class="sidebar-tab" data-tab="cables"><i class="mdi mdi-vector-polyline"></i> {% trans "Cables" %}</button>
       </div>
-      <div class="sidebar-tile-list" id="sidebar-list"></div>
+      <div class="sidebar-tab-content" id="sidebar-tab-markers">
+        <div class="sidebar-toggles" id="sidebar-toggles"></div>
+        <div class="sidebar-filter-row">
+          <span id="sidebar-count" class="text-muted" style="font-size:11px"></span>
+        </div>
+        <div class="sidebar-tile-list" id="sidebar-list"></div>
+      </div>
+      <div class="sidebar-tab-content d-none" id="sidebar-tab-cables"></div>
     </div>
     <div class="sidebar-panel sidebar-panel--detail d-none" id="sidebar-panel-detail">
       <div class="sidebar-detail-header" id="sidebar-detail-back">

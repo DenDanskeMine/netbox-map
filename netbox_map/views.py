@@ -590,6 +590,23 @@ class MapMarkerBulkDeleteView(generic.BulkDeleteView):
 
 
 #
+# LocationCoordinates views
+#
+
+class LocationCoordinatesRedirectView(LoginRequiredMixin, View):
+    """Redirect to the parent Location's detail page."""
+
+    def get(self, request, pk):
+        from .models import LocationCoordinates as LC
+        try:
+            lc = LC.objects.select_related('location').get(pk=pk)
+        except LC.DoesNotExist:
+            from django.http import Http404
+            raise Http404
+        return redirect(lc.location.get_absolute_url())
+
+
+#
 # CablePath views
 #
 

@@ -59,6 +59,36 @@
     var panelDetail     = document.getElementById('sidebar-panel-detail');
     var detailBackBtn   = document.getElementById('sidebar-detail-back');
 
+    /* ── Sidebar tab switching ─────────────────────────────────────── */
+    var tabMarkers      = document.getElementById('sidebar-tab-markers');
+    var tabCables       = document.getElementById('sidebar-tab-cables');
+    var activeSidebarTab = 'markers';
+
+    function switchSidebarTab(tab) {
+        if (tab === activeSidebarTab) return;
+        activeSidebarTab = tab;
+        var tabs = document.querySelectorAll('#sidebar-tabs .sidebar-tab');
+        tabs.forEach(function (b) {
+            b.classList.toggle('active', b.getAttribute('data-tab') === tab);
+        });
+        if (tab === 'markers') {
+            if (tabMarkers) tabMarkers.classList.remove('d-none');
+            if (tabCables) tabCables.classList.add('d-none');
+        } else {
+            if (tabMarkers) tabMarkers.classList.add('d-none');
+            if (tabCables) tabCables.classList.remove('d-none');
+        }
+    }
+
+    (function initSidebarTabs() {
+        var tabs = document.querySelectorAll('#sidebar-tabs .sidebar-tab');
+        tabs.forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                switchSidebarTab(btn.getAttribute('data-tab'));
+            });
+        });
+    })();
+
     /* ── Placement state ──────────────────────────────────────────── */
     var placementMode = null;   // null | 'site' | 'location' | 'tile' | 'marker'
     var placementItem = null;
@@ -1276,6 +1306,7 @@
 
         showCableDetail(cableItem);
         showDetailPanel();
+        switchSidebarTab('cables');
     }
 
     function showCableDetail(cableItem) {
@@ -1667,25 +1698,17 @@
 
     /* ── Cable sidebar section ───────────────────────────────────── */
     function buildCableSidebar() {
-        // Find or create the cables section in the list panel
-        var cablesSection = document.getElementById('sidebar-cables-section');
-        if (!cablesSection) {
-            cablesSection = document.createElement('div');
-            cablesSection.id = 'sidebar-cables-section';
-            cablesSection.className = 'sidebar-cables-section';
-            // Append to the list panel
-            if (panelList) {
-                panelList.appendChild(cablesSection);
-            }
-        }
+        // Use the dedicated cables tab container
+        var cablesSection = tabCables;
+        if (!cablesSection) return;
 
         if (allCableItems.length === 0) {
-            cablesSection.innerHTML = '';
+            cablesSection.innerHTML = '<div style="padding:12px;text-align:center;color:var(--fp-text-muted,#6c757d);font-size:12px">No cables</div>';
+            updateTabBadges();
             return;
         }
 
-        var html = '<div class="sidebar-cables-title">' +
-            '<i class="mdi mdi-vector-polyline"></i> Cables (' + allCableItems.length + ')</div>';
+        var html = '<div class="sidebar-cable-list-wrap">';
         html += '<div class="sidebar-cable-list">';
 
         allCableItems.forEach(function (item, idx) {
@@ -1703,7 +1726,9 @@
         });
 
         html += '</div>';
+        html += '</div>';
         cablesSection.innerHTML = html;
+        updateTabBadges();
 
         // Wire up click handlers
         var cableEls = cablesSection.querySelectorAll('[data-cable-idx]');
@@ -1719,6 +1744,17 @@
         // Update sidebar element references
         allCableItems.forEach(function (item, idx) {
             item.sidebarEl = cableEls[idx] || null;
+        });
+    }
+
+    function updateTabBadges() {
+        var tabs = document.querySelectorAll('#sidebar-tabs .sidebar-tab');
+        tabs.forEach(function (btn) {
+            var tab = btn.getAttribute('data-tab');
+            var count = tab === 'markers' ? allItems.length : allCableItems.length;
+            var icon = tab === 'markers' ? 'mdi-map-marker' : 'mdi-vector-polyline';
+            var label = tab === 'markers' ? 'Markers' : 'Cables';
+            btn.innerHTML = '<i class="mdi ' + icon + '"></i> ' + label + ' (' + count + ')';
         });
     }
 
@@ -1946,6 +1982,7 @@
         if (sidebarCount) {
             sidebarCount.textContent = visible + ' / ' + total + ' markers';
         }
+        updateTabBadges();
     }
 
     function applyFilters() {
@@ -2006,6 +2043,7 @@
         }
         showDetail(item);
         showDetailPanel();
+        switchSidebarTab('markers');
     }
 
     function showDetail(item) {
@@ -2469,33 +2507,59 @@
     }
 
     /* ── Build "Place on Map" chips (sites + locations only) ────── */
+    var SEARCH_THRESHOLD = 10;
+
     function buildPlaceChips() {
         if (!chipTrayPlace) return;
         chipTrayPlace.innerHTML = '';
 
         var hasAny = false;
 
-        // Sites
-        unplacedSites.forEach(function (s) {
+        // Sites — chips if ≤ threshold, search dropdown if more
+        if (unplacedSites.length > 0) {
             hasAny = true;
-            var chip = makeChip('#0d6efd', 'mdi-office-building-outline', s.name + (s.region ? ' (' + s.region + ')' : ''));
-            chip.addEventListener('mousedown', function (e) {
-                if (e.button !== 0) return;
-                startChipDrag('site', s, e);
-            });
-            chipTrayPlace.appendChild(chip);
-        });
+            if (unplacedSites.length <= SEARCH_THRESHOLD) {
+                unplacedSites.forEach(function (s) {
+                    var chip = makeChip('#0d6efd', 'mdi-office-building-outline', s.name + (s.region ? ' (' + s.region + ')' : ''));
+                    chip.addEventListener('mousedown', function (e) {
+                        if (e.button !== 0) return;
+                        startChipDrag('site', s, e);
+                    });
+                    chipTrayPlace.appendChild(chip);
+                });
+            } else {
+                chipTrayPlace.appendChild(buildSearchDropdown('site', unplacedSites, {
+                    color: '#0d6efd',
+                    icon: 'mdi-office-building-outline',
+                    label: function (s) { return s.name + (s.region ? ' (' + s.region + ')' : ''); },
+                    search: function (s) { return (s.name + ' ' + (s.region || '')).toLowerCase(); },
+                    placeholder: 'Search ' + unplacedSites.length + ' unplaced sites...'
+                }));
+            }
+        }
 
-        // Locations
-        unplacedLocations.forEach(function (l) {
+        // Locations — chips if ≤ threshold, search dropdown if more
+        if (unplacedLocations.length > 0) {
             hasAny = true;
-            var chip = makeChip('#1a8a7a', 'mdi-map-marker-outline', l.name + (l.site_name ? ' (' + l.site_name + ')' : ''));
-            chip.addEventListener('mousedown', function (e) {
-                if (e.button !== 0) return;
-                startChipDrag('location', l, e);
-            });
-            chipTrayPlace.appendChild(chip);
-        });
+            if (unplacedLocations.length <= SEARCH_THRESHOLD) {
+                unplacedLocations.forEach(function (l) {
+                    var chip = makeChip('#1a8a7a', 'mdi-map-marker-outline', l.name + (l.site_name ? ' (' + l.site_name + ')' : ''));
+                    chip.addEventListener('mousedown', function (e) {
+                        if (e.button !== 0) return;
+                        startChipDrag('location', l, e);
+                    });
+                    chipTrayPlace.appendChild(chip);
+                });
+            } else {
+                chipTrayPlace.appendChild(buildSearchDropdown('location', unplacedLocations, {
+                    color: '#1a8a7a',
+                    icon: 'mdi-map-marker-outline',
+                    label: function (l) { return l.name + (l.site_name ? ' (' + l.site_name + ')' : ''); },
+                    search: function (l) { return (l.name + ' ' + (l.site_name || '')).toLowerCase(); },
+                    placeholder: 'Search ' + unplacedLocations.length + ' unplaced locations...'
+                }));
+            }
+        }
 
         if (!hasAny && unplacedTiles.length === 0) {
             var empty = document.createElement('span');
@@ -2506,6 +2570,76 @@
 
         // Update tile search placeholder with count
         updateTileSearchPlaceholder();
+    }
+
+    /**
+     * Build a search-input + dropdown for placing items when there are many.
+     * Reuses the tile-search-item styling.
+     */
+    function buildSearchDropdown(mode, items, opts) {
+        var wrap = document.createElement('div');
+        wrap.className = 'tile-place-row';
+
+        var input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'form-control form-control-sm';
+        input.placeholder = opts.placeholder;
+        input.autocomplete = 'off';
+        wrap.appendChild(input);
+
+        var results = document.createElement('div');
+        results.className = 'tile-search-results';
+        wrap.appendChild(results);
+
+        function buildResults(query) {
+            results.innerHTML = '';
+            var q = (query || '').toLowerCase().trim();
+            if (!q) {
+                results.classList.remove('open');
+                return;
+            }
+
+            var matches = [];
+            for (var i = 0; i < items.length && matches.length < 30; i++) {
+                if (opts.search(items[i]).indexOf(q) !== -1) matches.push(items[i]);
+            }
+
+            if (matches.length === 0) {
+                results.innerHTML = '<div class="tile-search-empty">No matches</div>';
+                results.classList.add('open');
+                return;
+            }
+
+            matches.forEach(function (item) {
+                var row = document.createElement('div');
+                row.className = 'tile-search-item';
+                row.innerHTML =
+                    '<span class="chip-dot" style="background:' + opts.color + '">' +
+                        '<i class="mdi ' + opts.icon + '"></i>' +
+                    '</span>' +
+                    '<span class="tile-search-label">' + escHtml(opts.label(item)) + '</span>';
+                row.addEventListener('mousedown', function (e) {
+                    if (e.button !== 0) return;
+                    results.classList.remove('open');
+                    input.value = '';
+                    startChipDrag(mode, item, e);
+                });
+                results.appendChild(row);
+            });
+            results.classList.add('open');
+        }
+
+        input.addEventListener('input', function () { buildResults(input.value); });
+        input.addEventListener('focus', function () {
+            if (input.value.trim()) buildResults(input.value);
+        });
+        document.addEventListener('mousedown', function (e) {
+            if (!results.contains(e.target) && e.target !== input) {
+                results.classList.remove('open');
+            }
+        });
+
+        return wrap;
     }
 
     function makeChip(color, iconClass, label) {

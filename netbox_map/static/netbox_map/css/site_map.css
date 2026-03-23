@@ -37,6 +37,7 @@
 .sidebar-panel--list .sidebar-tile-list {
     flex: 1;
     overflow-y: auto;
+    min-height: 0;
 }
 
 .sidebar-panel--detail {
@@ -840,6 +841,55 @@
     cursor: crosshair !important;
 }
 
+/* ── Sidebar tabs ────────────────────────────────────────────── */
+.sidebar-tabs {
+    display: flex;
+    flex-shrink: 0;
+    border-bottom: 1px solid var(--fp-border-light, rgba(0,0,0,0.1));
+}
+
+.sidebar-tab {
+    flex: 1;
+    padding: 6px 0;
+    font-size: 12px;
+    font-weight: 600;
+    text-align: center;
+    border: none;
+    background: transparent;
+    color: var(--fp-text-muted, #6c757d);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: color 0.15s, border-color 0.15s;
+}
+
+.sidebar-tab:hover {
+    color: var(--fp-text, #212529);
+}
+
+.sidebar-tab.active {
+    color: var(--fp-accent, #0d6efd);
+    border-bottom-color: var(--fp-accent, #0d6efd);
+}
+
+.sidebar-tab .mdi {
+    margin-right: 4px;
+    font-size: 13px;
+}
+
+.sidebar-tab-content {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    overflow: hidden;
+    min-height: 0;
+}
+
+.sidebar-tab-content .sidebar-tile-list,
+.sidebar-tab-content .sidebar-cable-list-wrap {
+    flex: 1;
+    overflow-y: auto;
+}
+
 /* ── Cable sidebar section ───────────────────────────────────── */
 .sidebar-cables-title {
     padding: 6px 12px;
@@ -848,8 +898,6 @@
     letter-spacing: 0.5px;
     color: var(--fp-text-muted, #6c757d);
     opacity: 0.7;
-    border-top: 1px solid var(--fp-border-light, rgba(0,0,0,0.06));
-    margin-top: 4px;
 }
 
 .sidebar-cables-section .sidebar-cable-list {

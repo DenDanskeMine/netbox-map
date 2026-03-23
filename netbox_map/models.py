@@ -426,7 +426,7 @@ class LocationCoordinates(NetBoxModel):
         return f'{self.location} ({self.latitude}, {self.longitude})'
 
     def get_absolute_url(self):
-        return reverse('plugins:netbox_map:locationcoordinates', args=[self.pk])
+        return self.location.get_absolute_url()
 
 
 class MapMarker(NetBoxModel):

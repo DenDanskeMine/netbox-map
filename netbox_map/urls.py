@@ -59,6 +59,9 @@ urlpatterns = (
     path('cable-paths/<int:pk>/split/', views.SplitCableView.as_view(), name='cablepath_split'),
     path('cable-paths/<int:pk>/changelog/', ObjectChangeLogView.as_view(), name='cablepath_changelog', kwargs={'model': models.CablePath}),
 
+    # LocationCoordinates (redirect to parent Location)
+    path('location-coordinates/<int:pk>/', views.LocationCoordinatesRedirectView.as_view(), name='locationcoordinates'),
+
     # MapMarker
     path('map-markers/', views.MapMarkerListView.as_view(), name='mapmarker_list'),
     path('map-markers/add/', views.MapMarkerEditView.as_view(), name='mapmarker_add'),
