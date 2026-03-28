@@ -398,7 +398,7 @@ class TopologyDeviceDetailView(LoginRequiredMixin, View):
     """AJAX endpoint returning interfaces and ports for a device."""
 
     def get(self, request, device_id):
-        from dcim.models import Device, Interface, FrontPort, RearPort
+        from dcim.models import Device, Interface, FrontPort, RearPort, CableTermination
 
         try:
             device = Device.objects.get(pk=device_id)
@@ -408,6 +408,8 @@ class TopologyDeviceDetailView(LoginRequiredMixin, View):
         interfaces = Interface.objects.filter(device=device).select_related(
             'cable', 'lag',
         ).order_by('name')
+
+        iface_ct = ContentType.objects.get_for_model(Interface)
 
         result = []
         for iface in interfaces:
@@ -427,6 +429,10 @@ class TopologyDeviceDetailView(LoginRequiredMixin, View):
             if iface.cable:
                 iface_data['cable_color'] = f'#{iface.cable.color}' if iface.cable.color else ''
                 iface_data['cable_label'] = iface.cable.label or f'Cable #{iface.cable.pk}'
+                iface_data['cable_type'] = iface.cable.get_type_display() if iface.cable.type else ''
+
+                # Find remote end via trace(), fall back to CableTermination
+                connected = None
                 try:
                     trace = iface.trace()
                     if trace:
@@ -435,7 +441,7 @@ class TopologyDeviceDetailView(LoginRequiredMixin, View):
                         if far_terms:
                             far_obj = far_terms[0]
                             if hasattr(far_obj, 'device'):
-                                iface_data['connected_to'] = {
+                                connected = {
                                     'device': far_obj.device.name,
                                     'device_id': far_obj.device.pk,
                                     'port': far_obj.name,
@@ -443,6 +449,30 @@ class TopologyDeviceDetailView(LoginRequiredMixin, View):
                                 }
                 except Exception:
                     pass
+
+                # Fallback: look up the other end via CableTermination
+                if not connected:
+                    try:
+                        other_terms = CableTermination.objects.filter(
+                            cable=iface.cable,
+                        ).exclude(
+                            termination_type=iface_ct,
+                            termination_id=iface.pk,
+                        ).select_related('termination_type')
+                        for term in other_terms:
+                            obj = term.termination
+                            if obj and hasattr(obj, 'device'):
+                                connected = {
+                                    'device': obj.device.name,
+                                    'device_id': obj.device.pk,
+                                    'port': obj.name,
+                                    'port_type': type(obj).__name__,
+                                }
+                                break
+                    except Exception:
+                        pass
+
+                iface_data['connected_to'] = connected
             result.append(iface_data)
 
         ports = []

@@ -219,6 +219,28 @@
         setTimeout(function() { el.classList.remove('visible'); setTimeout(function() { el.remove(); }, 300); }, 2000);
     }
 
+    // Cable style toggle (curve / orthogonal)
+    var cableCurve = document.getElementById('cable-curve');
+    var cableOrtho = document.getElementById('cable-ortho');
+    if (cableCurve) cableCurve.addEventListener('click', function() {
+        cableCurve.classList.add('active'); if (cableOrtho) cableOrtho.classList.remove('active');
+        renderer.switchCableStyle('curve');
+    });
+    if (cableOrtho) cableOrtho.addEventListener('click', function() {
+        if (cableCurve) cableCurve.classList.remove('active'); cableOrtho.classList.add('active');
+        renderer.switchCableStyle('ortho');
+    });
+
+    // Cable labels toggle
+    var toggleLabels = document.getElementById('topo-toggle-labels');
+    if (toggleLabels) {
+        toggleLabels.addEventListener('click', function() {
+            this.classList.toggle('active');
+            var edgeLayer = document.querySelector('.edge-layer');
+            if (edgeLayer) edgeLayer.classList.toggle('show-cable-labels');
+        });
+    }
+
     // Handle "go to device" clicks from interface detail
     document.addEventListener('click', function(e) {
         var link = e.target.closest('[data-goto-device]');

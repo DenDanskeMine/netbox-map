@@ -46,6 +46,7 @@ window.TopologyApp = (function() {
         this.portOverrides = {};  // portId -> 'left'|'right'
         this.layout = 'force';
         this.viewMode = 'stencil';
+        this.cableStyle = 'curve'; // 'curve' or 'ortho'
         this.searchQuery = '';
     }
 

@@ -6,8 +6,10 @@
 
     var CARD_W = 180;
     var HEADER_H = 38;
-    var PORT_ROW_H = 20;
-    var CARD_PAD = 6;
+    var PORT_H = 24;          // height of each port container
+    var PORT_GAP = 3;         // gap between port containers
+    var PORT_TEXT_PAD = 12;   // text padding inside port container
+    var CARD_PAD = 10;
     var LAYER_GAP_X = 480;
     var NODE_GAP_Y = 40;
 
@@ -87,7 +89,7 @@
         // Compute card heights
         nodeData.forEach(function(nd) {
             var portCount = nd.ports.length;
-            nd._cardH = HEADER_H + Math.max(portCount, 1) * PORT_ROW_H + CARD_PAD;
+            nd._cardH = HEADER_H + portCount * (PORT_H + PORT_GAP) + CARD_PAD;
             if (portCount === 0) nd._cardH = HEADER_H + CARD_PAD;
         });
 
@@ -132,10 +134,10 @@
 
         // Compute port Y positions (relative to card top)
         function portRelY(nd, portIdx) {
-            return HEADER_H + portIdx * PORT_ROW_H + PORT_ROW_H / 2;
+            return HEADER_H + portIdx * (PORT_H + PORT_GAP) + PORT_H / 2;
         }
 
-        // Dynamic port position: side determined by where the OTHER device is
+        // Port position: cable attaches at port container edge (flush with card)
         function getPortPos(portId, otherNodeId) {
             var nd = portToNode[portId];
             if (!nd) return null;
@@ -156,27 +158,45 @@
             };
         }
 
-        // Cable path generator
+        // Cable path generator — supports curve and orthogonal styles
         function cablePath(d) {
             var srcNode = typeof d.source === 'object' ? d.source : nodeById[d.source];
             var tgtNode = typeof d.target === 'object' ? d.target : nodeById[d.target];
             var sp = getPortPos(d.source_port, d.target);
             var tp = getPortPos(d.target_port, d.source);
             if (!sp || !tp) {
-                // Fallback: center-to-center
                 if (!srcNode || !tgtNode) return '';
                 return 'M' + (srcNode.x + CARD_W/2) + ',' + (srcNode.y + (srcNode._cardH||40)/2)
                     + ' L' + (tgtNode.x + CARD_W/2) + ',' + (tgtNode.y + (tgtNode._cardH||40)/2);
             }
 
+            if (self.state.cableStyle === 'ortho') {
+                // Orthogonal: horizontal out, vertical, horizontal in
+                var sDir = sp.side === 'right' ? 1 : -1;
+                var tDir = tp.side === 'right' ? 1 : -1;
+                var midX = (sp.x + tp.x) / 2;
+                var outLen = Math.max(Math.abs(tp.x - sp.x) * 0.2, 30);
+                var sx2 = sp.x + outLen * sDir;
+                var tx2 = tp.x + outLen * tDir;
+                // Use midpoint X for the vertical segment
+                var vx = (sx2 + tx2) / 2;
+                return 'M' + sp.x + ',' + sp.y
+                    + ' L' + sx2 + ',' + sp.y
+                    + ' L' + sx2 + ',' + ((sp.y + tp.y) / 2)
+                    + ' L' + tx2 + ',' + ((sp.y + tp.y) / 2)
+                    + ' L' + tx2 + ',' + tp.y
+                    + ' L' + tp.x + ',' + tp.y;
+            }
+
+            // Default: bezier curve
             var dx = Math.abs(tp.x - sp.x);
             var cp = Math.max(dx * 0.45, 60);
-            var sDir = sp.side === 'right' ? 1 : -1;
-            var tDir = tp.side === 'right' ? 1 : -1;
+            var sDir2 = sp.side === 'right' ? 1 : -1;
+            var tDir2 = tp.side === 'right' ? 1 : -1;
 
             return 'M' + sp.x + ',' + sp.y
-                + ' C' + (sp.x + cp * sDir) + ',' + sp.y
-                + ' ' + (tp.x + cp * tDir) + ',' + tp.y
+                + ' C' + (sp.x + cp * sDir2) + ',' + sp.y
+                + ' ' + (tp.x + cp * tDir2) + ',' + tp.y
                 + ' ' + tp.x + ',' + tp.y;
         }
 
@@ -197,6 +217,96 @@
 
         this.edgeElements.append('title').text(function(d) {
             return [d.source_port_name, '\u2192', d.target_port_name, '|', d.cable_label, d.cable_type].join(' ');
+        });
+
+        // Give each cable path an ID for textPath reference
+        this.edgeElements.attr('id', function(d) { return 'cable-path-' + d.cable_id; });
+
+        // Connector dots container
+        var connectorDots = this.g.select('.edge-layer');
+
+        // Create label paths — always left-to-right for readable text
+        // For curves: reversed bezier when cable goes right-to-left
+        // For ortho: a simple horizontal line at the midpoint
+        function createLabelPath(d) {
+            var sp = getPortPos(d.source_port, d.target);
+            var tp = getPortPos(d.target_port, d.source);
+            if (!sp || !tp) return;
+
+            var pathId = 'cable-label-path-' + d.cable_id;
+            var lp, rp; // left point, right point
+
+            if (sp.x <= tp.x) { lp = sp; rp = tp; }
+            else { lp = tp; rp = sp; }
+
+            var labelPath;
+            if (self.state.cableStyle === 'ortho') {
+                // Horizontal line at vertical midpoint
+                var midY = (sp.y + tp.y) / 2;
+                var sDir = sp.side === 'right' ? 1 : -1;
+                var tDir = tp.side === 'right' ? 1 : -1;
+                var outLen = Math.max(Math.abs(tp.x - sp.x) * 0.2, 30);
+                var sx2 = sp.x + outLen * sDir;
+                var tx2 = tp.x + outLen * tDir;
+                var leftX = Math.min(sx2, tx2);
+                var rightX = Math.max(sx2, tx2);
+                labelPath = 'M' + leftX + ',' + midY + ' L' + rightX + ',' + midY;
+            } else {
+                // Bezier from left to right
+                var dx = Math.abs(rp.x - lp.x);
+                var cp = Math.max(dx * 0.45, 60);
+                var lDir = lp === sp ? (sp.side === 'right' ? 1 : -1) : (tp.side === 'right' ? 1 : -1);
+                var rDir = rp === sp ? (sp.side === 'right' ? 1 : -1) : (tp.side === 'right' ? 1 : -1);
+                labelPath = 'M' + lp.x + ',' + lp.y
+                    + ' C' + (lp.x + cp * lDir) + ',' + lp.y
+                    + ' ' + (rp.x + cp * rDir) + ',' + rp.y
+                    + ' ' + rp.x + ',' + rp.y;
+            }
+
+            connectorDots.append('path')
+                .attr('id', pathId)
+                .attr('d', labelPath)
+                .attr('fill', 'none')
+                .attr('stroke', 'none');
+        }
+
+        edgeData.forEach(createLabelPath);
+
+        // Cable labels — "#ID Type" following the label path
+        var cableLabels = this.g.select('.edge-layer')
+            .selectAll('text.cable-label').data(edgeData).enter().append('text')
+            .attr('class', 'cable-label')
+            .attr('dy', -5);
+
+        cableLabels.each(function(d) {
+            var tp = d3.select(this).append('textPath')
+                .attr('href', '#cable-label-path-' + d.cable_id)
+                .attr('startOffset', '50%')
+                .attr('text-anchor', 'middle');
+            tp.append('tspan').attr('class', 'cable-label-id').text('#' + d.cable_id);
+            if (d.cable_type) {
+                tp.append('tspan').attr('dx', 5).text(d.cable_type);
+            }
+        });
+        edgeData.forEach(function(d) {
+            var sp = getPortPos(d.source_port, d.target);
+            var tp = getPortPos(d.target_port, d.source);
+            if (sp) connectorDots.append('circle').attr('class', 'connector-dot')
+                .attr('cx', sp.x).attr('cy', sp.y).attr('r', 3.5)
+                .attr('fill', d.color || '#6c757d');
+            if (tp) connectorDots.append('circle').attr('class', 'connector-dot')
+                .attr('cx', tp.x).attr('cy', tp.y).attr('r', 3.5)
+                .attr('fill', d.color || '#6c757d');
+        });
+
+        // Show cable labels on cable hover
+        this.edgeElements.on('mouseenter', function(ev, d) {
+            // Find matching label
+            cableLabels.each(function(ld) {
+                if (ld.id === d.id) d3.select(this).classed('visible', true);
+            });
+        }).on('mouseleave', function() {
+            cableLabels.classed('visible', false);
         });
 
         // === Draw device cards ===
@@ -236,44 +346,61 @@
             .attr('y1', HEADER_H - 2).attr('y2', HEADER_H - 2)
             .attr('stroke', 'rgba(255,255,255,0.06)');
 
-        // Draw ports inside cards
+        // Draw ports — full-width containers flush with card edges
         cards.each(function(d) {
             var g = d3.select(this);
             d.ports.forEach(function(p, i) {
-                var py = HEADER_H + i * PORT_ROW_H;
+                var py = HEADER_H + i * (PORT_H + PORT_GAP);
                 var color = p.speed ? App.speedColor(p.speed) : '#556';
                 if (p.port_class === 'front-port') color = '#ff9800';
                 if (p.port_class === 'rear-port') color = '#795548';
 
-                // Alternating row background
-                g.append('rect')
-                    .attr('x', 1).attr('y', py)
-                    .attr('width', CARD_W - 2).attr('height', PORT_ROW_H)
-                    .attr('fill', i % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent');
+                var pg = g.append('g').attr('class', 'port-container');
 
-                // Port name (left-aligned after color bar)
-                g.append('text').attr('class', 'port-name')
-                    .attr('x', 14).attr('y', py + PORT_ROW_H / 2 + 3.5)
-                    .attr('text-anchor', 'start')
-                    .text(p.name.length > 12 ? p.name.substring(0, 10) + '..' : p.name);
+                // Port box — full card width, flush with edges
+                pg.append('rect')
+                    .attr('x', 0).attr('y', py)
+                    .attr('width', CARD_W).attr('height', PORT_H)
+                    .attr('fill', 'rgba(255,255,255,0.04)')
+                    .attr('stroke', 'rgba(255,255,255,0.06)')
+                    .attr('stroke-width', 0.5);
 
-                // Speed / type badge (right-aligned)
+                // Color accent bar on left
+                pg.append('rect')
+                    .attr('x', 0).attr('y', py)
+                    .attr('width', 3).attr('height', PORT_H)
+                    .attr('fill', color);
+
+                // Port name
+                pg.append('text').attr('class', 'port-name')
+                    .attr('x', PORT_TEXT_PAD)
+                    .attr('y', py + PORT_H / 2 + 3.5)
+                    .text(function() {
+                        var n = p.name;
+                        return n.length > 12 ? n.substring(0, 10) + '..' : n;
+                    });
+
+                // Speed pill
                 var badge = '';
                 if (p.speed) badge = App.formatSpeed(p.speed);
-                else if (p.port_class === 'front-port') badge = 'Front';
-                else if (p.port_class === 'rear-port') badge = 'Rear';
+                else if (p.port_class === 'front-port') badge = 'FP';
+                else if (p.port_class === 'rear-port') badge = 'RP';
+
                 if (badge) {
-                    g.append('text').attr('class', 'port-badge')
-                        .attr('x', CARD_W - 14).attr('y', py + PORT_ROW_H / 2 + 3.5)
-                        .attr('text-anchor', 'end').attr('fill', color)
+                    var pillW = badge.length * 6.5 + 8;
+                    var pillX = CARD_W - pillW - PORT_TEXT_PAD + 4;
+                    pg.append('rect')
+                        .attr('x', pillX).attr('y', py + 4)
+                        .attr('width', pillW).attr('height', PORT_H - 8)
+                        .attr('rx', 3)
+                        .attr('fill', color).attr('opacity', 0.2);
+                    pg.append('text').attr('class', 'port-badge')
+                        .attr('x', pillX + pillW / 2)
+                        .attr('y', py + PORT_H / 2 + 3.5)
+                        .attr('text-anchor', 'middle')
+                        .attr('fill', color)
                         .text(badge);
                 }
-
-                // Color accent bar on left edge
-                g.append('rect')
-                    .attr('x', 1).attr('y', py + 2)
-                    .attr('width', 3).attr('height', PORT_ROW_H - 4)
-                    .attr('rx', 1).attr('fill', color).attr('opacity', 0.7);
             });
         });
 
@@ -300,16 +427,33 @@
             self.edgeElements.attr('stroke-opacity', null).attr('stroke-width', 2);
         });
 
-        // Drag — update positions in state.nodes for saving
+        // Drag — update cables, dots follow automatically via textPath
         cards.call(d3.drag()
             .on('drag', function(ev, d) {
                 d.x += ev.dx; d.y += ev.dy;
                 d3.select(this).attr('transform', 'translate(' + d.x + ',' + d.y + ')');
-                // Sync back to state.nodes
                 var orig = self.state.nodes.find(function(n) { return n.id === d.id; });
                 if (orig) { orig.x = d.x; orig.y = d.y; }
+
                 // Redraw cables
                 self.edgeElements.attr('d', cablePath);
+
+                // Rebuild label paths (removes old, creates new left-to-right)
+                edgeData.forEach(function(e) {
+                    connectorDots.select('#cable-label-path-' + e.cable_id).remove();
+                    createLabelPath(e);
+                });
+
+                // Redraw connector dots
+                connectorDots.selectAll('circle.connector-dot').remove();
+                edgeData.forEach(function(e) {
+                    var sp = getPortPos(e.source_port, e.target);
+                    var tp = getPortPos(e.target_port, e.source);
+                    if (sp) connectorDots.append('circle').attr('class', 'connector-dot')
+                        .attr('cx', sp.x).attr('cy', sp.y).attr('r', 3.5).attr('fill', e.color || '#6c757d');
+                    if (tp) connectorDots.append('circle').attr('class', 'connector-dot')
+                        .attr('cx', tp.x).attr('cy', tp.y).attr('r', 3.5).attr('fill', e.color || '#6c757d');
+                });
             })
         );
 
@@ -403,6 +547,7 @@
     Renderer.prototype.resize = function() { this._updateSize(); };
     Renderer.prototype.switchView = function(m) { this.state.viewMode = m; this.render(this.state.nodes, this.state.edges); };
     Renderer.prototype.switchLayout = function() { this.render(this.state.nodes, this.state.edges); };
+    Renderer.prototype.switchCableStyle = function(style) { this.state.cableStyle = style; this.render(this.state.nodes, this.state.edges); };
 
     Renderer.prototype.highlightNode = function(id) {
         this._deselectAll();

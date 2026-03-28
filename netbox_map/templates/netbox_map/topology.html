@@ -85,6 +85,15 @@
         <button id="view-node" class="topo-btn" type="button" title="{% trans 'Node View' %}"><i class="mdi mdi-circle-outline"></i></button>
       </div>
 
+      {# Cable style toggle #}
+      <div class="topo-btn-group">
+        <button id="cable-curve" class="topo-btn active" type="button" title="{% trans 'Curved Cables' %}"><i class="mdi mdi-vector-curve"></i></button>
+        <button id="cable-ortho" class="topo-btn" type="button" title="{% trans 'Straight Cables' %}"><i class="mdi mdi-vector-polyline"></i></button>
+      </div>
+
+      {# Cable labels toggle #}
+      <button id="topo-toggle-labels" class="topo-btn" type="button" title="{% trans 'Cable Labels' %}"><i class="mdi mdi-tag-text-outline"></i></button>
+
       {# Export placeholder #}
       <button class="topo-btn" type="button" title="{% trans 'Export' %}" disabled><i class="mdi mdi-export-variant"></i></button>
     </div>
