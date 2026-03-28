@@ -3,7 +3,7 @@ from django.utils.safestring import mark_safe
 from django.utils.translation import gettext_lazy as _
 
 from netbox.tables import NetBoxTable, columns
-from .models import FloorPlanTile, FloorPlan, CustomMarkerType, MapMarker, CablePath
+from .models import FloorPlanTile, FloorPlan, CustomMarkerType, MapMarker, CablePath, TopologySavedView
 
 
 class FloorPlanTable(NetBoxTable):
@@ -297,3 +297,15 @@ class CustomMarkerTypeTable(NetBoxTable):
 
     def value_icon(self, value):
         return value
+
+
+class TopologySavedViewTable(NetBoxTable):
+    name = tables.Column(linkify=True, verbose_name=_('Name'))
+    site = tables.Column(linkify=True, verbose_name=_('Site'))
+    view_mode = tables.Column(verbose_name=_('View Mode'))
+    description = tables.Column(verbose_name=_('Description'))
+
+    class Meta(NetBoxTable.Meta):
+        model = TopologySavedView
+        fields = ('pk', 'name', 'site', 'view_mode', 'description')
+        default_columns = ('pk', 'name', 'site', 'view_mode', 'description')

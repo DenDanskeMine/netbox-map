@@ -1,0 +1,821 @@
+/* NetBox Map — Topology View Styles */
+/* Reuses --fp-* variables from floorplan.css for theme awareness */
+
+/* ===== Toolbar ===== */
+
+.topo-toolbar {
+    background: var(--fp-bg);
+    border: 1px solid var(--fp-border);
+    border-radius: 8px;
+    padding: 6px 10px;
+    margin-bottom: 8px;
+}
+
+.topo-toolbar-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.topo-toolbar-group {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.topo-toolbar-filters {
+    flex: 1;
+    min-width: 0;
+}
+
+.topo-toolbar-label {
+    color: var(--fp-text-muted);
+    font-size: 14px;
+    margin-right: 2px;
+    flex-shrink: 0;
+}
+
+.topo-filter-field {
+    width: 145px;
+    min-width: 90px;
+}
+
+.topo-filter-sm {
+    width: 120px;
+}
+
+.topo-filter-field select,
+.topo-filter-field .ts-wrapper {
+    font-size: 12px !important;
+    min-height: 28px !important;
+}
+
+.topo-filter-field .ts-wrapper .ts-control {
+    min-height: 26px !important;
+    padding: 0 8px !important;
+    font-size: 12px !important;
+}
+
+.topo-toolbar-info {
+    flex-shrink: 0;
+}
+
+.topo-stat {
+    font-size: 12px;
+    color: var(--fp-text-muted);
+    white-space: nowrap;
+    padding: 0 6px;
+}
+
+.topo-stat-sep {
+    margin: 0 3px;
+    opacity: 0.4;
+}
+
+.topo-toolbar-actions {
+    flex-shrink: 0;
+}
+
+.topo-toolbar-divider {
+    display: inline-block;
+    width: 1px;
+    height: 20px;
+    background: var(--fp-border);
+    margin: 0 4px;
+    vertical-align: middle;
+}
+
+/* Custom toolbar buttons */
+.topo-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    padding: 4px 10px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--fp-text-muted);
+    background: transparent;
+    border: 1px solid var(--fp-border);
+    border-radius: 5px;
+    cursor: pointer;
+    transition: all 0.12s ease;
+    white-space: nowrap;
+    height: 28px;
+    line-height: 1;
+    text-decoration: none;
+}
+
+.topo-btn:hover {
+    color: var(--fp-text);
+    background: var(--fp-hover);
+    border-color: var(--fp-toggle-active-border);
+}
+
+.topo-btn.active {
+    color: var(--fp-toggle-active-text);
+    background: var(--fp-toggle-active-bg);
+    border-color: var(--fp-toggle-active-border);
+}
+
+.topo-btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+}
+
+.topo-btn i.mdi {
+    font-size: 15px;
+    line-height: 1;
+}
+
+.topo-btn-primary {
+    color: #fff;
+    background: #2ecc71;
+    border-color: #2ecc71;
+}
+
+.topo-btn-primary:hover {
+    background: #27ae60;
+    border-color: #27ae60;
+    color: #fff;
+}
+
+.topo-btn-danger {
+    color: #e74c3c;
+    border-color: rgba(231, 76, 60, 0.3);
+}
+
+.topo-btn-danger:hover {
+    background: rgba(231, 76, 60, 0.1);
+    border-color: rgba(231, 76, 60, 0.5);
+}
+
+/* Button group (connected buttons) */
+.topo-btn-group {
+    display: inline-flex;
+}
+
+.topo-btn-group .topo-btn {
+    border-radius: 0;
+    margin-left: -1px;
+}
+
+.topo-btn-group .topo-btn:first-child {
+    border-radius: 5px 0 0 5px;
+    margin-left: 0;
+}
+
+.topo-btn-group .topo-btn:last-child {
+    border-radius: 0 5px 5px 0;
+}
+
+/* Dropdown override for toolbar */
+.topo-toolbar .dropdown-toggle::after {
+    font-size: 10px;
+    margin-left: 4px;
+}
+
+.topo-toolbar .dropdown-menu {
+    font-size: 13px;
+    background: var(--fp-bg);
+    border-color: var(--fp-border);
+}
+
+.topo-toolbar .dropdown-item {
+    color: var(--fp-text);
+    font-size: 13px;
+    padding: 5px 14px;
+}
+
+.topo-toolbar .dropdown-item:hover {
+    background: var(--fp-hover);
+    color: var(--fp-text);
+}
+
+.topo-toolbar .dropdown-item.active {
+    background: var(--fp-active);
+    color: var(--fp-toggle-active-text);
+}
+
+.topo-toolbar .dropdown-divider {
+    border-color: var(--fp-border);
+}
+
+/* ===== Footer / Legend ===== */
+
+.topo-footer {
+    display: flex;
+    gap: 20px;
+    padding: 6px 0;
+    flex-wrap: wrap;
+}
+
+.topo-legend {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    color: var(--fp-text-muted);
+}
+
+.topo-legend-title {
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-size: 10px;
+    opacity: 0.6;
+}
+
+.topo-legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+}
+
+/* ===== Layout ===== */
+
+.topology-layout {
+    display: flex;
+    gap: 0;
+    height: calc(100vh - 300px);
+    min-height: 450px;
+    border: 1px solid var(--fp-border);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.topology-graph-area {
+    flex: 1;
+    min-width: 0;
+    position: relative;
+    background: var(--fp-canvas-bg);
+    overflow: hidden;
+}
+
+#topology-svg {
+    width: 100%;
+    height: 100%;
+    cursor: grab;
+}
+
+#topology-svg:active {
+    cursor: grabbing;
+}
+
+/* ===== Overlay states ===== */
+
+.topology-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    z-index: 5;
+}
+
+.topology-overlay .mdi {
+    opacity: 0.3;
+}
+
+/* ===== Sidebar ===== */
+
+.topology-sidebar {
+    width: 320px;
+    min-width: 280px;
+    max-width: 400px;
+    background: var(--fp-bg);
+    border-left: 1px solid var(--fp-border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.topology-sidebar .sidebar-panel {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+}
+
+/* Sidebar header / search */
+.topo-sidebar-header {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--fp-border);
+}
+
+.topo-search-wrap {
+    position: relative;
+}
+
+.topo-search-wrap .mdi {
+    position: absolute;
+    left: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--fp-text-muted);
+    font-size: 16px;
+    pointer-events: none;
+}
+
+.topo-search-wrap input {
+    padding-left: 32px;
+    background: var(--fp-input-bg);
+    border-color: var(--fp-input-border);
+    color: var(--fp-input-text);
+    font-size: 13px;
+}
+
+/* Role toggles */
+.topo-role-toggles {
+    padding: 8px 12px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    border-bottom: 1px solid var(--fp-border-light);
+}
+
+.topo-role-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    cursor: pointer;
+    user-select: none;
+    background: var(--fp-toggle-bg);
+    border: 1px solid var(--fp-toggle-border);
+    color: var(--fp-text-muted);
+    transition: all 0.15s ease;
+}
+
+.topo-role-toggle:hover {
+    background: var(--fp-hover);
+}
+
+.topo-role-toggle.active {
+    background: var(--fp-toggle-active-bg);
+    border-color: var(--fp-toggle-active-border);
+    color: var(--fp-toggle-active-text);
+}
+
+.topo-role-toggle .toggle-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+.topo-role-toggle:not(.active) .toggle-dot {
+    opacity: 0.3;
+}
+
+/* Device list */
+.topo-device-list {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-width: thin;
+    scrollbar-color: var(--fp-scrollbar-thumb) transparent;
+}
+
+.topo-device-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 12px;
+    cursor: pointer;
+    border-bottom: 1px solid var(--fp-border-light);
+    transition: background 0.1s ease;
+}
+
+.topo-device-item:hover {
+    background: var(--fp-hover);
+}
+
+.topo-device-item.selected {
+    background: var(--fp-active);
+}
+
+.topo-device-item .role-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.topo-device-item .device-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.topo-device-item .device-name {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--fp-text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.topo-device-item .device-meta {
+    font-size: 11px;
+    color: var(--fp-text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.topo-device-item .device-ports {
+    font-size: 11px;
+    color: var(--fp-text-dim);
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+/* Detail panel */
+.topo-detail-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--fp-border);
+    cursor: pointer;
+    font-size: 13px;
+    color: var(--fp-text);
+    transition: background 0.1s ease;
+}
+
+.topo-detail-header:hover {
+    background: var(--fp-hover);
+}
+
+.topo-detail-esc {
+    margin-left: auto;
+    font-size: 10px;
+    padding: 1px 5px;
+    border-radius: 3px;
+    background: var(--fp-toggle-bg);
+    border: 1px solid var(--fp-border);
+    color: var(--fp-text-dim);
+}
+
+.topo-detail-content {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-width: thin;
+    scrollbar-color: var(--fp-scrollbar-thumb) transparent;
+}
+
+/* Detail sections */
+.topo-detail-section {
+    border-bottom: 1px solid var(--fp-border-light);
+    padding: 10px 12px;
+}
+
+.topo-detail-section-title {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--fp-text-muted);
+    margin-bottom: 6px;
+}
+
+.topo-detail-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 3px 0;
+    font-size: 13px;
+}
+
+.topo-detail-label {
+    color: var(--fp-text-muted);
+    font-size: 12px;
+}
+
+.topo-detail-value {
+    color: var(--fp-text);
+    font-weight: 500;
+    text-align: right;
+    max-width: 60%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.topo-detail-value a {
+    color: var(--fp-link-color);
+    text-decoration: none;
+}
+
+.topo-detail-value a:hover {
+    text-decoration: underline;
+}
+
+/* Interface list in detail */
+.topo-iface-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 12px;
+    font-size: 12px;
+    border-bottom: 1px solid var(--fp-border-light);
+    transition: background 0.1s ease;
+}
+
+.topo-iface-item:hover {
+    background: var(--fp-hover);
+}
+
+.topo-iface-name {
+    font-weight: 500;
+    color: var(--fp-text);
+    min-width: 80px;
+}
+
+.topo-iface-name a {
+    color: var(--fp-link-color);
+    text-decoration: none;
+}
+
+.topo-iface-type {
+    color: var(--fp-text-muted);
+    font-size: 11px;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.topo-iface-speed {
+    display: inline-block;
+    padding: 1px 6px;
+    border-radius: 8px;
+    font-size: 10px;
+    font-weight: 600;
+    color: #fff;
+    flex-shrink: 0;
+}
+
+.topo-iface-cable {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.topo-iface-connected {
+    font-size: 11px;
+    color: var(--fp-text-dim);
+    flex-shrink: 0;
+}
+
+.topo-iface-connected a {
+    color: var(--fp-link-color);
+    text-decoration: none;
+}
+
+/* ===== SVG Node Styles ===== */
+
+.topo-node {
+    cursor: pointer;
+}
+
+.topo-node .node-bg {
+    stroke-width: 2;
+    stroke: rgba(255, 255, 255, 0.15);
+    transition: stroke-width 0.15s ease;
+}
+
+.topo-node:hover .node-bg {
+    stroke: rgba(255, 255, 255, 0.5);
+    stroke-width: 3;
+}
+
+.topo-node.selected .node-bg {
+    stroke: #fff;
+    stroke-width: 3;
+    filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.3));
+}
+
+.topo-node .node-label {
+    font-size: 11px;
+    fill: #c0c0d0;
+    text-anchor: middle;
+    pointer-events: none;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+}
+
+.topo-node .node-icon {
+    text-anchor: middle;
+    dominant-baseline: central;
+    fill: rgba(255, 255, 255, 0.9);
+    font-size: 16px;
+    pointer-events: none;
+    font-family: 'Material Design Icons';
+}
+
+.topo-node .status-dot {
+    stroke: var(--fp-canvas-bg);
+    stroke-width: 2;
+}
+
+/* ===== SVG Edge Styles ===== */
+
+.topo-edge {
+    stroke-opacity: 0.5;
+    fill: none;
+    transition: stroke-opacity 0.15s ease;
+}
+
+.topo-edge:hover {
+    stroke-opacity: 1;
+    stroke-width: 3 !important;
+    cursor: pointer;
+}
+
+.topo-edge.planned {
+    stroke-dasharray: 6, 4;
+}
+
+.topo-edge.decommissioned {
+    stroke-dasharray: 2, 4;
+    stroke-opacity: 0.3;
+}
+
+/* Edge label (shown on hover) */
+.topo-edge-label {
+    font-size: 10px;
+    fill: #a0a0b8;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+}
+
+.topo-edge:hover + .topo-edge-label,
+.topo-edge-label.visible {
+    opacity: 1;
+}
+
+/* ===== Stencil View — Visio-style Device Cards ===== */
+
+.topo-stencil-node {
+    cursor: pointer;
+}
+
+.topo-stencil-node .stencil-bg {
+    fill: #1c2030;
+    stroke: rgba(255, 255, 255, 0.07);
+    stroke-width: 1;
+    transition: stroke 0.15s ease, filter 0.15s ease;
+}
+
+.topo-stencil-node:hover .stencil-bg {
+    stroke: rgba(255, 255, 255, 0.2);
+}
+
+.topo-stencil-node.selected .stencil-bg {
+    stroke: rgba(255, 255, 255, 0.45);
+    stroke-width: 1.5;
+    filter: drop-shadow(0 0 14px rgba(80, 120, 255, 0.2));
+}
+
+.topo-stencil-node .stencil-name {
+    font-size: 12px;
+    font-weight: 700;
+    fill: #e0e0f0;
+    pointer-events: none;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+}
+
+.topo-stencil-node .stencil-type {
+    font-size: 9px;
+    fill: #606878;
+    pointer-events: none;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+}
+
+.topo-stencil-node .port-name {
+    font-size: 9px;
+    fill: #b0b8c8;
+    pointer-events: none;
+    font-family: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
+}
+
+.topo-stencil-node .port-badge {
+    font-size: 8px;
+    font-weight: 600;
+    pointer-events: none;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+}
+
+/* ===== Speed Colors ===== */
+
+.speed-100m { background: #f39c12; }
+.speed-1g { background: #2ecc71; }
+.speed-10g { background: #3498db; }
+.speed-25g { background: #9b59b6; }
+.speed-40g { background: #e74c3c; }
+.speed-100g { background: #e91e63; }
+
+/* ===== Legend ===== */
+
+.legend-dot {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    vertical-align: middle;
+    margin-right: 2px;
+}
+
+/* (stats bar merged into toolbar) */
+
+/* ===== Hide/Show Button ===== */
+
+.topo-hide-btn {
+    background: none;
+    border: none;
+    color: var(--fp-text-dim);
+    cursor: pointer;
+    padding: 2px 4px;
+    font-size: 14px;
+    opacity: 0.4;
+    transition: opacity 0.15s ease;
+    flex-shrink: 0;
+}
+
+.topo-device-item:hover .topo-hide-btn {
+    opacity: 0.8;
+}
+
+.topo-hide-btn:hover {
+    opacity: 1 !important;
+    color: var(--fp-accent);
+}
+
+.topo-device-item.hidden-node {
+    opacity: 0.5;
+}
+
+.topo-device-item.hidden-node .device-name {
+    text-decoration: line-through;
+}
+
+/* ===== Toast ===== */
+
+.topo-toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: #2d7a3a;
+    color: #fff;
+    padding: 8px 20px;
+    border-radius: 6px;
+    font-size: 13px;
+    z-index: 9999;
+    opacity: 0;
+    transition: opacity 0.3s ease, transform 0.3s ease;
+    pointer-events: none;
+}
+
+.topo-toast.visible {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+}
+
+.topo-toast.error {
+    background: #c0392b;
+}
+
+/* ===== Responsive ===== */
+
+@media (max-width: 768px) {
+    .topology-layout {
+        flex-direction: column;
+        height: auto;
+    }
+
+    .topology-graph-area {
+        height: 400px;
+    }
+
+    .topology-sidebar {
+        width: 100%;
+        max-width: none;
+        height: 300px;
+        border-left: none;
+        border-top: 1px solid var(--fp-border);
+    }
+}

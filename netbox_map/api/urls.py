@@ -9,5 +9,6 @@ router.register('location-coordinates', views.LocationCoordinatesViewSet)
 router.register('tile-port-assignments', views.TilePortAssignmentViewSet)
 router.register('cable-paths', views.CablePathViewSet)
 router.register('map-markers', views.MapMarkerViewSet)
+router.register('topology-saved-views', views.TopologySavedViewViewSet)
 
 urlpatterns = router.urls

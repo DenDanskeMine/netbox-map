@@ -734,3 +734,39 @@ class MapSettings(models.Model):
             obj.tile_popover_config['drop'] = ['label', 'cable_trace']
             obj.save()
         return obj
+
+
+#
+# Topology saved views
+#
+
+class TopologySavedView(NetBoxModel):
+    """A saved topology view with device positions, hidden nodes, and port overrides."""
+    name = models.CharField(max_length=200)
+    description = models.CharField(max_length=500, blank=True)
+    site = models.ForeignKey(
+        'dcim.Site',
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name='topology_views',
+    )
+    filters = models.JSONField(default=dict, blank=True)
+    layout_data = models.JSONField(default=dict, blank=True)
+    view_mode = models.CharField(max_length=20, default='stencil')
+
+    clone_fields = ('site', 'filters', 'layout_data', 'view_mode')
+
+    class Meta:
+        ordering = ['name']
+        verbose_name = _('Topology Saved View')
+        verbose_name_plural = _('Topology Saved Views')
+        constraints = [
+            models.UniqueConstraint(fields=['name'], name='unique_topology_view_name'),
+        ]
+
+    def __str__(self):
+        return self.name
+
+    def get_absolute_url(self):
+        return reverse('plugins:netbox_map:topologysavedview', args=[self.pk])

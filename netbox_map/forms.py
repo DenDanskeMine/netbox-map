@@ -14,7 +14,7 @@ from utilities.forms.fields import (
     CommentField,
 )
 from utilities.forms.rendering import FieldSet
-from .models import FloorPlan, FloorPlanTile, CustomMarkerType, MapMarker, MapSettings, CablePath, ASSIGNABLE_MODELS
+from .models import FloorPlan, FloorPlanTile, CustomMarkerType, MapMarker, MapSettings, CablePath, TopologySavedView, ASSIGNABLE_MODELS
 from dcim.choices import CableTypeChoices, SiteStatusChoices
 from .choices import (
     FloorPlanTileTypeChoices, FloorPlanTileStatusChoices,
@@ -1158,4 +1158,76 @@ class SiteMapFilterForm(forms.Form):
         required=False,
         label=_('Device Role'),
         help_text=_('Only show sites that have devices with these roles'),
+    )
+
+
+#
+# Topology filter form
+#
+
+class TopologyFilterForm(forms.Form):
+    site_id = DynamicModelChoiceField(
+        queryset=Site.objects.all(),
+        required=False,
+        label=_('Site'),
+    )
+    tenant_id = DynamicModelChoiceField(
+        queryset=Tenant.objects.all(),
+        required=False,
+        label=_('Tenant'),
+    )
+    location_id = DynamicModelChoiceField(
+        queryset=Location.objects.all(),
+        required=False,
+        label=_('Location'),
+        query_params={'site_id': '$site_id'},
+    )
+    rack_id = DynamicModelChoiceField(
+        queryset=Rack.objects.all(),
+        required=False,
+        label=_('Rack'),
+        query_params={'site_id': '$site_id', 'location_id': '$location_id'},
+    )
+    role_id = DynamicModelMultipleChoiceField(
+        queryset=DeviceRole.objects.all(),
+        required=False,
+        label=_('Device Role'),
+    )
+    cable_type = forms.ChoiceField(
+        choices=[('', '---------')] + list(CableTypeChoices),
+        required=False,
+        label=_('Cable Type'),
+    )
+
+
+#
+# Topology saved view forms
+#
+
+class TopologySavedViewForm(NetBoxModelForm):
+    site = DynamicModelChoiceField(
+        queryset=Site.objects.all(),
+        required=False,
+        label=_('Site'),
+    )
+
+    fieldsets = (
+        FieldSet('name', 'description', 'site', 'view_mode', name=_('Saved View')),
+        FieldSet('tags', name=_('Tags')),
+    )
+
+    class Meta:
+        model = TopologySavedView
+        fields = ['name', 'description', 'site', 'view_mode', 'tags']
+
+
+class TopologySavedViewFilterForm(NetBoxModelFilterSetForm):
+    model = TopologySavedView
+    site_id = DynamicModelChoiceField(
+        queryset=Site.objects.all(),
+        required=False,
+        label=_('Site'),
+    )
+    fieldsets = (
+        FieldSet('site_id'),
     )

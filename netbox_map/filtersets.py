@@ -5,7 +5,7 @@ from django.utils.translation import gettext_lazy as _
 from dcim.models import Site, Location
 from netbox.filtersets import NetBoxModelFilterSet
 from dcim.choices import CableTypeChoices
-from .models import FloorPlan, FloorPlanTile, CustomMarkerType, MapMarker, TilePortAssignment, CablePath
+from .models import FloorPlan, FloorPlanTile, CustomMarkerType, MapMarker, TilePortAssignment, CablePath, TopologySavedView
 from .choices import FloorPlanTileStatusChoices, CablePathStatusChoices, get_all_tile_type_choices
 
 
@@ -149,3 +149,17 @@ class MapMarkerFilterSet(NetBoxModelFilterSet):
 
     def search(self, queryset, name, value):
         return queryset.filter(label__icontains=value)
+
+
+class TopologySavedViewFilterSet(NetBoxModelFilterSet):
+    site_id = django_filters.ModelMultipleChoiceFilter(
+        queryset=Site.objects.all(),
+        label=_('Site (ID)'),
+    )
+
+    class Meta:
+        model = TopologySavedView
+        fields = ['id', 'name', 'site_id']
+
+    def search(self, queryset, name, value):
+        return queryset.filter(name__icontains=value)
