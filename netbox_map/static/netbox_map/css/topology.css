@@ -852,58 +852,60 @@
     cursor: pointer;
 }
 
+.topo-stencil-node .stencil-shadow {
+    pointer-events: none;
+}
+
 .topo-stencil-node .stencil-bg {
-    fill: #1c2030;
-    stroke: rgba(255, 255, 255, 0.07);
+    fill: #1e2238;
+    stroke: rgba(255, 255, 255, 0.08);
     stroke-width: 1;
     transition: stroke 0.15s ease, filter 0.15s ease;
 }
 
 .topo-stencil-node:hover .stencil-bg {
-    stroke: rgba(255, 255, 255, 0.2);
+    stroke: rgba(255, 255, 255, 0.22);
 }
 
 .topo-stencil-node.selected .stencil-bg {
-    stroke: rgba(255, 255, 255, 0.45);
+    stroke: rgba(100, 160, 255, 0.6);
     stroke-width: 1.5;
-    filter: drop-shadow(0 0 14px rgba(80, 120, 255, 0.2));
+    filter: drop-shadow(0 0 12px rgba(80, 120, 255, 0.25));
 }
 
 .topo-stencil-node .stencil-name {
-    font-size: 12px;
+    font-size: 11.5px;
     font-weight: 700;
-    fill: #e0e0f0;
+    fill: #e8eaf0;
     pointer-events: none;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
 }
 
 .topo-stencil-node .stencil-type {
-    font-size: 9px;
-    fill: #606878;
+    font-size: 8.5px;
+    fill: #7880a0;
     pointer-events: none;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-}
-
-.topo-stencil-node .port-container rect {
-    transition: stroke-opacity 0.1s ease;
-}
-
-.topo-stencil-node:hover .port-container rect {
-    stroke-opacity: 0.6;
 }
 
 .topo-stencil-node .port-name {
     font-size: 10px;
-    fill: #c0c8d8;
+    fill: #d0d4e0;
     pointer-events: none;
     font-family: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
 }
 
-.topo-stencil-node .port-badge {
+.topo-stencil-node .port-speed {
     font-size: 9px;
-    font-weight: 600;
+    font-weight: 700;
     pointer-events: none;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+}
+
+/* Virtual pass-through edges */
+.topo-edge.virtual {
+    stroke-dasharray: 8, 4;
+    stroke-opacity: 0.6;
 }
 
 /* ===== Cable Labels ===== */

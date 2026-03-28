@@ -18,6 +18,11 @@
     var sidebar = new App.Sidebar(state, events);
     var detail = new App.Detail(state, events);
 
+    // PDF export (loaded after this script)
+    setTimeout(function() {
+        if (window.TopologyPDF) new window.TopologyPDF(state, renderer);
+    }, 100);
+
     var loadingEl = document.getElementById('topology-loading');
     var emptyEl = document.getElementById('topology-empty');
 
@@ -37,14 +42,15 @@
         }
     }
 
-    // Collect current layout for saving
+    // Collect current layout for saving — reads positions from renderer's actual data
     function collectLayout() {
         var layout = {};
-        state.nodes.forEach(function(n) {
+        // Use renderer's positioned data (has actual x,y from layout + drag)
+        var renderedNodes = renderer._stencilNodeData || state.nodes;
+        renderedNodes.forEach(function(n) {
             var entry = { x: n.x || 0, y: n.y || 0 };
             if (state.hiddenNodes.has(n.id)) entry.hidden = true;
 
-            // Collect port overrides for this device
             var portOverrides = {};
             (n.ports || []).forEach(function(p) {
                 if (state.portOverrides[p.id]) {
@@ -56,6 +62,16 @@
             layout[n.id] = entry;
         });
         return layout;
+    }
+
+    // Get current positions from renderer for preserving across re-renders
+    function getCurrentPositions() {
+        var positions = {};
+        var renderedNodes = renderer._stencilNodeData || [];
+        renderedNodes.forEach(function(n) {
+            if (n.x !== undefined) positions[n.id] = { x: n.x, y: n.y };
+        });
+        return positions;
     }
 
     // Wire renderer highlight from sidebar clicks
@@ -217,6 +233,123 @@
         document.body.appendChild(el);
         setTimeout(function() { el.classList.add('visible'); }, 10);
         setTimeout(function() { el.classList.remove('visible'); setTimeout(function() { el.remove(); }, 300); }, 2000);
+    }
+
+    // Reset layout button
+    var resetBtn = document.getElementById('topo-reset-layout');
+    if (resetBtn) {
+        resetBtn.addEventListener('click', function() {
+            // Clear saved layout so renderer uses auto-layout
+            state.savedLayout = {};
+            renderer.render(state.nodes, state.edges);
+            events.emit('data:loaded', { nodes: state.nodes, edges: state.edges });
+        });
+    }
+
+    // Pass-through collapse toggle
+    var collapsePP = document.getElementById('topo-collapse-pp');
+    if (collapsePP) {
+        collapsePP.addEventListener('click', function() {
+            var isActive = this.classList.toggle('active');
+
+            if (isActive) {
+                // Save ALL positions before doing anything (including PPs)
+                state._allPositionsBeforePP = getCurrentPositions();
+
+                // Find patch panel nodes
+                var ppNodes = new Set();
+                state.nodes.forEach(function(n) {
+                    if (n.role_slug && n.role_slug.indexOf('patch-panel') !== -1) {
+                        ppNodes.add(n.id);
+                    }
+                });
+
+                if (ppNodes.size === 0) return;
+
+                // Collect edges to/from patch panels
+                var ppEdges = [];
+                var normalEdges = [];
+                state.edges.forEach(function(e) {
+                    var s = typeof e.source === 'object' ? e.source.id : e.source;
+                    var t = typeof e.target === 'object' ? e.target.id : e.target;
+                    if (ppNodes.has(s) || ppNodes.has(t)) ppEdges.push(e);
+                    else normalEdges.push(e);
+                });
+
+                // Group PP edges by patch panel
+                var ppGroups = {};
+                ppEdges.forEach(function(e) {
+                    var s = typeof e.source === 'object' ? e.source.id : e.source;
+                    var t = typeof e.target === 'object' ? e.target.id : e.target;
+                    var ppId = ppNodes.has(s) ? s : t;
+                    var otherDevId = ppNodes.has(s) ? t : s;
+                    var otherPort = ppNodes.has(s) ? e.target_port : e.source_port;
+                    var otherPortName = ppNodes.has(s) ? e.target_port_name : e.source_port_name;
+                    if (!ppGroups[ppId]) ppGroups[ppId] = [];
+                    ppGroups[ppId].push({
+                        deviceId: otherDevId,
+                        portId: otherPort,
+                        portName: otherPortName,
+                    });
+                });
+
+                // Create virtual edges
+                var virtualEdges = [];
+                Object.keys(ppGroups).forEach(function(ppId) {
+                    var connections = ppGroups[ppId];
+                    var ppName = '';
+                    state.nodes.forEach(function(n) { if (n.id === ppId) ppName = n.name; });
+                    for (var i = 0; i < connections.length - 1; i += 2) {
+                        var a = connections[i], b = connections[i + 1];
+                        virtualEdges.push({
+                            id: 'virtual-' + ppId + '-' + i,
+                            source: a.deviceId, target: b.deviceId,
+                            source_port: a.portId, target_port: b.portId,
+                            source_port_name: a.portName, target_port_name: b.portName,
+                            cable_id: 'PP', cable_label: 'Through ' + ppName,
+                            cable_type: 'Pass-through', cable_type_value: '',
+                            color: '#9e9e9e', status: 'Connected', status_value: 'connected',
+                            length: '', length_unit: '', url: '', _virtual: true,
+                        });
+                    }
+                });
+
+                state._origNodes = state.nodes;
+                state._origEdges = state.edges;
+                var filteredNodes = state.nodes.filter(function(n) { return !ppNodes.has(n.id); });
+                var mergedEdges = normalEdges.concat(virtualEdges);
+
+                // Use the saved positions (non-PP nodes keep their spots)
+                state.savedLayout = state._allPositionsBeforePP;
+                renderer.render(filteredNodes, mergedEdges, true);
+                events.emit('data:loaded', { nodes: filteredNodes, edges: mergedEdges });
+            } else {
+                // Restore: merge current non-PP positions + original PP positions
+                if (state._origNodes) {
+                    var currentPos = getCurrentPositions();
+                    var restoreLayout = {};
+                    // PP nodes: use positions from before we hid them
+                    if (state._allPositionsBeforePP) {
+                        for (var id in state._allPositionsBeforePP) {
+                            restoreLayout[id] = state._allPositionsBeforePP[id];
+                        }
+                    }
+                    // Non-PP nodes: use current (possibly dragged) positions
+                    for (var id2 in currentPos) {
+                        restoreLayout[id2] = currentPos[id2];
+                    }
+
+                    state.savedLayout = restoreLayout;
+                    state.nodes = state._origNodes;
+                    state.edges = state._origEdges;
+                    renderer.render(state.nodes, state.edges, true);
+                    events.emit('data:loaded', { nodes: state.nodes, edges: state.edges });
+                    delete state._origNodes;
+                    delete state._origEdges;
+                    delete state._allPositionsBeforePP;
+                }
+            }
+        });
     }
 
     // Cable style toggle (curve / orthogonal)

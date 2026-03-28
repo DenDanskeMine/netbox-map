@@ -85,6 +85,19 @@
         <button id="view-node" class="topo-btn" type="button" title="{% trans 'Node View' %}"><i class="mdi mdi-circle-outline"></i></button>
       </div>
 
+      {# Reset layout #}
+      <button id="topo-reset-layout" class="topo-btn" type="button" title="{% trans 'Reset layout — auto-arrange devices by role hierarchy' %}">
+        <i class="mdi mdi-refresh"></i>
+      </button>
+
+      {# Pass-through collapse #}
+      <button id="topo-collapse-pp" class="topo-btn" type="button"
+              title="{% trans 'Hide patch panels and show end-to-end connections. Cables through patch panels are shown as dashed lines since they represent traced paths, not real single cables.' %}">
+        <i class="mdi mdi-transit-skip"></i>
+      </button>
+
+      <span class="topo-toolbar-divider"></span>
+
       {# Cable style toggle #}
       <div class="topo-btn-group">
         <button id="cable-curve" class="topo-btn active" type="button" title="{% trans 'Curved Cables' %}"><i class="mdi mdi-vector-curve"></i></button>
@@ -94,8 +107,8 @@
       {# Cable labels toggle #}
       <button id="topo-toggle-labels" class="topo-btn" type="button" title="{% trans 'Cable Labels' %}"><i class="mdi mdi-tag-text-outline"></i></button>
 
-      {# Export placeholder #}
-      <button class="topo-btn" type="button" title="{% trans 'Export' %}" disabled><i class="mdi mdi-export-variant"></i></button>
+      {# PDF Export #}
+      <button id="topo-export-pdf" class="topo-btn" type="button" title="{% trans 'Export PDF' %}"><i class="mdi mdi-file-pdf-box"></i></button>
     </div>
   </form>
 </div>
@@ -177,4 +190,6 @@
   <script src="{% static 'netbox_map/js/topology_sidebar.js' %}"></script>
   <script src="{% static 'netbox_map/js/topology_detail.js' %}"></script>
   <script src="{% static 'netbox_map/js/topology_main.js' %}"></script>
+  <script src="{% static 'netbox_map/js/jspdf.umd.min.js' %}"></script>
+  <script src="{% static 'netbox_map/js/topology_pdf.js' %}"></script>
 {% endblock %}

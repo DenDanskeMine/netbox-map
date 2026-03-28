@@ -65,7 +65,8 @@
         this.svg.attr('width', this.width).attr('height', this.height);
     };
 
-    Renderer.prototype.render = function(nodes, edges) {
+    Renderer.prototype.render = function(nodes, edges, skipFit) {
+        this._skipFit = !!skipFit;
         if (this.state.viewMode === 'stencil') this._renderStencil(nodes, edges);
         else this._renderNodes(nodes, edges);
     };
@@ -208,6 +209,7 @@
             .attr('class', function(d) {
                 var c = 'topo-edge';
                 if (d.status_value === 'planned') c += ' planned';
+                if (d._virtual) c += ' virtual';
                 return c;
             })
             .attr('stroke', function(d) { return d.color || '#6c757d'; })
@@ -317,24 +319,41 @@
 
         this.nodeElements = cards;
 
+        // Card shadow (subtle)
+        cards.append('rect').attr('class', 'stencil-shadow')
+            .attr('x', 2).attr('y', 2)
+            .attr('width', CARD_W).attr('height', function(d) { return d._cardH; })
+            .attr('rx', 6).attr('ry', 6)
+            .attr('fill', 'rgba(0,0,0,0.15)');
+
         // Card body
         cards.append('rect').attr('class', 'stencil-bg')
             .attr('width', CARD_W).attr('height', function(d) { return d._cardH; })
-            .attr('rx', 5).attr('ry', 5);
+            .attr('rx', 6).attr('ry', 6);
 
-        // Role color top stripe
-        cards.append('rect')
-            .attr('width', CARD_W).attr('height', 3)
+        // Role color top stripe (rounded top corners)
+        cards.append('clipPath')
+            .attr('id', function(d) { return 'clip-' + d.id; })
+            .append('rect')
+            .attr('width', CARD_W).attr('height', function(d) { return d._cardH; })
+            .attr('rx', 6).attr('ry', 6);
+
+        cards.append('rect').attr('class', 'stencil-stripe')
+            .attr('width', CARD_W).attr('height', 4)
+            .attr('clip-path', function(d) { return 'url(#clip-' + d.id + ')'; })
             .attr('fill', function(d) { return d.role_color || '#6c757d'; });
 
         // Device name
         cards.append('text').attr('class', 'stencil-name')
-            .attr('x', CARD_W / 2).attr('y', 17).attr('text-anchor', 'middle')
-            .text(function(d) { return d.name || ''; });
+            .attr('x', CARD_W / 2).attr('y', 18).attr('text-anchor', 'middle')
+            .text(function(d) {
+                var n = d.name || '';
+                return n.length > 20 ? n.substring(0, 18) + '\u2026' : n;
+            });
 
         // Device type
         cards.append('text').attr('class', 'stencil-type')
-            .attr('x', CARD_W / 2).attr('y', 29).attr('text-anchor', 'middle')
+            .attr('x', CARD_W / 2).attr('y', 30).attr('text-anchor', 'middle')
             .text(function(d) {
                 var t = d.device_type || '';
                 return t.length > 24 ? t.substring(0, 22) + '\u2026' : t;
@@ -342,11 +361,11 @@
 
         // Separator
         cards.append('line')
-            .attr('x1', 0).attr('x2', CARD_W)
-            .attr('y1', HEADER_H - 2).attr('y2', HEADER_H - 2)
-            .attr('stroke', 'rgba(255,255,255,0.06)');
+            .attr('x1', 4).attr('x2', CARD_W - 4)
+            .attr('y1', HEADER_H - 1).attr('y2', HEADER_H - 1)
+            .attr('stroke', 'rgba(255,255,255,0.08)');
 
-        // Draw ports — full-width containers flush with card edges
+        // Draw ports
         cards.each(function(d) {
             var g = d3.select(this);
             d.ports.forEach(function(p, i) {
@@ -357,47 +376,39 @@
 
                 var pg = g.append('g').attr('class', 'port-container');
 
-                // Port box — full card width, flush with edges
+                // Port row background (alternating subtle shade)
                 pg.append('rect')
                     .attr('x', 0).attr('y', py)
                     .attr('width', CARD_W).attr('height', PORT_H)
-                    .attr('fill', 'rgba(255,255,255,0.04)')
-                    .attr('stroke', 'rgba(255,255,255,0.06)')
-                    .attr('stroke-width', 0.5);
+                    .attr('fill', i % 2 === 0 ? 'rgba(255,255,255,0.025)' : 'rgba(0,0,0,0.02)');
 
-                // Color accent bar on left
+                // Color accent bar
                 pg.append('rect')
-                    .attr('x', 0).attr('y', py)
-                    .attr('width', 3).attr('height', PORT_H)
+                    .attr('x', 0).attr('y', py + 2)
+                    .attr('width', 3).attr('height', PORT_H - 4)
+                    .attr('rx', 1)
                     .attr('fill', color);
 
-                // Port name
+                // Port name (left side)
                 pg.append('text').attr('class', 'port-name')
-                    .attr('x', PORT_TEXT_PAD)
-                    .attr('y', py + PORT_H / 2 + 3.5)
+                    .attr('x', 10)
+                    .attr('y', py + PORT_H / 2 + 4)
                     .text(function() {
                         var n = p.name;
-                        return n.length > 12 ? n.substring(0, 10) + '..' : n;
+                        return n.length > 14 ? n.substring(0, 12) + '..' : n;
                     });
 
-                // Speed pill
+                // Speed/type text (right side, no pill — cleaner)
                 var badge = '';
                 if (p.speed) badge = App.formatSpeed(p.speed);
                 else if (p.port_class === 'front-port') badge = 'FP';
                 else if (p.port_class === 'rear-port') badge = 'RP';
 
                 if (badge) {
-                    var pillW = badge.length * 6.5 + 8;
-                    var pillX = CARD_W - pillW - PORT_TEXT_PAD + 4;
-                    pg.append('rect')
-                        .attr('x', pillX).attr('y', py + 4)
-                        .attr('width', pillW).attr('height', PORT_H - 8)
-                        .attr('rx', 3)
-                        .attr('fill', color).attr('opacity', 0.2);
-                    pg.append('text').attr('class', 'port-badge')
-                        .attr('x', pillX + pillW / 2)
-                        .attr('y', py + PORT_H / 2 + 3.5)
-                        .attr('text-anchor', 'middle')
+                    pg.append('text').attr('class', 'port-speed')
+                        .attr('x', CARD_W - 8)
+                        .attr('y', py + PORT_H / 2 + 4)
+                        .attr('text-anchor', 'end')
                         .attr('fill', color)
                         .text(badge);
                 }
@@ -457,7 +468,15 @@
             })
         );
 
-        setTimeout(function() { self.fitToView(); }, 50);
+        // Sync final positions back to state.nodes so save/toggle works
+        nodeData.forEach(function(d) {
+            var orig = self.state.nodes.find(function(n) { return n.id === d.id; });
+            if (orig) { orig.x = d.x; orig.y = d.y; }
+        });
+
+        if (!self._skipFit) {
+            setTimeout(function() { self.fitToView(); }, 50);
+        }
     };
 
     /* ================================================================
@@ -545,9 +564,9 @@
     Renderer.prototype.zoomIn = function() { this.svg.transition().duration(300).call(this.zoom.scaleBy, 1.3); };
     Renderer.prototype.zoomOut = function() { this.svg.transition().duration(300).call(this.zoom.scaleBy, 0.7); };
     Renderer.prototype.resize = function() { this._updateSize(); };
-    Renderer.prototype.switchView = function(m) { this.state.viewMode = m; this.render(this.state.nodes, this.state.edges); };
-    Renderer.prototype.switchLayout = function() { this.render(this.state.nodes, this.state.edges); };
-    Renderer.prototype.switchCableStyle = function(style) { this.state.cableStyle = style; this.render(this.state.nodes, this.state.edges); };
+    Renderer.prototype.switchView = function(m) { this.state.viewMode = m; this.render(this.state.nodes, this.state.edges, true); };
+    Renderer.prototype.switchLayout = function() { this.render(this.state.nodes, this.state.edges, true); };
+    Renderer.prototype.switchCableStyle = function(style) { this.state.cableStyle = style; this.render(this.state.nodes, this.state.edges, true); };
 
     Renderer.prototype.highlightNode = function(id) {
         this._deselectAll();
