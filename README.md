@@ -73,6 +73,8 @@ A NetBox plugin for interactive floor plan visualization, site maps, rack utiliz
 
 <img width="765" height="457" alt="image" src="https://github.com/user-attachments/assets/9fe6f38a-e8b7-46b8-a800-8672581b837e" />
 
+<img width="2254" height="983" alt="Screenshot from 2026-03-29 18-10-27" src="https://github.com/user-attachments/assets/5a2602b1-4215-448b-b31c-84a0f0f42d22" />
+<img width="1846" height="1127" alt="Screenshot from 2026-03-29 15-14-36" src="https://github.com/user-attachments/assets/b905d07c-54bb-495d-b86e-b3c887cadd53" />
 
 
 ## Installation
