@@ -6,8 +6,10 @@ from django.contrib.contenttypes.models import ContentType
 from django.db.models import Count, Prefetch
 from django.http import JsonResponse
 from django.shortcuts import redirect, render
+from django.utils.decorators import method_decorator
 from django.utils.translation import gettext_lazy as _
 from django.views import View
+from django.views.decorators.csrf import ensure_csrf_cookie
 
 from dcim.filtersets import SiteFilterSet
 from dcim.models import Device, Location, Site
@@ -16,7 +18,491 @@ from utilities.views import ViewTab, register_model_view
 
 from . import filtersets, forms, tables
 from .choices import get_all_type_configs
-from .models import FloorPlan, FloorPlanTile, CustomMarkerType, LocationCoordinates, MapMarker, MapSettings, TilePortAssignment, CablePath
+from .models import FloorPlan, FloorPlanTile, CustomMarkerType, LocationCoordinates, MapMarker, MapSettings, TilePortAssignment, CablePath, TopologySavedView
+
+
+#
+# Topology views
+#
+
+@method_decorator(ensure_csrf_cookie, name='dispatch')
+class TopologyView(LoginRequiredMixin, View):
+    """Interactive network topology visualization."""
+
+    def get(self, request):
+        filter_form = forms.TopologyFilterForm(data=request.GET or None)
+
+        initial_filters = {}
+        for key in ('site_id', 'tenant_id', 'location_id', 'rack_id', 'role_id', 'cable_type', 'device_ids'):
+            val = request.GET.get(key)
+            if val:
+                initial_filters[key] = val
+
+        # Load saved view if requested
+        saved_view = None
+        saved_view_data = '{}'
+        view_id = request.GET.get('view_id')
+        if view_id:
+            try:
+                saved_view = TopologySavedView.objects.get(pk=view_id)
+                saved_view_data = json.dumps(saved_view.layout_data)
+                # Use saved filters if no explicit filters provided
+                if not initial_filters and saved_view.filters:
+                    initial_filters = saved_view.filters
+            except TopologySavedView.DoesNotExist:
+                pass
+
+        # All saved views for the dropdown
+        saved_views = TopologySavedView.objects.all().order_by('name').values('pk', 'name')
+
+        return render(request, 'netbox_map/topology.html', {
+            'filter_form': filter_form,
+            'initial_filters_json': json.dumps(initial_filters),
+            'active_filters': bool(initial_filters),
+            'saved_view': saved_view,
+            'saved_view_data': saved_view_data,
+            'saved_views': list(saved_views),
+            'saved_views_json': json.dumps(list(saved_views)),
+        })
+
+
+#
+# Topology saved view CRUD
+#
+
+class TopologySavedViewListView(generic.ObjectListView):
+    queryset = TopologySavedView.objects.all()
+    filterset = filtersets.TopologySavedViewFilterSet
+    filterset_form = forms.TopologySavedViewFilterForm
+    table = tables.TopologySavedViewTable
+
+
+@register_model_view(TopologySavedView)
+class TopologySavedViewView(generic.ObjectView):
+    queryset = TopologySavedView.objects.all()
+
+
+@register_model_view(TopologySavedView, 'edit')
+class TopologySavedViewEditView(generic.ObjectEditView):
+    queryset = TopologySavedView.objects.all()
+    form = forms.TopologySavedViewForm
+
+
+@register_model_view(TopologySavedView, 'delete')
+class TopologySavedViewDeleteView(generic.ObjectDeleteView):
+    queryset = TopologySavedView.objects.all()
+
+
+class TopologySaveLayoutView(LoginRequiredMixin, View):
+    """AJAX endpoint to save/create topology layout."""
+
+    def post(self, request):
+        try:
+            data = json.loads(request.body)
+        except json.JSONDecodeError:
+            return JsonResponse({'error': 'Invalid JSON'}, status=400)
+
+        view_id = data.get('view_id')
+        layout_data = data.get('layout_data', {})
+        filters = data.get('filters', {})
+        view_mode = data.get('view_mode', 'stencil')
+        name = data.get('name', '')
+
+        if view_id:
+            # Update existing
+            try:
+                view = TopologySavedView.objects.get(pk=view_id)
+                view.layout_data = layout_data
+                view.filters = filters
+                view.view_mode = view_mode or 'stencil'
+                view.save()
+                return JsonResponse({'id': view.pk, 'name': view.name, 'saved': True})
+            except TopologySavedView.DoesNotExist:
+                return JsonResponse({'error': 'View not found'}, status=404)
+        else:
+            # Create new
+            if not name:
+                return JsonResponse({'error': 'Name is required'}, status=400)
+            view = TopologySavedView.objects.create(
+                name=name,
+                layout_data=layout_data,
+                filters=filters,
+                view_mode=view_mode,
+            )
+            return JsonResponse({'id': view.pk, 'name': view.name, 'saved': True})
+
+
+class TopologyDataView(LoginRequiredMixin, View):
+    """AJAX endpoint returning topology graph data (nodes + edges).
+
+    Returns nodes with their cabled interfaces/ports, and edges with
+    port-level connection details for the stencil view.
+    """
+
+    def get(self, request):
+        from dcim.models import (
+            Device, Interface, Cable, FrontPort, RearPort,
+            ConsolePort, ConsoleServerPort, PowerPort, PowerOutlet,
+        )
+        from dcim.models import CableTermination
+
+        site_id = request.GET.get('site_id')
+        tenant_id = request.GET.get('tenant_id')
+        location_id = request.GET.get('location_id')
+        rack_id = request.GET.get('rack_id')
+        role_id = request.GET.get('role_id')
+        cable_type = request.GET.get('cable_type')
+        device_ids_param = request.GET.get('device_ids')
+
+        devices = Device.objects.select_related(
+            'device_type__manufacturer', 'role', 'site', 'location',
+            'rack', 'tenant', 'primary_ip4', 'primary_ip6',
+            'virtual_chassis',
+        )
+
+        if device_ids_param:
+            # Explicit device IDs — no filter required
+            ids = [int(x) for x in device_ids_param.split(',') if x.strip().isdigit()]
+            devices = devices.filter(pk__in=ids)
+        else:
+            if site_id:
+                devices = devices.filter(site_id=site_id)
+            if tenant_id:
+                devices = devices.filter(tenant_id=tenant_id)
+            if location_id:
+                devices = devices.filter(location_id=location_id)
+            if rack_id:
+                devices = devices.filter(rack_id=rack_id)
+            if role_id:
+                devices = devices.filter(role_id=role_id)
+
+            # Require at least one filter when not using device_ids
+            if not any([site_id, tenant_id, location_id, rack_id, role_id]):
+                return JsonResponse({'nodes': [], 'edges': [], 'stats': {'node_count': 0, 'edge_count': 0}})
+
+        device_map = {}
+        nodes = []
+        for device in devices:
+            primary_ip = None
+            if device.primary_ip4:
+                primary_ip = str(device.primary_ip4.address.ip)
+            elif device.primary_ip6:
+                primary_ip = str(device.primary_ip6.address.ip)
+
+            node = {
+                'id': f'device-{device.pk}',
+                'device_id': device.pk,
+                'name': device.name or str(device),
+                'role': device.role.name if device.role else '',
+                'role_slug': device.role.slug if device.role else '',
+                'role_color': f'#{device.role.color}' if device.role and device.role.color else '#6c757d',
+                'device_type': str(device.device_type) if device.device_type else '',
+                'manufacturer': device.device_type.manufacturer.name if device.device_type and device.device_type.manufacturer else '',
+                'site': device.site.name if device.site else '',
+                'location': device.location.name if device.location else '',
+                'rack': device.rack.name if device.rack else '',
+                'tenant': device.tenant.name if device.tenant else '',
+                'status': device.get_status_display(),
+                'status_value': device.status,
+                'primary_ip': primary_ip,
+                'url': device.get_absolute_url(),
+                'interface_count': 0,
+                'ports': [],
+                'virtual_chassis': device.virtual_chassis.name if device.virtual_chassis else None,
+            }
+            device_map[device.pk] = node
+            nodes.append(node)
+
+        if not device_map:
+            return JsonResponse({'nodes': [], 'edges': [], 'stats': {'node_count': 0, 'edge_count': 0}})
+
+        device_ids = set(device_map.keys())
+
+        # Get content types for all port models
+        port_models = [Interface, FrontPort, RearPort, ConsolePort, ConsoleServerPort, PowerPort, PowerOutlet]
+        port_cts = [ContentType.objects.get_for_model(m) for m in port_models]
+        port_ct_map = {ct.pk: model_cls for ct, model_cls in zip(port_cts, port_models)}
+
+        # Build port-to-device mapping AND collect port details
+        port_id_map = {}       # (ct_id, port_id) -> device_id
+        port_info_map = {}     # (ct_id, port_id) -> port info dict
+
+        # Interfaces — include name, type, speed
+        iface_ct = port_cts[0]
+        for iface in Interface.objects.filter(device_id__in=device_ids).values(
+            'id', 'device_id', 'name', 'type', 'speed', 'cable_id',
+        ):
+            key = (iface_ct.pk, iface['id'])
+            port_id_map[key] = iface['device_id']
+            port_info_map[key] = {
+                'id': f"iface-{iface['id']}",
+                'name': iface['name'],
+                'port_class': 'interface',
+                'type': iface['type'] or '',
+                'speed': iface['speed'],
+                'cabled': bool(iface['cable_id']),
+            }
+
+        # FrontPort / RearPort
+        fp_ct, rp_ct = port_cts[1], port_cts[2]
+        for fp in FrontPort.objects.filter(device_id__in=device_ids).values(
+            'id', 'device_id', 'name', 'type', 'cable_id',
+        ):
+            key = (fp_ct.pk, fp['id'])
+            port_id_map[key] = fp['device_id']
+            port_info_map[key] = {
+                'id': f"fp-{fp['id']}",
+                'name': fp['name'],
+                'port_class': 'front-port',
+                'type': fp['type'] or '',
+                'speed': None,
+                'cabled': bool(fp['cable_id']),
+            }
+
+        for rp in RearPort.objects.filter(device_id__in=device_ids).values(
+            'id', 'device_id', 'name', 'type', 'cable_id',
+        ):
+            key = (rp_ct.pk, rp['id'])
+            port_id_map[key] = rp['device_id']
+            port_info_map[key] = {
+                'id': f"rp-{rp['id']}",
+                'name': rp['name'],
+                'port_class': 'rear-port',
+                'type': rp['type'] or '',
+                'speed': None,
+                'cabled': bool(rp['cable_id']),
+            }
+
+        # Console/Power ports (simpler)
+        for ct_idx, model_cls, prefix in [
+            (3, ConsolePort, 'cp'), (4, ConsoleServerPort, 'csp'),
+            (5, PowerPort, 'pp'), (6, PowerOutlet, 'po'),
+        ]:
+            ct = port_cts[ct_idx]
+            for p in model_cls.objects.filter(device_id__in=device_ids).values(
+                'id', 'device_id', 'name', 'cable_id',
+            ):
+                key = (ct.pk, p['id'])
+                port_id_map[key] = p['device_id']
+                port_info_map[key] = {
+                    'id': f"{prefix}-{p['id']}",
+                    'name': p['name'],
+                    'port_class': prefix,
+                    'type': '',
+                    'speed': None,
+                    'cabled': bool(p['cable_id']),
+                }
+
+        # Attach cabled ports to their device nodes (only cabled ones for stencil view)
+        for key, info in port_info_map.items():
+            if info['cabled']:
+                dev_id = port_id_map[key]
+                if dev_id in device_map:
+                    device_map[dev_id]['ports'].append(info)
+
+        # Interface counts
+        iface_counts = Interface.objects.filter(
+            device_id__in=device_ids,
+        ).values('device_id').annotate(count=Count('id'))
+        for entry in iface_counts:
+            dev_id = entry['device_id']
+            if dev_id in device_map:
+                device_map[dev_id]['interface_count'] = entry['count']
+
+        # Find cables via CableTermination
+        cable_terminations = CableTermination.objects.filter(
+            termination_type__in=port_cts,
+        ).select_related('cable')
+
+        cable_terms = {}
+        cable_objects = {}
+        for ct_obj in cable_terminations:
+            key = (ct_obj.termination_type_id, ct_obj.termination_id)
+            if key not in port_id_map:
+                continue
+            if ct_obj.cable_id not in cable_terms:
+                cable_terms[ct_obj.cable_id] = []
+                cable_objects[ct_obj.cable_id] = ct_obj.cable
+            cable_terms[ct_obj.cable_id].append(key)
+
+        edges = []
+        for cable_id, terms in cable_terms.items():
+            # Gather terminations that belong to devices in scope
+            term_infos = []
+            for ct_id, term_id in terms:
+                dev_id = port_id_map.get((ct_id, term_id))
+                if dev_id and dev_id in device_ids:
+                    port_info = port_info_map.get((ct_id, term_id))
+                    term_infos.append((dev_id, port_info))
+
+            if len(term_infos) < 2:
+                continue
+
+            cable = cable_objects[cable_id]
+            if cable_type and cable.type != cable_type:
+                continue
+
+            # Create edges between pairs of terminations on different devices
+            seen_pairs = set()
+            for i in range(len(term_infos)):
+                for j in range(i + 1, len(term_infos)):
+                    dev_a, port_a = term_infos[i]
+                    dev_b, port_b = term_infos[j]
+                    if dev_a == dev_b:
+                        continue
+                    pair_key = (min(dev_a, dev_b), max(dev_a, dev_b), cable_id)
+                    if pair_key in seen_pairs:
+                        continue
+                    seen_pairs.add(pair_key)
+
+                    # Ensure consistent ordering
+                    if dev_a > dev_b:
+                        dev_a, dev_b = dev_b, dev_a
+                        port_a, port_b = port_b, port_a
+
+                    edges.append({
+                        'id': f'cable-{cable_id}',
+                        'source': f'device-{dev_a}',
+                        'target': f'device-{dev_b}',
+                        'source_port': port_a['id'] if port_a else None,
+                        'target_port': port_b['id'] if port_b else None,
+                        'source_port_name': port_a['name'] if port_a else '',
+                        'target_port_name': port_b['name'] if port_b else '',
+                        'source_port_speed': port_a['speed'] if port_a else None,
+                        'target_port_speed': port_b['speed'] if port_b else None,
+                        'cable_id': cable_id,
+                        'cable_label': cable.label or f'Cable #{cable_id}',
+                        'cable_type': cable.get_type_display() if cable.type else '',
+                        'cable_type_value': cable.type or '',
+                        'color': f'#{cable.color}' if cable.color else '#6c757d',
+                        'status': cable.get_status_display(),
+                        'status_value': cable.status,
+                        'length': str(cable.length) if cable.length else '',
+                        'length_unit': cable.get_length_unit_display() if cable.length_unit else '',
+                        'url': cable.get_absolute_url(),
+                    })
+
+        return JsonResponse({
+            'nodes': nodes,
+            'edges': edges,
+            'stats': {'node_count': len(nodes), 'edge_count': len(edges)},
+        })
+
+
+class TopologyDeviceDetailView(LoginRequiredMixin, View):
+    """AJAX endpoint returning interfaces and ports for a device."""
+
+    def get(self, request, device_id):
+        from dcim.models import Device, Interface, FrontPort, RearPort, CableTermination
+
+        try:
+            device = Device.objects.get(pk=device_id)
+        except Device.DoesNotExist:
+            return JsonResponse({'error': 'Device not found'}, status=404)
+
+        interfaces = Interface.objects.filter(device=device).select_related(
+            'cable', 'lag',
+        ).order_by('name')
+
+        iface_ct = ContentType.objects.get_for_model(Interface)
+
+        result = []
+        for iface in interfaces:
+            iface_data = {
+                'id': iface.pk,
+                'name': iface.name,
+                'type': iface.get_type_display(),
+                'type_value': iface.type,
+                'enabled': iface.enabled,
+                'speed': iface.speed,
+                'cable_id': iface.cable_id,
+                'lag': iface.lag.name if iface.lag else None,
+                'mode': iface.get_mode_display() if iface.mode else '',
+                'connected_to': None,
+                'url': iface.get_absolute_url(),
+            }
+            if iface.cable:
+                iface_data['cable_color'] = f'#{iface.cable.color}' if iface.cable.color else ''
+                iface_data['cable_label'] = iface.cable.label or f'Cable #{iface.cable.pk}'
+                iface_data['cable_type'] = iface.cable.get_type_display() if iface.cable.type else ''
+
+                # Find remote end via trace(), fall back to CableTermination
+                connected = None
+                try:
+                    trace = iface.trace()
+                    if trace:
+                        last_hop = trace[-1]
+                        far_terms = last_hop[2]
+                        if far_terms:
+                            far_obj = far_terms[0]
+                            if hasattr(far_obj, 'device'):
+                                connected = {
+                                    'device': far_obj.device.name,
+                                    'device_id': far_obj.device.pk,
+                                    'port': far_obj.name,
+                                    'port_type': type(far_obj).__name__,
+                                }
+                except Exception:
+                    pass
+
+                # Fallback: look up the other end via CableTermination
+                if not connected:
+                    try:
+                        other_terms = CableTermination.objects.filter(
+                            cable=iface.cable,
+                        ).exclude(
+                            termination_type=iface_ct,
+                            termination_id=iface.pk,
+                        ).select_related('termination_type')
+                        for term in other_terms:
+                            obj = term.termination
+                            if obj and hasattr(obj, 'device'):
+                                connected = {
+                                    'device': obj.device.name,
+                                    'device_id': obj.device.pk,
+                                    'port': obj.name,
+                                    'port_type': type(obj).__name__,
+                                }
+                                break
+                    except Exception:
+                        pass
+
+                iface_data['connected_to'] = connected
+            result.append(iface_data)
+
+        ports = []
+        for port in FrontPort.objects.filter(device=device).select_related('cable').order_by('name'):
+            port_data = {
+                'id': port.pk,
+                'name': port.name,
+                'port_type': 'Front Port',
+                'type': port.get_type_display(),
+                'cable_id': port.cable_id,
+                'url': port.get_absolute_url(),
+            }
+            if port.cable:
+                port_data['cable_color'] = f'#{port.cable.color}' if port.cable.color else ''
+            ports.append(port_data)
+
+        for port in RearPort.objects.filter(device=device).select_related('cable').order_by('name'):
+            port_data = {
+                'id': port.pk,
+                'name': port.name,
+                'port_type': 'Rear Port',
+                'type': port.get_type_display(),
+                'cable_id': port.cable_id,
+                'url': port.get_absolute_url(),
+            }
+            if port.cable:
+                port_data['cable_color'] = f'#{port.cable.color}' if port.cable.color else ''
+            ports.append(port_data)
+
+        return JsonResponse({
+            'interfaces': result,
+            'ports': ports,
+            'device_name': device.name,
+            'device_url': device.get_absolute_url(),
+        })
 
 
 #

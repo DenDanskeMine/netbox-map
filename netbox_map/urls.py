@@ -20,6 +20,20 @@ urlpatterns = (
     # Site Map
     path('sitemap/', views.SiteMapView.as_view(), name='sitemap'),
 
+    # Topology View
+    path('topology/', views.TopologyView.as_view(), name='topology'),
+    path('topology/data/', views.TopologyDataView.as_view(), name='topology_data'),
+    path('topology/device/<int:device_id>/', views.TopologyDeviceDetailView.as_view(), name='topology_device_detail'),
+    path('topology/save-layout/', views.TopologySaveLayoutView.as_view(), name='topology_save_layout'),
+
+    # Topology Saved Views
+    path('topology/views/', views.TopologySavedViewListView.as_view(), name='topologysavedview_list'),
+    path('topology/views/add/', views.TopologySavedViewEditView.as_view(), name='topologysavedview_add'),
+    path('topology/views/<int:pk>/', views.TopologySavedViewView.as_view(), name='topologysavedview'),
+    path('topology/views/<int:pk>/edit/', views.TopologySavedViewEditView.as_view(), name='topologysavedview_edit'),
+    path('topology/views/<int:pk>/delete/', views.TopologySavedViewDeleteView.as_view(), name='topologysavedview_delete'),
+    path('topology/views/<int:pk>/changelog/', ObjectChangeLogView.as_view(), name='topologysavedview_changelog', kwargs={'model': models.TopologySavedView}),
+
     # AJAX marker detail
     path('marker-detail/drop/<int:tile_id>/', views.DropDetailView.as_view(), name='drop_detail'),
     path('marker-detail/<str:object_type>/<int:object_id>/', views.MarkerDetailView.as_view(), name='marker_detail'),

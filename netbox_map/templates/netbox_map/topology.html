@@ -1,0 +1,269 @@
+{% extends 'base/layout.html' %}
+{% load static %}
+{% load i18n %}
+
+{% block title %}{% trans "Network Topology" %}{% endblock %}
+
+{% block header %}
+  <h1><span class="mdi mdi-graph-outline"></span> {% trans "Network Topology" %}</h1>
+{% endblock %}
+
+{% block head %}
+  <link rel="stylesheet" href="{% static 'netbox_map/css/floorplan.css' %}">
+  <link rel="stylesheet" href="{% static 'netbox_map/css/topology.css' %}">
+{% endblock %}
+
+{% block content %}
+{% csrf_token %}
+
+{# ===== Toolbar ===== #}
+<div class="topo-toolbar">
+  {# Row 1: Filters + Actions #}
+  <form method="get" action="" id="topology-filter-form" class="topo-toolbar-row">
+    <div class="topo-toolbar-group topo-toolbar-filters">
+      <label class="topo-toolbar-label"><i class="mdi mdi-filter-variant"></i></label>
+      <div class="topo-filter-field">{{ filter_form.site_id }}</div>
+      <div class="topo-filter-field">{{ filter_form.location_id }}</div>
+      <div class="topo-filter-field topo-filter-sm">{{ filter_form.role_id }}</div>
+      <div class="topo-filter-field topo-filter-sm">{{ filter_form.cable_type }}</div>
+      <div class="d-none">{{ filter_form.tenant_id }}{{ filter_form.rack_id }}</div>
+      <button type="submit" class="topo-btn topo-btn-primary">{% trans "Apply" %}</button>
+      {% if active_filters %}
+      <a href="?" class="topo-btn topo-btn-danger" title="{% trans 'Clear filters' %}"><i class="mdi mdi-close"></i></a>
+      {% endif %}
+    </div>
+
+    <div class="topo-toolbar-group topo-toolbar-info">
+      <span class="topo-stat" id="topology-stats">
+        <span id="stat-nodes">0</span> {% trans "devices" %}
+        <span class="topo-stat-sep">&middot;</span>
+        <span id="stat-edges">0</span> {% trans "cables" %}
+      </span>
+    </div>
+
+    <div class="topo-toolbar-group topo-toolbar-actions">
+      {# Saved views #}
+      <div class="dropdown">
+        <button class="topo-btn dropdown-toggle" type="button" data-bs-toggle="dropdown">
+          <i class="mdi mdi-bookmark-outline"></i>
+          {% if saved_view %}{{ saved_view.name }}{% else %}{% trans "Views" %}{% endif %}
+        </button>
+        <ul class="dropdown-menu dropdown-menu-end">
+          <li><a class="dropdown-item" href="{% url 'plugins:netbox_map:topology' %}">
+            <i class="mdi mdi-plus"></i> {% trans "New View" %}</a></li>
+          {% if saved_views %}<li><hr class="dropdown-divider"></li>{% endif %}
+          {% for sv in saved_views %}
+          <li><a class="dropdown-item{% if saved_view and saved_view.pk == sv.pk %} active{% endif %}"
+                 href="?view_id={{ sv.pk }}">{{ sv.name }}</a></li>
+          {% endfor %}
+          <li><hr class="dropdown-divider"></li>
+          <li><a class="dropdown-item" href="{% url 'plugins:netbox_map:topologysavedview_list' %}">
+            <i class="mdi mdi-cog-outline"></i> {% trans "Manage Views" %}</a></li>
+        </ul>
+      </div>
+      {% if saved_view %}
+      <button id="topo-save" class="topo-btn topo-btn-primary" type="button" title="{% trans 'Save Layout' %}">
+        <i class="mdi mdi-content-save"></i> {% trans "Save" %}
+      </button>
+      {% endif %}
+      <button id="topo-save-as" class="topo-btn" type="button" title="{% trans 'Save As New View' %}">
+        <i class="mdi mdi-content-save-plus-outline"></i>
+      </button>
+
+      <span class="topo-toolbar-divider"></span>
+
+      {# Zoom #}
+      <div class="topo-btn-group">
+        <button id="topo-zoom-out" class="topo-btn" type="button" title="{% trans 'Zoom Out' %}"><i class="mdi mdi-minus"></i></button>
+        <button id="topo-zoom-fit" class="topo-btn" type="button" title="{% trans 'Fit to View' %}"><i class="mdi mdi-fit-to-screen-outline"></i></button>
+        <button id="topo-zoom-in" class="topo-btn" type="button" title="{% trans 'Zoom In' %}"><i class="mdi mdi-plus"></i></button>
+      </div>
+
+      <span class="topo-toolbar-divider"></span>
+
+      {# View mode #}
+      <div class="topo-btn-group">
+        <button id="view-stencil" class="topo-btn active" type="button" title="{% trans 'Stencil View' %}"><i class="mdi mdi-card-outline"></i></button>
+        <button id="view-node" class="topo-btn" type="button" title="{% trans 'Node View' %}"><i class="mdi mdi-circle-outline"></i></button>
+      </div>
+
+      {# Add devices #}
+      <button id="topo-add-devices" class="topo-btn" type="button" title="{% trans 'Add individual devices to canvas' %}">
+        <i class="mdi mdi-plus-box-outline"></i> {% trans "Add" %}
+      </button>
+
+      {# Role hierarchy editor #}
+      <button id="topo-edit-hierarchy" class="topo-btn" type="button" title="{% trans 'Configure role layer order for auto-layout' %}">
+        <i class="mdi mdi-sort-variant"></i>
+      </button>
+
+      {# Auto-sort ports #}
+      <button id="topo-auto-sort" class="topo-btn active" type="button" title="{% trans 'Auto-sort interfaces to minimize cable crossings (updates on drag)' %}">
+        <i class="mdi mdi-sort-ascending"></i>
+      </button>
+
+      {# Snap to grid #}
+      <button id="topo-snap-grid" class="topo-btn" type="button" title="{% trans 'Snap to grid (or hold Shift while dragging)' %}">
+        <i class="mdi mdi-grid"></i>
+      </button>
+
+      {# Reset layout #}
+      <button id="topo-reset-layout" class="topo-btn" type="button" title="{% trans 'Reset layout — auto-arrange devices by role hierarchy' %}">
+        <i class="mdi mdi-refresh"></i>
+      </button>
+
+      {# Pass-through collapse #}
+      <button id="topo-collapse-pp" class="topo-btn" type="button"
+              title="{% trans 'Hide patch panels and show end-to-end connections. Cables through patch panels are shown as dashed lines since they represent traced paths, not real single cables.' %}">
+        <i class="mdi mdi-transit-skip"></i>
+      </button>
+
+      <span class="topo-toolbar-divider"></span>
+
+      {# Cable color mode #}
+      <div class="topo-btn-group">
+        <button id="cable-color-physical" class="topo-btn active" type="button" title="{% trans 'Color by cable type' %}"><i class="mdi mdi-palette-outline"></i></button>
+        <button id="cable-color-speed" class="topo-btn" type="button" title="{% trans 'Color by interface speed' %}"><i class="mdi mdi-speedometer"></i></button>
+      </div>
+
+      {# Cable style toggle #}
+      <div class="topo-btn-group">
+        <button id="cable-curve" class="topo-btn active" type="button" title="{% trans 'Curved Cables' %}"><i class="mdi mdi-vector-curve"></i></button>
+        <button id="cable-ortho" class="topo-btn" type="button" title="{% trans 'Straight Cables' %}"><i class="mdi mdi-vector-polyline"></i></button>
+      </div>
+
+      {# Cable labels toggle #}
+      <button id="topo-toggle-labels" class="topo-btn" type="button" title="{% trans 'Cable Labels' %}"><i class="mdi mdi-tag-text-outline"></i></button>
+
+      {# PDF Export #}
+      <button id="topo-export-pdf" class="topo-btn" type="button" title="{% trans 'Export PDF' %}"><i class="mdi mdi-download"></i></button>
+    </div>
+  </form>
+</div>
+
+{# ===== Main layout: SVG graph + sidebar ===== #}
+<div class="topology-layout"
+     id="topology-container"
+     data-topology-url="{% url 'plugins:netbox_map:topology_data' %}"
+     data-device-detail-url="{% url 'plugins:netbox_map:topology_device_detail' device_id=0 %}"
+     data-csrf-token="{{ csrf_token }}"
+     data-save-url="{% url 'plugins:netbox_map:topology_save_layout' %}"
+     data-saved-view-id="{{ saved_view.pk|default:'' }}">
+  <div class="topology-graph-area">
+    <svg id="topology-svg"></svg>
+    <div id="topology-loading" class="topology-overlay d-none">
+      <div class="spinner-border text-primary" role="status"></div>
+      <span class="ms-2">{% trans "Loading topology..." %}</span>
+    </div>
+    <div id="topology-empty" class="topology-overlay">
+      <div class="text-center text-muted">
+        <i class="mdi mdi-graph-outline" style="font-size:48px;"></i>
+        <p class="mt-2">{% trans "Use a filter or click" %} <strong>+ Add</strong> {% trans "to add devices to the canvas." %}</p>
+      </div>
+    </div>
+  </div>
+
+  {# Role hierarchy editor (hidden, slides over sidebar) #}
+  <div id="hierarchy-editor" class="device-picker d-none">
+    <div class="picker-header">
+      <span class="picker-title"><i class="mdi mdi-sort-variant"></i> {% trans "Role Layer Order" %}</span>
+      <button id="hierarchy-close" class="picker-close-btn"><i class="mdi mdi-close"></i></button>
+    </div>
+    <div class="picker-filters" style="border-bottom:none;">
+      <p class="small text-muted mb-0">{% trans "Drag roles to reorder. Top = left side of topology (upstream), bottom = right side (downstream). Click Apply to re-layout." %}</p>
+    </div>
+    <div class="picker-results" id="hierarchy-list" style="padding:4px 0;"></div>
+    <div class="picker-footer">
+      <button id="hierarchy-reset" class="topo-btn" style="font-size:11px;">{% trans "Auto-detect" %}</button>
+      <button id="hierarchy-apply" class="topo-btn topo-btn-primary">{% trans "Apply" %}</button>
+    </div>
+  </div>
+
+  {# Device picker panel (hidden, slides over sidebar) #}
+  <div id="device-picker" class="device-picker d-none">
+    <div class="picker-header">
+      <span class="picker-title"><i class="mdi mdi-plus-box-outline"></i> {% trans "Add Devices" %}</span>
+      <button id="picker-close" class="picker-close-btn"><i class="mdi mdi-close"></i></button>
+    </div>
+    <div class="picker-filters">
+      <div class="picker-search-wrap">
+        <i class="mdi mdi-magnify"></i>
+        <input type="text" id="picker-search" class="form-control form-control-sm" placeholder="{% trans 'Search by name...' %}">
+      </div>
+      <div class="picker-filter-row">
+        <select id="picker-site" class="form-select form-select-sm">
+          <option value="">{% trans "All Sites" %}</option>
+        </select>
+        <select id="picker-role" class="form-select form-select-sm">
+          <option value="">{% trans "All Roles" %}</option>
+        </select>
+      </div>
+    </div>
+    <div class="picker-results" id="picker-results">
+      <div class="picker-placeholder">{% trans "Search for devices to add" %}</div>
+    </div>
+    <div class="picker-footer">
+      <span id="picker-count" class="picker-count">0 {% trans "added" %}</span>
+      <button id="picker-done" class="topo-btn topo-btn-primary">{% trans "Apply" %}</button>
+    </div>
+  </div>
+
+  <div class="topology-sidebar" id="topology-sidebar">
+    <div class="sidebar-panel" id="topo-sidebar-list">
+      <div class="topo-sidebar-header">
+        <div class="topo-search-wrap">
+          <i class="mdi mdi-magnify"></i>
+          <input type="text" id="topo-search" class="form-control form-control-sm"
+                 placeholder="{% trans 'Search devices...' %}">
+        </div>
+      </div>
+      <div class="topo-role-toggles" id="topo-role-toggles"></div>
+      <div class="topo-device-count px-2 py-1">
+        <span id="topo-device-count" class="small text-muted"></span>
+      </div>
+      <div class="topo-device-list" id="topo-device-list"></div>
+    </div>
+
+    <div class="sidebar-panel d-none" id="topo-sidebar-detail">
+      <div class="topo-detail-header" id="topo-detail-back">
+        <i class="mdi mdi-arrow-left"></i>
+        <span>{% trans "Back to list" %}</span>
+        <span class="topo-detail-esc">Esc</span>
+      </div>
+      <div class="topo-detail-content" id="topo-detail-content"></div>
+    </div>
+  </div>
+</div>
+
+{{ initial_filters_json|json_script:"topo-initial-filters" }}
+{{ saved_view_data|json_script:"topo-saved-layout" }}
+
+{# ===== Footer legend ===== #}
+<div class="topo-footer">
+  <div class="topo-legend">
+    <span class="topo-legend-title">{% trans "Speed" %}</span>
+    <span class="topo-legend-item"><span class="legend-dot" style="background:#f39c12;"></span>100M</span>
+    <span class="topo-legend-item"><span class="legend-dot" style="background:#2ecc71;"></span>1G</span>
+    <span class="topo-legend-item"><span class="legend-dot" style="background:#3498db;"></span>10G</span>
+    <span class="topo-legend-item"><span class="legend-dot" style="background:#9b59b6;"></span>25G</span>
+    <span class="topo-legend-item"><span class="legend-dot" style="background:#e74c3c;"></span>40G</span>
+    <span class="topo-legend-item"><span class="legend-dot" style="background:#e91e63;"></span>100G</span>
+  </div>
+  <div class="topo-legend">
+    <span class="topo-legend-title">{% trans "Port" %}</span>
+    <span class="topo-legend-item"><span class="legend-dot" style="background:#ff9800;"></span>{% trans "Front" %}</span>
+    <span class="topo-legend-item"><span class="legend-dot" style="background:#795548;"></span>{% trans "Rear" %}</span>
+  </div>
+</div>
+{% endblock %}
+
+{% block javascript %}
+  <script src="{% static 'netbox_map/js/d3.v7.min.js' %}"></script>
+  <script src="{% static 'netbox_map/js/topology_core.js' %}"></script>
+  <script src="{% static 'netbox_map/js/topology_renderer.js' %}"></script>
+  <script src="{% static 'netbox_map/js/topology_sidebar.js' %}"></script>
+  <script src="{% static 'netbox_map/js/topology_detail.js' %}"></script>
+  <script src="{% static 'netbox_map/js/topology_main.js' %}"></script>
+  <script src="{% static 'netbox_map/js/jspdf.umd.min.js' %}"></script>
+  <script src="{% static 'netbox_map/js/topology_pdf.js' %}"></script>
+{% endblock %}

@@ -39,6 +39,25 @@ menu = PluginMenu(
                     ),
                 )
             ),
+            PluginMenuItem(
+                link='plugins:netbox_map:topology',
+                link_text=_('Topology View'),
+                permissions=['dcim.view_device'],
+            ),
+            PluginMenuItem(
+                link='plugins:netbox_map:topologysavedview_list',
+                link_text=_('Saved Views'),
+                permissions=['netbox_map.view_topologysavedview'],
+                buttons=(
+                    PluginMenuButton(
+                        link='plugins:netbox_map:topologysavedview_add',
+                        title=_('Add'),
+                        icon_class='mdi mdi-plus-thick',
+                        color=ButtonColorChoices.GREEN,
+                        permissions=['netbox_map.add_topologysavedview'],
+                    ),
+                )
+            ),
         )),
         (_('Floor Plans'), (
             PluginMenuItem(

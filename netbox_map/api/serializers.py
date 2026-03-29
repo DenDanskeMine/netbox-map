@@ -7,7 +7,7 @@ from netbox.api.fields import ContentTypeField
 from netbox.api.serializers import NetBoxModelSerializer
 from utilities.api import get_serializer_for_model
 from ..choices import BUILTIN_TYPE_SLUGS
-from ..models import FloorPlan, FloorPlanTile, CustomMarkerType, LocationCoordinates, MapMarker, TilePortAssignment, CablePath
+from ..models import FloorPlan, FloorPlanTile, CustomMarkerType, LocationCoordinates, MapMarker, TilePortAssignment, CablePath, TopologySavedView
 
 
 class CustomMarkerTypeSerializer(NetBoxModelSerializer):
@@ -190,3 +190,14 @@ class CablePathSerializer(NetBoxModelSerializer):
 
     def get_display_color(self, obj):
         return obj.get_display_color()
+
+
+class TopologySavedViewSerializer(NetBoxModelSerializer):
+    class Meta:
+        model = TopologySavedView
+        fields = [
+            'id', 'url', 'display_url', 'display',
+            'name', 'description', 'site', 'filters', 'layout_data', 'view_mode',
+            'tags', 'custom_fields', 'created', 'last_updated',
+        ]
+        brief_fields = ('id', 'url', 'display', 'name')

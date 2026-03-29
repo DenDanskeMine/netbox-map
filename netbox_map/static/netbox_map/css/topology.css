@@ -1,0 +1,1379 @@
+/* NetBox Map — Topology View Styles */
+/* Reuses --fp-* variables from floorplan.css for theme awareness */
+
+/* ===== Toolbar ===== */
+
+.topo-toolbar {
+    background: var(--fp-bg);
+    border: 1px solid var(--fp-border);
+    border-radius: 8px;
+    padding: 6px 10px;
+    margin-bottom: 8px;
+}
+
+.topo-toolbar-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.topo-toolbar-group {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.topo-toolbar-filters {
+    flex: 1;
+    min-width: 0;
+}
+
+.topo-toolbar-label {
+    color: var(--fp-text-muted);
+    font-size: 14px;
+    margin-right: 2px;
+    flex-shrink: 0;
+}
+
+.topo-filter-field {
+    width: 145px;
+    min-width: 90px;
+}
+
+.topo-filter-sm {
+    width: 120px;
+}
+
+.topo-filter-field select,
+.topo-filter-field .ts-wrapper {
+    font-size: 12px !important;
+    min-height: 28px !important;
+}
+
+.topo-filter-field .ts-wrapper .ts-control {
+    min-height: 26px !important;
+    padding: 0 8px !important;
+    font-size: 12px !important;
+}
+
+.topo-toolbar-info {
+    flex-shrink: 0;
+}
+
+.topo-stat {
+    font-size: 12px;
+    color: var(--fp-text-muted);
+    white-space: nowrap;
+    padding: 0 6px;
+}
+
+.topo-stat-sep {
+    margin: 0 3px;
+    opacity: 0.4;
+}
+
+.topo-toolbar-actions {
+    flex-shrink: 0;
+}
+
+.topo-toolbar-divider {
+    display: inline-block;
+    width: 1px;
+    height: 20px;
+    background: var(--fp-border);
+    margin: 0 4px;
+    vertical-align: middle;
+}
+
+/* Custom toolbar buttons */
+.topo-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    padding: 4px 10px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--fp-text-muted);
+    background: transparent;
+    border: 1px solid var(--fp-border);
+    border-radius: 5px;
+    cursor: pointer;
+    transition: all 0.12s ease;
+    white-space: nowrap;
+    height: 28px;
+    line-height: 1;
+    text-decoration: none;
+}
+
+.topo-btn:hover {
+    color: var(--fp-text);
+    background: var(--fp-hover);
+    border-color: var(--fp-toggle-active-border);
+}
+
+.topo-btn.active {
+    color: var(--fp-toggle-active-text);
+    background: var(--fp-toggle-active-bg);
+    border-color: var(--fp-toggle-active-border);
+}
+
+.topo-btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+}
+
+.topo-btn i.mdi {
+    font-size: 15px;
+    line-height: 1;
+}
+
+.topo-btn-primary {
+    color: #fff;
+    background: #2ecc71;
+    border-color: #2ecc71;
+}
+
+.topo-btn-primary:hover {
+    background: #27ae60;
+    border-color: #27ae60;
+    color: #fff;
+}
+
+.topo-btn-danger {
+    color: #e74c3c;
+    border-color: rgba(231, 76, 60, 0.3);
+}
+
+.topo-btn-danger:hover {
+    background: rgba(231, 76, 60, 0.1);
+    border-color: rgba(231, 76, 60, 0.5);
+}
+
+/* Button group (connected buttons) */
+.topo-btn-group {
+    display: inline-flex;
+}
+
+.topo-btn-group .topo-btn {
+    border-radius: 0;
+    margin-left: -1px;
+}
+
+.topo-btn-group .topo-btn:first-child {
+    border-radius: 5px 0 0 5px;
+    margin-left: 0;
+}
+
+.topo-btn-group .topo-btn:last-child {
+    border-radius: 0 5px 5px 0;
+}
+
+/* Dropdown override for toolbar */
+.topo-toolbar .dropdown-toggle::after {
+    font-size: 10px;
+    margin-left: 4px;
+}
+
+.topo-toolbar .dropdown-menu {
+    font-size: 13px;
+    background: var(--fp-bg);
+    border-color: var(--fp-border);
+}
+
+.topo-toolbar .dropdown-item {
+    color: var(--fp-text);
+    font-size: 13px;
+    padding: 5px 14px;
+}
+
+.topo-toolbar .dropdown-item:hover {
+    background: var(--fp-hover);
+    color: var(--fp-text);
+}
+
+.topo-toolbar .dropdown-item.active {
+    background: var(--fp-active);
+    color: var(--fp-toggle-active-text);
+}
+
+.topo-toolbar .dropdown-divider {
+    border-color: var(--fp-border);
+}
+
+/* ===== Footer / Legend ===== */
+
+.topo-footer {
+    display: flex;
+    gap: 20px;
+    padding: 6px 0;
+    flex-wrap: wrap;
+}
+
+.topo-legend {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    color: var(--fp-text-muted);
+}
+
+.topo-legend-title {
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-size: 10px;
+    opacity: 0.6;
+}
+
+.topo-legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+}
+
+/* ===== Layout ===== */
+
+.topology-layout {
+    display: flex;
+    gap: 0;
+    height: calc(100vh - 300px);
+    min-height: 450px;
+    border: 1px solid var(--fp-border);
+    border-radius: 8px;
+    overflow: hidden;
+    position: relative;
+}
+
+.topology-graph-area {
+    flex: 1;
+    min-width: 0;
+    position: relative;
+    background: var(--fp-canvas-bg);
+    overflow: hidden;
+}
+
+#topology-svg {
+    width: 100%;
+    height: 100%;
+    cursor: grab;
+}
+
+#topology-svg:active {
+    cursor: grabbing;
+}
+
+/* ===== Overlay states ===== */
+
+.topology-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    z-index: 5;
+}
+
+.topology-overlay .mdi {
+    opacity: 0.3;
+}
+
+/* ===== Sidebar ===== */
+
+.topology-sidebar {
+    width: 320px;
+    min-width: 280px;
+    max-width: 400px;
+    background: var(--fp-bg);
+    border-left: 1px solid var(--fp-border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.topology-sidebar.hidden {
+    display: none;
+}
+
+.topology-sidebar .sidebar-panel {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+}
+
+/* Sidebar header / search */
+.topo-sidebar-header {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--fp-border);
+}
+
+.topo-search-wrap {
+    position: relative;
+}
+
+.topo-search-wrap .mdi {
+    position: absolute;
+    left: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--fp-text-muted);
+    font-size: 16px;
+    pointer-events: none;
+}
+
+.topo-search-wrap input {
+    padding-left: 32px;
+    background: var(--fp-input-bg);
+    border-color: var(--fp-input-border);
+    color: var(--fp-input-text);
+    font-size: 13px;
+}
+
+/* Role toggles */
+.topo-role-toggles {
+    padding: 8px 12px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    border-bottom: 1px solid var(--fp-border-light);
+}
+
+.topo-role-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    cursor: pointer;
+    user-select: none;
+    background: var(--fp-toggle-bg);
+    border: 1px solid var(--fp-toggle-border);
+    color: var(--fp-text-muted);
+    transition: all 0.15s ease;
+}
+
+.topo-role-toggle:hover {
+    background: var(--fp-hover);
+}
+
+.topo-role-toggle.active {
+    background: var(--fp-toggle-active-bg);
+    border-color: var(--fp-toggle-active-border);
+    color: var(--fp-toggle-active-text);
+}
+
+.topo-role-toggle .toggle-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+.topo-role-toggle:not(.active) .toggle-dot {
+    opacity: 0.3;
+}
+
+/* Device list */
+.topo-device-list {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-width: thin;
+    scrollbar-color: var(--fp-scrollbar-thumb) transparent;
+}
+
+.topo-device-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 12px;
+    cursor: pointer;
+    border-bottom: 1px solid var(--fp-border-light);
+    transition: background 0.1s ease;
+}
+
+.topo-device-item:hover {
+    background: var(--fp-hover);
+}
+
+.topo-device-item.selected {
+    background: var(--fp-active);
+}
+
+.topo-device-item .role-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.topo-device-item .device-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.topo-device-item .device-name {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--fp-text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.topo-device-item .device-meta {
+    font-size: 11px;
+    color: var(--fp-text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.topo-device-item .device-ports {
+    font-size: 11px;
+    color: var(--fp-text-dim);
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+/* Detail panel */
+.topo-detail-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--fp-border);
+    cursor: pointer;
+    font-size: 13px;
+    color: var(--fp-text);
+    transition: background 0.1s ease;
+}
+
+.topo-detail-header:hover {
+    background: var(--fp-hover);
+}
+
+.topo-detail-esc {
+    margin-left: auto;
+    font-size: 10px;
+    padding: 1px 5px;
+    border-radius: 3px;
+    background: var(--fp-toggle-bg);
+    border: 1px solid var(--fp-border);
+    color: var(--fp-text-dim);
+}
+
+.topo-detail-content {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-width: thin;
+    scrollbar-color: var(--fp-scrollbar-thumb) transparent;
+}
+
+/* ===== Detail Panel — Device Header ===== */
+
+.topo-detail-section {
+    border-bottom: 1px solid var(--fp-border-light);
+    padding: 8px 0;
+}
+
+.topo-detail-device-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+}
+
+.topo-detail-role-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.topo-detail-device-info {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.topo-detail-device-name {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--fp-text);
+    text-decoration: none;
+    line-height: 1.2;
+}
+
+.topo-detail-device-name:hover {
+    color: var(--fp-link-color);
+}
+
+.topo-detail-device-type {
+    font-size: 11px;
+    color: var(--fp-text-muted);
+}
+
+/* Quick stats row */
+.topo-detail-stats {
+    display: flex;
+    gap: 0;
+    padding: 6px 12px;
+    border-top: 1px solid var(--fp-border-light);
+    border-bottom: 1px solid var(--fp-border-light);
+    margin: 4px 0;
+}
+
+.topo-detail-stat {
+    flex: 1;
+    text-align: center;
+    padding: 4px 0;
+    border-right: 1px solid var(--fp-border-light);
+}
+
+.topo-detail-stat:last-child {
+    border-right: none;
+}
+
+.topo-detail-stat-val {
+    display: block;
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--fp-text);
+    line-height: 1.2;
+}
+
+.topo-detail-stat-label {
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--fp-text-muted);
+}
+
+/* Properties grid */
+.topo-detail-props {
+    padding: 6px 12px;
+}
+
+.topo-detail-prop {
+    display: flex;
+    justify-content: space-between;
+    padding: 2px 0;
+    font-size: 12px;
+}
+
+.topo-detail-prop-label {
+    color: var(--fp-text-muted);
+}
+
+.topo-detail-prop-value {
+    color: var(--fp-text);
+    font-weight: 500;
+    text-align: right;
+}
+
+.topo-detail-prop-value a {
+    color: var(--fp-link-color);
+    text-decoration: none;
+}
+
+.topo-detail-prop-value code {
+    font-size: 11px;
+    background: rgba(255,255,255,0.06);
+    padding: 1px 5px;
+    border-radius: 3px;
+    color: var(--fp-text);
+}
+
+/* ===== Detail Panel — Section Headers ===== */
+
+.topo-detail-section-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--fp-text-muted);
+    padding: 4px 12px 6px;
+}
+
+.topo-detail-section-icon {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.topo-detail-section-count {
+    font-weight: 400;
+    opacity: 0.6;
+}
+
+/* ===== Detail Panel — Interface Rows ===== */
+
+.topo-iface-row {
+    padding: 4px 12px;
+    border-bottom: 1px solid var(--fp-border-light);
+    transition: background 0.1s ease;
+    cursor: default;
+}
+
+.topo-iface-row:last-child {
+    border-bottom: none;
+}
+
+.topo-iface-row:hover {
+    background: var(--fp-hover);
+}
+
+.topo-iface-row.cabled {
+    cursor: pointer;
+}
+
+.topo-iface-row-main {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+span.topo-iface-dot {
+    width: 8px !important;
+    height: 8px !important;
+    min-width: 8px !important;
+    min-height: 8px !important;
+    max-width: 8px !important;
+    max-height: 8px !important;
+    border-radius: 50% !important;
+    flex-shrink: 0 !important;
+    flex-grow: 0 !important;
+    display: inline-block !important;
+    box-sizing: border-box !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    line-height: 0 !important;
+    font-size: 0 !important;
+    vertical-align: middle;
+}
+
+span.topo-iface-dot.empty {
+    background: transparent !important;
+    border: 1.5px solid var(--fp-border) !important;
+}
+
+.topo-iface-port-name {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--fp-text);
+    text-decoration: none;
+    font-family: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
+}
+
+.topo-iface-port-name:hover {
+    color: var(--fp-link-color);
+}
+
+.topo-iface-port-type {
+    font-size: 10px;
+    color: var(--fp-text-dim);
+    margin-left: auto;
+}
+
+.topo-iface-speed-pill {
+    font-size: 9px;
+    font-weight: 700;
+    padding: 1px 6px;
+    border-radius: 8px;
+    margin-left: auto;
+    flex-shrink: 0;
+}
+
+/* Connection info (second line) */
+.topo-iface-row-connection {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 0 2px 14px;
+    font-size: 11px;
+    color: var(--fp-text-dim);
+}
+
+.topo-iface-row-connection .mdi {
+    font-size: 13px;
+    opacity: 0.5;
+}
+
+.topo-iface-remote {
+    color: var(--fp-link-color);
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 11px;
+}
+
+.topo-iface-remote:hover {
+    text-decoration: underline;
+}
+
+.topo-iface-remote-port {
+    font-family: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
+    font-size: 10px;
+    color: var(--fp-text-muted);
+    background: rgba(255,255,255,0.04);
+    padding: 0 4px;
+    border-radius: 3px;
+}
+
+.topo-iface-cable-label {
+    font-size: 9px;
+    color: var(--fp-text-dim);
+    margin-left: auto;
+    opacity: 0.6;
+}
+
+/* Expanded interface detail (click to expand) */
+.topo-iface-row.expanded {
+    background: var(--fp-hover);
+}
+
+.topo-iface-expanded {
+    padding: 4px 14px 6px;
+    border-top: 1px solid var(--fp-border-light);
+    margin-top: 4px;
+}
+
+.topo-iface-exp-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    padding: 2px 0;
+    color: var(--fp-text-muted);
+}
+
+.topo-iface-exp-row span:last-child {
+    color: var(--fp-text);
+    font-weight: 500;
+}
+
+.topo-iface-exp-link {
+    color: var(--fp-link-color);
+    text-decoration: none;
+    font-size: 11px;
+    font-weight: 500;
+}
+
+.topo-iface-exp-link:hover {
+    text-decoration: underline;
+}
+
+/* ===== SVG Node Styles ===== */
+
+.topo-node {
+    cursor: pointer;
+}
+
+.topo-node .node-bg {
+    stroke-width: 2;
+    stroke: rgba(255, 255, 255, 0.15);
+    transition: stroke-width 0.15s ease;
+}
+
+.topo-node:hover .node-bg {
+    stroke: rgba(255, 255, 255, 0.5);
+    stroke-width: 3;
+}
+
+.topo-node.selected .node-bg {
+    stroke: #4a9eff;
+    stroke-width: 4;
+}
+
+.topo-node .node-label {
+    font-size: 11px;
+    fill: #c0c0d0;
+    text-anchor: middle;
+    pointer-events: none;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+}
+
+.topo-node .node-icon {
+    text-anchor: middle;
+    dominant-baseline: central;
+    fill: rgba(255, 255, 255, 0.9);
+    font-size: 16px;
+    pointer-events: none;
+    font-family: 'Material Design Icons';
+}
+
+.topo-node .status-dot {
+    stroke: var(--fp-canvas-bg);
+    stroke-width: 2;
+}
+
+/* ===== SVG Edge Styles ===== */
+
+.topo-edge {
+    stroke-opacity: 0.5;
+    fill: none;
+    transition: stroke-opacity 0.15s ease;
+}
+
+.topo-edge:hover {
+    stroke-opacity: 1;
+    stroke-width: 3 !important;
+    cursor: pointer;
+}
+
+.topo-edge.planned {
+    stroke-dasharray: 6, 4;
+}
+
+.topo-edge.decommissioned {
+    stroke-dasharray: 2, 4;
+    stroke-opacity: 0.3;
+}
+
+/* Edge label (shown on hover) */
+.topo-edge-label {
+    font-size: 10px;
+    fill: #a0a0b8;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+}
+
+.topo-edge:hover + .topo-edge-label,
+.topo-edge-label.visible {
+    opacity: 1;
+}
+
+/* ===== Stencil View — Visio-style Device Cards ===== */
+
+.topo-stencil-node {
+    cursor: pointer;
+}
+
+.topo-stencil-node .stencil-shadow {
+    pointer-events: none;
+}
+
+.topo-stencil-node .stencil-bg {
+    fill: #1e2238;
+    stroke: rgba(255, 255, 255, 0.08);
+    stroke-width: 1;
+    transition: stroke 0.15s ease, filter 0.15s ease;
+}
+
+.topo-stencil-node:hover .stencil-bg {
+    stroke: rgba(255, 255, 255, 0.22);
+}
+
+.topo-stencil-node.selected .stencil-bg {
+    stroke: #4a9eff;
+    stroke-width: 3;
+}
+
+.topo-stencil-node .stencil-name {
+    font-size: 11.5px;
+    font-weight: 700;
+    fill: #e8eaf0;
+    pointer-events: none;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+}
+
+.topo-stencil-node .stencil-type {
+    font-size: 8.5px;
+    fill: #7880a0;
+    pointer-events: none;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+}
+
+.topo-stencil-node .port-name {
+    font-size: 10px;
+    fill: #d0d4e0;
+    pointer-events: none;
+    font-family: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
+}
+
+.topo-stencil-node .port-speed {
+    font-size: 9px;
+    font-weight: 700;
+    pointer-events: none;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+}
+
+/* Virtual pass-through edges */
+.topo-edge.virtual {
+    stroke-dasharray: 8, 4;
+    stroke-opacity: 0.6;
+}
+
+/* ===== Cable Labels ===== */
+
+.cable-label {
+    font-size: 9px;
+    fill: #c0c8d8;
+    pointer-events: none;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+    letter-spacing: 0.3px;
+}
+
+.cable-label-id {
+    font-weight: 700;
+    font-size: 9.5px;
+}
+
+.cable-label.visible {
+    opacity: 1;
+}
+
+.show-cable-labels .cable-label {
+    opacity: 0.7;
+}
+
+/* ===== Connector Dots ===== */
+
+.connector-dot {
+    pointer-events: none;
+    stroke: var(--fp-canvas-bg);
+    stroke-width: 1.5;
+}
+
+/* ===== Speed Colors ===== */
+
+.speed-100m { background: #f39c12; }
+.speed-1g { background: #2ecc71; }
+.speed-10g { background: #3498db; }
+.speed-25g { background: #9b59b6; }
+.speed-40g { background: #e74c3c; }
+.speed-100g { background: #e91e63; }
+
+/* ===== Legend ===== */
+
+.legend-dot {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    vertical-align: middle;
+    margin-right: 2px;
+}
+
+/* ===== Device Picker Panel ===== */
+
+.device-picker {
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 340px;
+    background: var(--fp-bg);
+    border-left: 1px solid var(--fp-border);
+    z-index: 15;
+    display: flex;
+    flex-direction: column;
+    box-shadow: -4px 0 20px rgba(0, 0, 0, 0.3);
+}
+
+.picker-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--fp-border);
+}
+
+.picker-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--fp-text);
+}
+
+.picker-title .mdi {
+    margin-right: 4px;
+    opacity: 0.6;
+}
+
+.picker-close-btn {
+    background: none;
+    border: none;
+    color: var(--fp-text-muted);
+    cursor: pointer;
+    font-size: 18px;
+    padding: 2px 4px;
+    line-height: 1;
+}
+
+.picker-close-btn:hover {
+    color: var(--fp-text);
+}
+
+.picker-filters {
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--fp-border);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.picker-search-wrap {
+    position: relative;
+}
+
+.picker-search-wrap .mdi {
+    position: absolute;
+    left: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--fp-text-muted);
+    font-size: 15px;
+    pointer-events: none;
+}
+
+.picker-search-wrap input {
+    padding-left: 30px;
+    background: var(--fp-input-bg);
+    border-color: var(--fp-input-border);
+    color: var(--fp-input-text);
+    font-size: 12px;
+}
+
+.picker-filter-row {
+    display: flex;
+    gap: 6px;
+}
+
+.picker-filter-row select {
+    flex: 1;
+    font-size: 11px;
+    padding: 4px 8px;
+    background: var(--fp-input-bg);
+    border: 1px solid var(--fp-input-border);
+    border-radius: 4px;
+    color: var(--fp-input-text);
+    cursor: pointer;
+    appearance: auto;
+}
+
+.picker-filter-row select:focus {
+    border-color: var(--fp-accent);
+    outline: none;
+}
+
+.picker-filter-row select option {
+    background: var(--fp-bg);
+    color: var(--fp-text);
+}
+
+.picker-results {
+    flex: 1;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--fp-scrollbar-thumb) transparent;
+}
+
+.picker-placeholder {
+    padding: 40px 20px;
+    text-align: center;
+    color: var(--fp-text-dim);
+    font-size: 12px;
+}
+
+.picker-device {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--fp-border-light);
+    transition: background 0.1s;
+}
+
+.picker-device:hover {
+    background: var(--fp-hover);
+}
+
+.picker-device-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.picker-device-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.picker-device-name {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--fp-text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.picker-device-meta {
+    font-size: 10px;
+    color: var(--fp-text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.picker-add-btn {
+    padding: 2px 10px;
+    font-size: 10px;
+    font-weight: 600;
+    border: 1px solid var(--fp-border);
+    border-radius: 4px;
+    background: transparent;
+    color: #2ecc71;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: all 0.12s;
+}
+
+.picker-add-btn:hover {
+    background: rgba(46, 204, 113, 0.1);
+    border-color: #2ecc71;
+}
+
+.picker-add-btn.added {
+    background: rgba(46, 204, 113, 0.15);
+    border-color: rgba(46, 204, 113, 0.3);
+    color: #2ecc71;
+    cursor: default;
+}
+
+.picker-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    border-top: 1px solid var(--fp-border);
+}
+
+.picker-count {
+    font-size: 11px;
+    color: var(--fp-text-muted);
+}
+
+.picker-loading {
+    padding: 20px;
+    text-align: center;
+    color: var(--fp-text-dim);
+    font-size: 12px;
+}
+
+/* ===== Hierarchy Editor Items ===== */
+
+.hierarchy-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--fp-border-light);
+    cursor: grab;
+    transition: background 0.1s;
+    user-select: none;
+}
+
+.hierarchy-item:hover {
+    background: var(--fp-hover);
+}
+
+.hierarchy-item.dragging {
+    opacity: 0.4;
+    background: var(--fp-active);
+}
+
+.hierarchy-handle {
+    color: var(--fp-text-dim);
+    font-size: 16px;
+    cursor: grab;
+    flex-shrink: 0;
+}
+
+.hierarchy-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.hierarchy-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--fp-text);
+    flex: 1;
+}
+
+.hierarchy-layer {
+    font-size: 10px;
+    color: var(--fp-text-dim);
+    flex-shrink: 0;
+}
+
+/* (stats bar merged into toolbar) */
+
+/* ===== Context Menu ===== */
+
+.topo-context-menu {
+    position: fixed;
+    z-index: 9999;
+    background: var(--fp-bg);
+    border: 1px solid var(--fp-border);
+    border-radius: 6px;
+    padding: 4px 0;
+    min-width: 180px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
+.ctx-item {
+    padding: 6px 14px;
+    font-size: 12px;
+    color: var(--fp-text);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.ctx-item:hover {
+    background: var(--fp-hover);
+}
+
+.ctx-item .mdi {
+    font-size: 15px;
+    opacity: 0.7;
+}
+
+.ctx-header {
+    padding: 6px 14px;
+    font-size: 12px;
+    color: var(--fp-text);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.ctx-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+.ctx-divider {
+    height: 1px;
+    background: var(--fp-border);
+    margin: 2px 0;
+}
+
+.ctx-danger {
+    color: #e74c3c;
+}
+
+.ctx-danger:hover {
+    background: rgba(231, 76, 60, 0.1);
+}
+
+/* ===== Detail Actions ===== */
+
+.topo-detail-actions {
+    display: flex;
+    gap: 6px;
+    padding: 6px 12px;
+    border-bottom: 1px solid var(--fp-border-light);
+}
+
+/* ===== Hide/Show Button ===== */
+
+.topo-hide-btn {
+    background: none;
+    border: none;
+    color: var(--fp-text-dim);
+    cursor: pointer;
+    padding: 2px 4px;
+    font-size: 14px;
+    opacity: 0.4;
+    transition: opacity 0.15s ease;
+    flex-shrink: 0;
+}
+
+.topo-device-item:hover .topo-hide-btn {
+    opacity: 0.8;
+}
+
+.topo-hide-btn:hover {
+    opacity: 1 !important;
+    color: var(--fp-accent);
+}
+
+.topo-device-item.hidden-node {
+    opacity: 0.5;
+}
+
+.topo-device-item.hidden-node .device-name {
+    text-decoration: line-through;
+}
+
+/* ===== Toast ===== */
+
+.topo-toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: #2d7a3a;
+    color: #fff;
+    padding: 8px 20px;
+    border-radius: 6px;
+    font-size: 13px;
+    z-index: 9999;
+    opacity: 0;
+    transition: opacity 0.3s ease, transform 0.3s ease;
+    pointer-events: none;
+}
+
+.topo-toast.visible {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+}
+
+.topo-toast.error {
+    background: #c0392b;
+}
+
+/* ===== Responsive ===== */
+
+@media (max-width: 768px) {
+    .topology-layout {
+        flex-direction: column;
+        height: auto;
+    }
+
+    .topology-graph-area {
+        height: 400px;
+    }
+
+    .topology-sidebar {
+        width: 100%;
+        max-width: none;
+        height: 300px;
+        border-left: none;
+        border-top: 1px solid var(--fp-border);
+    }
+}
