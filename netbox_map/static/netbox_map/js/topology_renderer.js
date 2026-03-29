@@ -884,6 +884,8 @@
                 // Store raw (unsnapped) position for smooth dragging
                 d._rawX = d.x;
                 d._rawY = d.y;
+                d._dragStartX = d.x;
+                d._dragStartY = d.y;
             })
             .on('drag', function(ev, d) {
                 // Accumulate raw movement
@@ -926,8 +928,9 @@
                 });
             })
             .on('end', function(ev, d) {
-                // Auto-sort ports on drag end to minimize cable crossings
-                if (self.state.autoSortPorts) {
+                // Only re-sort if device actually moved (not just a click)
+                var moved = Math.abs(d.x - d._dragStartX) > 2 || Math.abs(d.y - d._dragStartY) > 2;
+                if (moved && self.state.autoSortPorts) {
                     // Sync all positions to state.nodes first
                     nodeData.forEach(function(nd) {
                         var orig = self.state.nodes.find(function(n) { return n.id === nd.id; });

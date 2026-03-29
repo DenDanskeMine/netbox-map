@@ -792,9 +792,8 @@ span.topo-iface-dot.empty {
 }
 
 .topo-node.selected .node-bg {
-    stroke: #fff;
-    stroke-width: 3;
-    filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.3));
+    stroke: #4a9eff;
+    stroke-width: 4;
 }
 
 .topo-node .node-label {
@@ -879,9 +878,8 @@ span.topo-iface-dot.empty {
 }
 
 .topo-stencil-node.selected .stencil-bg {
-    stroke: rgba(100, 160, 255, 0.6);
-    stroke-width: 1.5;
-    filter: drop-shadow(0 0 12px rgba(80, 120, 255, 0.25));
+    stroke: #4a9eff;
+    stroke-width: 3;
 }
 
 .topo-stencil-node .stencil-name {
