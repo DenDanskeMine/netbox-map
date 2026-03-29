@@ -15,6 +15,9 @@
     var renderer = new App.Renderer(state, events);
     renderer.init();
 
+    // Expose events for inline handlers
+    App._events = events;
+
     var sidebar = new App.Sidebar(state, events);
     var detail = new App.Detail(state, events);
 
@@ -25,13 +28,23 @@
 
     var loadingEl = document.getElementById('topology-loading');
     var emptyEl = document.getElementById('topology-empty');
+    var sidebarEl = document.getElementById('topology-sidebar');
+
+    // Hide sidebar when no data
+    if (sidebarEl) sidebarEl.classList.add('hidden');
 
     // Apply saved layout (positions, hidden nodes, port overrides)
     function applySavedLayout() {
         var layout = state.savedLayout;
         if (!layout || typeof layout !== 'object') return;
 
+        // Restore custom hierarchy if saved
+        if (layout._hierarchy) {
+            state.customHierarchy = layout._hierarchy;
+        }
+
         for (var nodeId in layout) {
+            if (nodeId === '_hierarchy') continue;
             var data = layout[nodeId];
             if (data.hidden) state.hiddenNodes.add(nodeId);
             if (data.port_overrides) {
@@ -94,6 +107,7 @@
         var hasFilters = Object.keys(state.initialFilters).length > 0;
 
         if (!hasFilters) {
+            // No filters — show empty state but don't block (picker can still add devices)
             if (loadingEl) loadingEl.classList.add('d-none');
             if (emptyEl) emptyEl.classList.remove('d-none');
             return;
@@ -124,6 +138,9 @@
 
             renderer.render(data.nodes, data.edges);
             events.emit('data:loaded', data);
+
+            // Show sidebar now that we have data
+            if (sidebarEl) sidebarEl.classList.remove('hidden');
 
             // Apply hidden nodes after render
             if (state.hiddenNodes.size > 0) {
@@ -181,9 +198,21 @@
 
     // === Save Layout ===
     function saveLayout(viewId, name) {
+        var layoutData = collectLayout();
+        if (state.customHierarchy) layoutData._hierarchy = state.customHierarchy;
+
+        // Always save the actual device IDs on canvas so view restores correctly
+        var deviceIds = [];
+        state.nodes.forEach(function(n) { if (n.device_id) deviceIds.push(n.device_id); });
+
+        var filters = Object.assign({}, state.initialFilters);
+        if (deviceIds.length > 0) {
+            filters.device_ids = deviceIds.join(',');
+        }
+
         var payload = {
-            layout_data: collectLayout(),
-            filters: state.initialFilters,
+            layout_data: layoutData,
+            filters: filters,
             view_mode: state.viewMode,
         };
         if (viewId) payload.view_id = viewId;
@@ -195,6 +224,7 @@
                 showToast('View "' + resp.name + '" saved');
                 // Update URL to include view_id if new
                 if (!viewId && resp.id) {
+                    state.savedViewId = resp.id;
                     var url = new URL(window.location);
                     url.searchParams.set('view_id', resp.id);
                     window.history.replaceState(null, '', url.toString());
@@ -234,6 +264,386 @@
         setTimeout(function() { el.classList.add('visible'); }, 10);
         setTimeout(function() { el.classList.remove('visible'); setTimeout(function() { el.remove(); }, 300); }, 2000);
     }
+
+    // ===== Device Picker =====
+    var pickerEl = document.getElementById('device-picker');
+    var pickerBtn = document.getElementById('topo-add-devices');
+    var pickerClose = document.getElementById('picker-close');
+    var pickerSearch = document.getElementById('picker-search');
+    var pickerSite = document.getElementById('picker-site');
+    var pickerRole = document.getElementById('picker-role');
+    var pickerResults = document.getElementById('picker-results');
+    var pickerCount = document.getElementById('picker-count');
+    var pickerDone = document.getElementById('picker-done');
+    var pickerCache = {};  // cache filter dropdown data
+    state.addedDeviceIds = new Set();
+
+    // Track which device IDs are currently on canvas
+    function getCanvasDeviceIds() {
+        var ids = new Set();
+        state.nodes.forEach(function(n) { ids.add(n.device_id); });
+        return ids;
+    }
+
+    function openPicker() {
+        if (!pickerEl) return;
+        pickerEl.classList.remove('d-none');
+        if (pickerSearch) { pickerSearch.value = ''; pickerSearch.focus(); }
+        // Populate filter dropdowns (once)
+        if (!pickerCache.sites) {
+            api.get('/api/dcim/sites/?brief=true&limit=1000').then(function(data) {
+                pickerCache.sites = data.results || data || [];
+                if (pickerSite) {
+                    var html = '<option value="">All Sites</option>';
+                    pickerCache.sites.forEach(function(s) {
+                        html += '<option value="' + s.id + '">' + App.escapeHtml(s.display || s.name) + '</option>';
+                    });
+                    pickerSite.innerHTML = html;
+                }
+            }).catch(function() {
+                console.warn('Failed to load sites for picker');
+            });
+            api.get('/api/dcim/device-roles/?brief=true&limit=1000').then(function(data) {
+                pickerCache.roles = data.results || data || [];
+                if (pickerRole) {
+                    var html = '<option value="">All Roles</option>';
+                    pickerCache.roles.forEach(function(r) {
+                        html += '<option value="' + r.id + '">' + App.escapeHtml(r.display || r.name) + '</option>';
+                    });
+                    pickerRole.innerHTML = html;
+                }
+            }).catch(function() {
+                console.warn('Failed to load roles for picker');
+            });
+        }
+        pickerResults.innerHTML = '<div class="picker-placeholder">Search for devices to add</div>';
+    }
+
+    function closePicker() {
+        if (pickerEl) pickerEl.classList.add('d-none');
+    }
+
+    function searchDevices() {
+        var q = pickerSearch ? pickerSearch.value.trim() : '';
+        var siteId = pickerSite ? pickerSite.value : '';
+        var roleId = pickerRole ? pickerRole.value : '';
+
+        if (!q && !siteId && !roleId) {
+            pickerResults.innerHTML = '<div class="picker-placeholder">Type a name or select a site/role to search</div>';
+            return;
+        }
+
+        var params = new URLSearchParams();
+        if (q) params.set('name__ic', q);
+        if (siteId) params.set('site_id', siteId);
+        if (roleId) params.set('role_id', roleId);
+        params.set('limit', '30');
+
+        pickerResults.innerHTML = '<div class="picker-loading"><div class="spinner-border spinner-border-sm"></div></div>';
+
+        api.get('/api/dcim/devices/?' + params.toString()).then(function(data) {
+            var results = data.results || [];
+            var canvasIds = getCanvasDeviceIds();
+
+            if (results.length === 0) {
+                pickerResults.innerHTML = '<div class="picker-placeholder">No devices found</div>';
+                return;
+            }
+
+            var html = '';
+            results.forEach(function(dev) {
+                var isOnCanvas = canvasIds.has(dev.id) || state.addedDeviceIds.has(dev.id);
+                var roleColor = dev.role && dev.role.color ? '#' + dev.role.color : '#6c757d';
+                var roleName = dev.role ? dev.role.display : '';
+                var siteName = dev.site ? dev.site.display : '';
+                var typeName = dev.device_type ? dev.device_type.display : '';
+
+                html += '<div class="picker-device" data-device-id="' + dev.id + '">'
+                    + '<span class="picker-device-dot" style="background:' + roleColor + ';"></span>'
+                    + '<div class="picker-device-info">'
+                    + '<div class="picker-device-name">' + App.escapeHtml(dev.display) + '</div>'
+                    + '<div class="picker-device-meta">' + App.escapeHtml(typeName);
+                if (siteName) html += ' &middot; ' + App.escapeHtml(siteName);
+                html += '</div></div>'
+                    + '<button class="picker-add-btn' + (isOnCanvas ? ' added' : '') + '" data-id="' + dev.id + '">'
+                    + (isOnCanvas ? 'Added' : 'Add')
+                    + '</button></div>';
+            });
+
+            if (data.count > 30) {
+                html += '<div class="picker-placeholder">' + (data.count - 30) + ' more — refine your search</div>';
+            }
+
+            pickerResults.innerHTML = html;
+
+            // Wire add buttons
+            pickerResults.querySelectorAll('.picker-add-btn:not(.added)').forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    var devId = parseInt(this.getAttribute('data-id'));
+                    state.addedDeviceIds.add(devId);
+                    this.classList.add('added');
+                    this.textContent = 'Added';
+                    updatePickerCount();
+                });
+            });
+        }).catch(function() {
+            pickerResults.innerHTML = '<div class="picker-placeholder">Error searching devices</div>';
+        });
+    }
+
+    function updatePickerCount() {
+        if (pickerCount) {
+            pickerCount.textContent = state.addedDeviceIds.size + ' added';
+        }
+    }
+
+    function applyPickerDevices() {
+        if (state.addedDeviceIds.size === 0) { closePicker(); return; }
+
+        // Collect all device IDs: existing + newly added
+        var allIds = new Set();
+        state.nodes.forEach(function(n) { allIds.add(n.device_id); });
+        state.addedDeviceIds.forEach(function(id) { allIds.add(id); });
+
+        var savedPositions = getCurrentPositions();
+        closePicker();
+
+        // Reload topology with explicit device IDs
+        var url = state.topologyUrl + '?device_ids=' + Array.from(allIds).join(',');
+
+        if (loadingEl) loadingEl.classList.remove('d-none');
+        if (emptyEl) emptyEl.classList.add('d-none');
+
+        api.get(url).then(function(data) {
+            if (loadingEl) loadingEl.classList.add('d-none');
+            if (emptyEl) emptyEl.classList.add('d-none');
+            state.nodes = data.nodes;
+            state.edges = data.edges;
+            state.savedLayout = savedPositions;
+            renderer.render(data.nodes, data.edges);
+            events.emit('data:loaded', data);
+
+            if (sidebarEl) sidebarEl.classList.remove('hidden');
+
+            var statNodes = document.getElementById('stat-nodes');
+            var statEdges = document.getElementById('stat-edges');
+            if (statNodes) statNodes.textContent = data.stats.node_count;
+            if (statEdges) statEdges.textContent = data.stats.edge_count;
+
+            state.addedDeviceIds.clear();
+            updatePickerCount();
+        }).catch(function(err) {
+            if (loadingEl) loadingEl.classList.add('d-none');
+            console.error('Failed to load devices:', err);
+        });
+    }
+
+    if (pickerBtn) pickerBtn.addEventListener('click', openPicker);
+    if (pickerClose) pickerClose.addEventListener('click', closePicker);
+    if (pickerDone) pickerDone.addEventListener('click', applyPickerDevices);
+
+    // Debounced search
+    var pickerSearchTimer;
+    if (pickerSearch) {
+        pickerSearch.addEventListener('input', function() {
+            clearTimeout(pickerSearchTimer);
+            pickerSearchTimer = setTimeout(searchDevices, 300);
+        });
+    }
+    if (pickerSite) pickerSite.addEventListener('change', searchDevices);
+    if (pickerRole) pickerRole.addEventListener('change', searchDevices);
+
+    // Escape to close picker
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape' && pickerEl && !pickerEl.classList.contains('d-none')) {
+            closePicker();
+        }
+    });
+
+    // ===== Role Hierarchy Editor =====
+    var hierarchyEl = document.getElementById('hierarchy-editor');
+    var hierarchyBtn = document.getElementById('topo-edit-hierarchy');
+    var hierarchyClose = document.getElementById('hierarchy-close');
+    var hierarchyList = document.getElementById('hierarchy-list');
+    var hierarchyApply = document.getElementById('hierarchy-apply');
+    var hierarchyReset = document.getElementById('hierarchy-reset');
+
+    function openHierarchy() {
+        if (!hierarchyEl) return;
+        closePicker();
+        hierarchyEl.classList.remove('d-none');
+
+        // Collect unique roles from current nodes
+        var roles = {};
+        state.nodes.forEach(function(n) {
+            if (n.role && !roles[n.role_slug]) {
+                roles[n.role_slug] = { slug: n.role_slug, name: n.role, color: n.role_color };
+            }
+        });
+
+        // Sort by current layer assignment or custom hierarchy
+        var roleList = Object.values(roles);
+        var customOrder = state.customHierarchy || {};
+        roleList.sort(function(a, b) {
+            var aOrder = customOrder[a.slug] !== undefined ? customOrder[a.slug] : 99;
+            var bOrder = customOrder[b.slug] !== undefined ? customOrder[b.slug] : 99;
+            if (aOrder !== bOrder) return aOrder - bOrder;
+            return a.name.localeCompare(b.name);
+        });
+
+        // Render draggable list
+        var html = '';
+        roleList.forEach(function(r, i) {
+            html += '<div class="hierarchy-item" draggable="true" data-slug="' + App.escapeHtml(r.slug) + '">'
+                + '<span class="hierarchy-handle"><i class="mdi mdi-drag-horizontal-variant"></i></span>'
+                + '<span class="hierarchy-dot" style="background:' + App.escapeHtml(r.color) + ';"></span>'
+                + '<span class="hierarchy-name">' + App.escapeHtml(r.name) + '</span>'
+                + '<span class="hierarchy-layer">Layer ' + i + '</span>'
+                + '</div>';
+        });
+        hierarchyList.innerHTML = html;
+
+        // Wire drag-and-drop reordering
+        var items = hierarchyList.querySelectorAll('.hierarchy-item');
+        var dragItem = null;
+
+        items.forEach(function(item) {
+            item.addEventListener('dragstart', function(e) {
+                dragItem = this;
+                this.classList.add('dragging');
+                e.dataTransfer.effectAllowed = 'move';
+            });
+            item.addEventListener('dragend', function() {
+                this.classList.remove('dragging');
+                dragItem = null;
+                // Update layer numbers
+                hierarchyList.querySelectorAll('.hierarchy-item').forEach(function(el, idx) {
+                    el.querySelector('.hierarchy-layer').textContent = 'Layer ' + idx;
+                });
+            });
+            item.addEventListener('dragover', function(e) {
+                e.preventDefault();
+                if (!dragItem || dragItem === this) return;
+                var rect = this.getBoundingClientRect();
+                var midY = rect.top + rect.height / 2;
+                if (e.clientY < midY) {
+                    hierarchyList.insertBefore(dragItem, this);
+                } else {
+                    hierarchyList.insertBefore(dragItem, this.nextSibling);
+                }
+            });
+        });
+    }
+
+    function closeHierarchy() {
+        if (hierarchyEl) hierarchyEl.classList.add('d-none');
+    }
+
+    function applyHierarchy() {
+        // Read order from DOM
+        var order = {};
+        hierarchyList.querySelectorAll('.hierarchy-item').forEach(function(el, idx) {
+            order[el.getAttribute('data-slug')] = idx;
+        });
+        state.customHierarchy = order;
+
+        // Clear saved positions and re-render with new hierarchy
+        state.savedLayout = {};
+        closeHierarchy();
+        renderer.render(state.nodes, state.edges);
+        events.emit('data:loaded', { nodes: state.nodes, edges: state.edges });
+    }
+
+    if (hierarchyBtn) hierarchyBtn.addEventListener('click', openHierarchy);
+    if (hierarchyClose) hierarchyClose.addEventListener('click', closeHierarchy);
+    if (hierarchyApply) hierarchyApply.addEventListener('click', applyHierarchy);
+    if (hierarchyReset) hierarchyReset.addEventListener('click', function() {
+        delete state.customHierarchy;
+        state.savedLayout = {};
+        closeHierarchy();
+        renderer.render(state.nodes, state.edges);
+        events.emit('data:loaded', { nodes: state.nodes, edges: state.edges });
+    });
+
+    // Snap to grid toggle
+    var snapBtn = document.getElementById('topo-snap-grid');
+    if (snapBtn) {
+        snapBtn.addEventListener('click', function() {
+            state.snapToGrid = !state.snapToGrid;
+            this.classList.toggle('active', state.snapToGrid);
+        });
+    }
+
+    // Add connected devices (from right-click menu)
+    events.on('device:add-neighbors', function(node) {
+        // Fetch the device's interfaces to find connected devices
+        var url = state.deviceDetailUrl + node.device_id + '/';
+        api.get(url).then(function(data) {
+            var neighborIds = new Set();
+            var canvasIds = new Set();
+            state.nodes.forEach(function(n) { canvasIds.add(n.device_id); });
+
+            (data.interfaces || []).forEach(function(iface) {
+                if (iface.connected_to && iface.connected_to.device_id) {
+                    if (!canvasIds.has(iface.connected_to.device_id)) {
+                        neighborIds.add(iface.connected_to.device_id);
+                    }
+                }
+            });
+
+            if (neighborIds.size === 0) {
+                showToast('No new connected devices found');
+                return;
+            }
+
+            // Add all neighbor IDs and reload
+            var allIds = new Set();
+            state.nodes.forEach(function(n) { allIds.add(n.device_id); });
+            neighborIds.forEach(function(id) { allIds.add(id); });
+
+            var savedPositions = getCurrentPositions();
+            var topoUrl = state.topologyUrl + '?device_ids=' + Array.from(allIds).join(',');
+
+            api.get(topoUrl).then(function(topoData) {
+                if (emptyEl) emptyEl.classList.add('d-none');
+                state.nodes = topoData.nodes;
+                state.edges = topoData.edges;
+                state.savedLayout = savedPositions;
+                renderer.render(topoData.nodes, topoData.edges);
+                events.emit('data:loaded', topoData);
+                if (sidebarEl) sidebarEl.classList.remove('hidden');
+
+                var statNodes = document.getElementById('stat-nodes');
+                var statEdges = document.getElementById('stat-edges');
+                if (statNodes) statNodes.textContent = topoData.stats.node_count;
+                if (statEdges) statEdges.textContent = topoData.stats.edge_count;
+
+                showToast(neighborIds.size + ' device(s) added');
+            });
+        });
+    });
+
+    // Remove device from canvas
+    events.on('device:remove', function(nodeId) {
+        // Remove from state.nodes and re-render
+        var savedPos = getCurrentPositions();
+        state.nodes = state.nodes.filter(function(n) { return n.id !== nodeId; });
+        state.edges = state.edges.filter(function(e) {
+            var s = typeof e.source === 'object' ? e.source.id : e.source;
+            var t = typeof e.target === 'object' ? e.target.id : e.target;
+            return s !== nodeId && t !== nodeId;
+        });
+        delete savedPos[nodeId];
+        state.savedLayout = savedPos;
+        renderer.render(state.nodes, state.edges, true);
+        events.emit('data:loaded', { nodes: state.nodes, edges: state.edges });
+
+        // Update stats
+        var statNodes = document.getElementById('stat-nodes');
+        var statEdges = document.getElementById('stat-edges');
+        if (statNodes) statNodes.textContent = state.nodes.length;
+        if (statEdges) statEdges.textContent = state.edges.length;
+    });
 
     // Reset layout button
     var resetBtn = document.getElementById('topo-reset-layout');
@@ -351,6 +761,20 @@
             }
         });
     }
+
+    // Cable color mode toggle (physical / speed)
+    var cablePhysical = document.getElementById('cable-color-physical');
+    var cableSpeed = document.getElementById('cable-color-speed');
+    if (cablePhysical) cablePhysical.addEventListener('click', function() {
+        cablePhysical.classList.add('active'); if (cableSpeed) cableSpeed.classList.remove('active');
+        state.cableColorMode = 'physical';
+        renderer.render(state.nodes, state.edges, true);
+    });
+    if (cableSpeed) cableSpeed.addEventListener('click', function() {
+        if (cablePhysical) cablePhysical.classList.remove('active'); cableSpeed.classList.add('active');
+        state.cableColorMode = 'speed';
+        renderer.render(state.nodes, state.edges, true);
+    });
 
     // Cable style toggle (curve / orthogonal)
     var cableCurve = document.getElementById('cable-curve');

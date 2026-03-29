@@ -26,6 +26,7 @@
       <div class="topo-filter-field">{{ filter_form.location_id }}</div>
       <div class="topo-filter-field topo-filter-sm">{{ filter_form.role_id }}</div>
       <div class="topo-filter-field topo-filter-sm">{{ filter_form.cable_type }}</div>
+      <div class="d-none">{{ filter_form.tenant_id }}{{ filter_form.rack_id }}</div>
       <button type="submit" class="topo-btn topo-btn-primary">{% trans "Apply" %}</button>
       {% if active_filters %}
       <a href="?" class="topo-btn topo-btn-danger" title="{% trans 'Clear filters' %}"><i class="mdi mdi-close"></i></a>
@@ -48,13 +49,14 @@
           {% if saved_view %}{{ saved_view.name }}{% else %}{% trans "Views" %}{% endif %}
         </button>
         <ul class="dropdown-menu dropdown-menu-end">
+          <li><a class="dropdown-item" href="{% url 'plugins:netbox_map:topology' %}">
+            <i class="mdi mdi-plus"></i> {% trans "New View" %}</a></li>
+          {% if saved_views %}<li><hr class="dropdown-divider"></li>{% endif %}
           {% for sv in saved_views %}
           <li><a class="dropdown-item{% if saved_view and saved_view.pk == sv.pk %} active{% endif %}"
                  href="?view_id={{ sv.pk }}">{{ sv.name }}</a></li>
-          {% empty %}
-          <li><span class="dropdown-item text-muted small">{% trans "No saved views yet" %}</span></li>
           {% endfor %}
-          {% if saved_views %}<li><hr class="dropdown-divider"></li>{% endif %}
+          <li><hr class="dropdown-divider"></li>
           <li><a class="dropdown-item" href="{% url 'plugins:netbox_map:topologysavedview_list' %}">
             <i class="mdi mdi-cog-outline"></i> {% trans "Manage Views" %}</a></li>
         </ul>
@@ -85,6 +87,21 @@
         <button id="view-node" class="topo-btn" type="button" title="{% trans 'Node View' %}"><i class="mdi mdi-circle-outline"></i></button>
       </div>
 
+      {# Add devices #}
+      <button id="topo-add-devices" class="topo-btn" type="button" title="{% trans 'Add individual devices to canvas' %}">
+        <i class="mdi mdi-plus-box-outline"></i> {% trans "Add" %}
+      </button>
+
+      {# Role hierarchy editor #}
+      <button id="topo-edit-hierarchy" class="topo-btn" type="button" title="{% trans 'Configure role layer order for auto-layout' %}">
+        <i class="mdi mdi-sort-variant"></i>
+      </button>
+
+      {# Snap to grid #}
+      <button id="topo-snap-grid" class="topo-btn" type="button" title="{% trans 'Snap to grid (or hold Shift while dragging)' %}">
+        <i class="mdi mdi-grid"></i>
+      </button>
+
       {# Reset layout #}
       <button id="topo-reset-layout" class="topo-btn" type="button" title="{% trans 'Reset layout — auto-arrange devices by role hierarchy' %}">
         <i class="mdi mdi-refresh"></i>
@@ -98,6 +115,12 @@
 
       <span class="topo-toolbar-divider"></span>
 
+      {# Cable color mode #}
+      <div class="topo-btn-group">
+        <button id="cable-color-physical" class="topo-btn active" type="button" title="{% trans 'Color by cable type' %}"><i class="mdi mdi-palette-outline"></i></button>
+        <button id="cable-color-speed" class="topo-btn" type="button" title="{% trans 'Color by interface speed' %}"><i class="mdi mdi-speedometer"></i></button>
+      </div>
+
       {# Cable style toggle #}
       <div class="topo-btn-group">
         <button id="cable-curve" class="topo-btn active" type="button" title="{% trans 'Curved Cables' %}"><i class="mdi mdi-vector-curve"></i></button>
@@ -108,7 +131,7 @@
       <button id="topo-toggle-labels" class="topo-btn" type="button" title="{% trans 'Cable Labels' %}"><i class="mdi mdi-tag-text-outline"></i></button>
 
       {# PDF Export #}
-      <button id="topo-export-pdf" class="topo-btn" type="button" title="{% trans 'Export PDF' %}"><i class="mdi mdi-file-pdf-box"></i></button>
+      <button id="topo-export-pdf" class="topo-btn" type="button" title="{% trans 'Export PDF' %}"><i class="mdi mdi-download"></i></button>
     </div>
   </form>
 </div>
@@ -118,11 +141,9 @@
      id="topology-container"
      data-topology-url="{% url 'plugins:netbox_map:topology_data' %}"
      data-device-detail-url="{% url 'plugins:netbox_map:topology_device_detail' device_id=0 %}"
-     data-initial-filters='{{ initial_filters_json }}'
      data-csrf-token="{{ csrf_token }}"
      data-save-url="{% url 'plugins:netbox_map:topology_save_layout' %}"
-     data-saved-view-id="{{ saved_view.pk|default:'' }}"
-     data-saved-layout='{{ saved_view_data }}'>
+     data-saved-view-id="{{ saved_view.pk|default:'' }}">
   <div class="topology-graph-area">
     <svg id="topology-svg"></svg>
     <div id="topology-loading" class="topology-overlay d-none">
@@ -132,8 +153,53 @@
     <div id="topology-empty" class="topology-overlay">
       <div class="text-center text-muted">
         <i class="mdi mdi-graph-outline" style="font-size:48px;"></i>
-        <p class="mt-2">{% trans "Select a filter to view the network topology." %}</p>
+        <p class="mt-2">{% trans "Use a filter or click" %} <strong>+ Add</strong> {% trans "to add devices to the canvas." %}</p>
       </div>
+    </div>
+  </div>
+
+  {# Role hierarchy editor (hidden, slides over sidebar) #}
+  <div id="hierarchy-editor" class="device-picker d-none">
+    <div class="picker-header">
+      <span class="picker-title"><i class="mdi mdi-sort-variant"></i> {% trans "Role Layer Order" %}</span>
+      <button id="hierarchy-close" class="picker-close-btn"><i class="mdi mdi-close"></i></button>
+    </div>
+    <div class="picker-filters" style="border-bottom:none;">
+      <p class="small text-muted mb-0">{% trans "Drag roles to reorder. Top = left side of topology (upstream), bottom = right side (downstream). Click Apply to re-layout." %}</p>
+    </div>
+    <div class="picker-results" id="hierarchy-list" style="padding:4px 0;"></div>
+    <div class="picker-footer">
+      <button id="hierarchy-reset" class="topo-btn" style="font-size:11px;">{% trans "Auto-detect" %}</button>
+      <button id="hierarchy-apply" class="topo-btn topo-btn-primary">{% trans "Apply" %}</button>
+    </div>
+  </div>
+
+  {# Device picker panel (hidden, slides over sidebar) #}
+  <div id="device-picker" class="device-picker d-none">
+    <div class="picker-header">
+      <span class="picker-title"><i class="mdi mdi-plus-box-outline"></i> {% trans "Add Devices" %}</span>
+      <button id="picker-close" class="picker-close-btn"><i class="mdi mdi-close"></i></button>
+    </div>
+    <div class="picker-filters">
+      <div class="picker-search-wrap">
+        <i class="mdi mdi-magnify"></i>
+        <input type="text" id="picker-search" class="form-control form-control-sm" placeholder="{% trans 'Search by name...' %}">
+      </div>
+      <div class="picker-filter-row">
+        <select id="picker-site" class="form-select form-select-sm">
+          <option value="">{% trans "All Sites" %}</option>
+        </select>
+        <select id="picker-role" class="form-select form-select-sm">
+          <option value="">{% trans "All Roles" %}</option>
+        </select>
+      </div>
+    </div>
+    <div class="picker-results" id="picker-results">
+      <div class="picker-placeholder">{% trans "Search for devices to add" %}</div>
+    </div>
+    <div class="picker-footer">
+      <span id="picker-count" class="picker-count">0 {% trans "added" %}</span>
+      <button id="picker-done" class="topo-btn topo-btn-primary">{% trans "Apply" %}</button>
     </div>
   </div>
 
@@ -163,6 +229,9 @@
     </div>
   </div>
 </div>
+
+{{ initial_filters_json|json_script:"topo-initial-filters" }}
+{{ saved_view_data|json_script:"topo-saved-layout" }}
 
 {# ===== Footer legend ===== #}
 <div class="topo-footer">

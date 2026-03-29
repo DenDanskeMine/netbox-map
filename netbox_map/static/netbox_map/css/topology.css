@@ -243,6 +243,7 @@
     border: 1px solid var(--fp-border);
     border-radius: 8px;
     overflow: hidden;
+    position: relative;
 }
 
 .topology-graph-area {
@@ -293,6 +294,10 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
+}
+
+.topology-sidebar.hidden {
+    display: none;
 }
 
 .topology-sidebar .sidebar-panel {
@@ -641,22 +646,28 @@
     gap: 6px;
 }
 
-.topo-iface-dot {
-    width: 8px;
-    height: 8px;
-    min-width: 8px;
-    min-height: 8px;
-    max-width: 8px;
-    max-height: 8px;
-    border-radius: 50%;
-    flex-shrink: 0;
-    display: inline-block;
-    box-sizing: border-box;
+span.topo-iface-dot {
+    width: 8px !important;
+    height: 8px !important;
+    min-width: 8px !important;
+    min-height: 8px !important;
+    max-width: 8px !important;
+    max-height: 8px !important;
+    border-radius: 50% !important;
+    flex-shrink: 0 !important;
+    flex-grow: 0 !important;
+    display: inline-block !important;
+    box-sizing: border-box !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    line-height: 0 !important;
+    font-size: 0 !important;
+    vertical-align: middle;
 }
 
-.topo-iface-dot.empty {
+span.topo-iface-dot.empty {
     background: transparent !important;
-    border: 1.5px solid var(--fp-border);
+    border: 1.5px solid var(--fp-border) !important;
 }
 
 .topo-iface-port-name {
@@ -961,7 +972,334 @@
     margin-right: 2px;
 }
 
+/* ===== Device Picker Panel ===== */
+
+.device-picker {
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 340px;
+    background: var(--fp-bg);
+    border-left: 1px solid var(--fp-border);
+    z-index: 15;
+    display: flex;
+    flex-direction: column;
+    box-shadow: -4px 0 20px rgba(0, 0, 0, 0.3);
+}
+
+.picker-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--fp-border);
+}
+
+.picker-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--fp-text);
+}
+
+.picker-title .mdi {
+    margin-right: 4px;
+    opacity: 0.6;
+}
+
+.picker-close-btn {
+    background: none;
+    border: none;
+    color: var(--fp-text-muted);
+    cursor: pointer;
+    font-size: 18px;
+    padding: 2px 4px;
+    line-height: 1;
+}
+
+.picker-close-btn:hover {
+    color: var(--fp-text);
+}
+
+.picker-filters {
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--fp-border);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.picker-search-wrap {
+    position: relative;
+}
+
+.picker-search-wrap .mdi {
+    position: absolute;
+    left: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--fp-text-muted);
+    font-size: 15px;
+    pointer-events: none;
+}
+
+.picker-search-wrap input {
+    padding-left: 30px;
+    background: var(--fp-input-bg);
+    border-color: var(--fp-input-border);
+    color: var(--fp-input-text);
+    font-size: 12px;
+}
+
+.picker-filter-row {
+    display: flex;
+    gap: 6px;
+}
+
+.picker-filter-row select {
+    flex: 1;
+    font-size: 11px;
+    padding: 4px 8px;
+    background: var(--fp-input-bg);
+    border: 1px solid var(--fp-input-border);
+    border-radius: 4px;
+    color: var(--fp-input-text);
+    cursor: pointer;
+    appearance: auto;
+}
+
+.picker-filter-row select:focus {
+    border-color: var(--fp-accent);
+    outline: none;
+}
+
+.picker-filter-row select option {
+    background: var(--fp-bg);
+    color: var(--fp-text);
+}
+
+.picker-results {
+    flex: 1;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--fp-scrollbar-thumb) transparent;
+}
+
+.picker-placeholder {
+    padding: 40px 20px;
+    text-align: center;
+    color: var(--fp-text-dim);
+    font-size: 12px;
+}
+
+.picker-device {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--fp-border-light);
+    transition: background 0.1s;
+}
+
+.picker-device:hover {
+    background: var(--fp-hover);
+}
+
+.picker-device-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.picker-device-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.picker-device-name {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--fp-text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.picker-device-meta {
+    font-size: 10px;
+    color: var(--fp-text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.picker-add-btn {
+    padding: 2px 10px;
+    font-size: 10px;
+    font-weight: 600;
+    border: 1px solid var(--fp-border);
+    border-radius: 4px;
+    background: transparent;
+    color: #2ecc71;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: all 0.12s;
+}
+
+.picker-add-btn:hover {
+    background: rgba(46, 204, 113, 0.1);
+    border-color: #2ecc71;
+}
+
+.picker-add-btn.added {
+    background: rgba(46, 204, 113, 0.15);
+    border-color: rgba(46, 204, 113, 0.3);
+    color: #2ecc71;
+    cursor: default;
+}
+
+.picker-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    border-top: 1px solid var(--fp-border);
+}
+
+.picker-count {
+    font-size: 11px;
+    color: var(--fp-text-muted);
+}
+
+.picker-loading {
+    padding: 20px;
+    text-align: center;
+    color: var(--fp-text-dim);
+    font-size: 12px;
+}
+
+/* ===== Hierarchy Editor Items ===== */
+
+.hierarchy-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--fp-border-light);
+    cursor: grab;
+    transition: background 0.1s;
+    user-select: none;
+}
+
+.hierarchy-item:hover {
+    background: var(--fp-hover);
+}
+
+.hierarchy-item.dragging {
+    opacity: 0.4;
+    background: var(--fp-active);
+}
+
+.hierarchy-handle {
+    color: var(--fp-text-dim);
+    font-size: 16px;
+    cursor: grab;
+    flex-shrink: 0;
+}
+
+.hierarchy-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.hierarchy-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--fp-text);
+    flex: 1;
+}
+
+.hierarchy-layer {
+    font-size: 10px;
+    color: var(--fp-text-dim);
+    flex-shrink: 0;
+}
+
 /* (stats bar merged into toolbar) */
+
+/* ===== Context Menu ===== */
+
+.topo-context-menu {
+    position: fixed;
+    z-index: 9999;
+    background: var(--fp-bg);
+    border: 1px solid var(--fp-border);
+    border-radius: 6px;
+    padding: 4px 0;
+    min-width: 180px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
+.ctx-item {
+    padding: 6px 14px;
+    font-size: 12px;
+    color: var(--fp-text);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.ctx-item:hover {
+    background: var(--fp-hover);
+}
+
+.ctx-item .mdi {
+    font-size: 15px;
+    opacity: 0.7;
+}
+
+.ctx-header {
+    padding: 6px 14px;
+    font-size: 12px;
+    color: var(--fp-text);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.ctx-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+.ctx-divider {
+    height: 1px;
+    background: var(--fp-border);
+    margin: 2px 0;
+}
+
+.ctx-danger {
+    color: #e74c3c;
+}
+
+.ctx-danger:hover {
+    background: rgba(231, 76, 60, 0.1);
+}
+
+/* ===== Detail Actions ===== */
+
+.topo-detail-actions {
+    display: flex;
+    gap: 6px;
+    padding: 6px 12px;
+    border-bottom: 1px solid var(--fp-border-light);
+}
 
 /* ===== Hide/Show Button ===== */
 

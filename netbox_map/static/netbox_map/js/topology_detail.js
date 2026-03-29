@@ -74,6 +74,12 @@
         if (node.virtual_chassis) html += this._prop('VC', node.virtual_chassis);
         html += '</div></div>';
 
+        // Actions
+        html += '<div class="topo-detail-actions">'
+            + '<a href="' + App.escapeHtml(node.url) + '" class="topo-btn" style="font-size:11px;" target="_blank"><i class="mdi mdi-open-in-new"></i> NetBox</a>'
+            + '<button class="topo-btn" style="font-size:11px;color:#e74c3c;" onclick="TopologyApp._events.emit(\'device:remove\',\'' + App.escapeHtml(node.id) + '\')"><i class="mdi mdi-close-circle-outline"></i> Remove</button>'
+            + '</div>';
+
         // Loading placeholder
         html += '<div id="topo-interfaces-section">'
             + '<div class="text-center py-3"><div class="spinner-border spinner-border-sm text-primary"></div></div>'

@@ -33,7 +33,7 @@ class TopologyView(LoginRequiredMixin, View):
         filter_form = forms.TopologyFilterForm(data=request.GET or None)
 
         initial_filters = {}
-        for key in ('site_id', 'tenant_id', 'location_id', 'rack_id', 'role_id', 'cable_type'):
+        for key in ('site_id', 'tenant_id', 'location_id', 'rack_id', 'role_id', 'cable_type', 'device_ids'):
             val = request.GET.get(key)
             if val:
                 initial_filters[key] = val
@@ -154,6 +154,7 @@ class TopologyDataView(LoginRequiredMixin, View):
         rack_id = request.GET.get('rack_id')
         role_id = request.GET.get('role_id')
         cable_type = request.GET.get('cable_type')
+        device_ids_param = request.GET.get('device_ids')
 
         devices = Device.objects.select_related(
             'device_type__manufacturer', 'role', 'site', 'location',
@@ -161,20 +162,25 @@ class TopologyDataView(LoginRequiredMixin, View):
             'virtual_chassis',
         )
 
-        if site_id:
-            devices = devices.filter(site_id=site_id)
-        if tenant_id:
-            devices = devices.filter(tenant_id=tenant_id)
-        if location_id:
-            devices = devices.filter(location_id=location_id)
-        if rack_id:
-            devices = devices.filter(rack_id=rack_id)
-        if role_id:
-            devices = devices.filter(role_id=role_id)
+        if device_ids_param:
+            # Explicit device IDs — no filter required
+            ids = [int(x) for x in device_ids_param.split(',') if x.strip().isdigit()]
+            devices = devices.filter(pk__in=ids)
+        else:
+            if site_id:
+                devices = devices.filter(site_id=site_id)
+            if tenant_id:
+                devices = devices.filter(tenant_id=tenant_id)
+            if location_id:
+                devices = devices.filter(location_id=location_id)
+            if rack_id:
+                devices = devices.filter(rack_id=rack_id)
+            if role_id:
+                devices = devices.filter(role_id=role_id)
 
-        # Require at least one filter
-        if not any([site_id, tenant_id, location_id, rack_id, role_id]):
-            return JsonResponse({'nodes': [], 'edges': [], 'stats': {'node_count': 0, 'edge_count': 0}})
+            # Require at least one filter when not using device_ids
+            if not any([site_id, tenant_id, location_id, rack_id, role_id]):
+                return JsonResponse({'nodes': [], 'edges': [], 'stats': {'node_count': 0, 'edge_count': 0}})
 
         device_map = {}
         nodes = []

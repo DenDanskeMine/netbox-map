@@ -13,16 +13,128 @@
     var LAYER_GAP_X = 480;
     var NODE_GAP_Y = 40;
 
-    var ROLE_LAYER = {
-        'firewall': 0, 'router': 1, 'core-switch': 2, 'core-router': 2,
-        'distribution-switch': 3, 'access-switch': 4, 'patch-panel': 3, 'server': 5,
-    };
+    // Compute layer assignment from actual cable connections via BFS.
+    // Devices with fewest connections or no "upstream" are placed left (layer 0).
+    // Falls back to role-based hints if available.
+    function computeLayers(nodeData, edgeData) {
+        var nodeIds = {};
+        nodeData.forEach(function(n) { nodeIds[n.id] = n; });
 
-    function getRoleLayer(slug) {
-        if (!slug) return 5;
-        if (ROLE_LAYER[slug] !== undefined) return ROLE_LAYER[slug];
-        for (var k in ROLE_LAYER) { if (slug.indexOf(k) !== -1) return ROLE_LAYER[k]; }
-        return 5;
+        // Build adjacency + connection counts
+        var adj = {};
+        var degree = {};
+        nodeData.forEach(function(n) { adj[n.id] = []; degree[n.id] = 0; });
+        edgeData.forEach(function(e) {
+            var s = typeof e.source === 'object' ? e.source.id : e.source;
+            var t = typeof e.target === 'object' ? e.target.id : e.target;
+            if (adj[s] && adj[t]) {
+                adj[s].push(t);
+                adj[t].push(s);
+                degree[s]++;
+                degree[t]++;
+            }
+        });
+
+        // Find root candidates: devices with fewest connections (edge devices)
+        // or use role hints if they match common patterns
+        var ROLE_HINTS = {
+            'firewall': 0, 'fw': 0,
+            'router': 1, 'rtr': 1, 'edge': 1,
+            'core': 2,
+            'distribution': 3, 'dist': 3, 'aggregation': 3,
+            'access': 4, 'leaf': 4,
+            'server': 5, 'host': 5, 'compute': 5, 'storage': 5,
+            'patch': 3, 'panel': 3,
+        };
+
+        function roleHint(slug) {
+            if (!slug) return -1;
+            slug = slug.toLowerCase();
+            for (var k in ROLE_HINTS) {
+                if (slug.indexOf(k) !== -1) return ROLE_HINTS[k];
+            }
+            return -1;
+        }
+
+        // Check if any role hints match
+        var hasHints = nodeData.some(function(n) { return roleHint(n.role_slug) >= 0; });
+
+        if (hasHints) {
+            // Use role hints — group by hint value, unmatched roles get assigned
+            // based on their connections to hinted devices
+            var layers = {};
+            var unassigned = [];
+            nodeData.forEach(function(n) {
+                var hint = roleHint(n.role_slug);
+                if (hint >= 0) {
+                    if (!layers[hint]) layers[hint] = [];
+                    layers[hint].push(n);
+                    n._layer = hint;
+                } else {
+                    unassigned.push(n);
+                }
+            });
+
+            // Assign unmatched devices based on neighbors' average layer
+            unassigned.forEach(function(n) {
+                var neighbors = adj[n.id] || [];
+                var sum = 0, count = 0;
+                neighbors.forEach(function(nid) {
+                    var nb = nodeIds[nid];
+                    if (nb && nb._layer !== undefined) { sum += nb._layer; count++; }
+                });
+                var layer = count > 0 ? Math.round(sum / count) : 5;
+                n._layer = layer;
+                if (!layers[layer]) layers[layer] = [];
+                layers[layer].push(n);
+            });
+
+            return layers;
+        }
+
+        // No role hints — use pure BFS from lowest-degree nodes
+        var sorted = nodeData.slice().sort(function(a, b) {
+            return (degree[a.id] || 0) - (degree[b.id] || 0);
+        });
+
+        // BFS from the node with fewest connections
+        var visited = {};
+        var layers = {};
+        var queue = [];
+
+        // Start from lowest-degree node
+        if (sorted.length > 0) {
+            var root = sorted[0];
+            queue.push({ node: root, level: 0 });
+            visited[root.id] = true;
+        }
+
+        while (queue.length > 0) {
+            var item = queue.shift();
+            var lvl = item.level;
+            if (!layers[lvl]) layers[lvl] = [];
+            layers[lvl].push(item.node);
+            item.node._layer = lvl;
+
+            (adj[item.node.id] || []).forEach(function(nid) {
+                if (!visited[nid] && nodeIds[nid]) {
+                    visited[nid] = true;
+                    queue.push({ node: nodeIds[nid], level: lvl + 1 });
+                }
+            });
+        }
+
+        // Handle disconnected nodes
+        nodeData.forEach(function(n) {
+            if (!visited[n.id]) {
+                var maxLayer = Object.keys(layers).length;
+                if (!layers[maxLayer]) layers[maxLayer] = [];
+                layers[maxLayer].push(n);
+                n._layer = maxLayer;
+            }
+        });
+
+        return layers;
     }
 
     function Renderer(state, events) {
@@ -94,13 +206,20 @@
             if (portCount === 0) nd._cardH = HEADER_H + CARD_PAD;
         });
 
-        // Hierarchical layout
-        var layers = {};
-        nodeData.forEach(function(n) {
-            var l = getRoleLayer(n.role_slug);
-            if (!layers[l]) layers[l] = [];
-            layers[l].push(n);
-        });
+        // Hierarchical layout — use custom hierarchy if set, otherwise auto-detect
+        var layers;
+        if (self.state.customHierarchy && Object.keys(self.state.customHierarchy).length > 0) {
+            layers = {};
+            nodeData.forEach(function(n) {
+                var l = self.state.customHierarchy[n.role_slug];
+                if (l === undefined) l = 99;
+                if (!layers[l]) layers[l] = [];
+                layers[l].push(n);
+                n._layer = l;
+            });
+        } else {
+            layers = computeLayers(nodeData, edgeData);
+        }
         var layerKeys = Object.keys(layers).map(Number).sort(function(a, b) { return a - b; });
 
         layerKeys.forEach(function(lk, col) {
@@ -122,6 +241,9 @@
                 if (saved && saved.x !== undefined) { n.x = saved.x; n.y = saved.y; }
             });
         }
+
+        // Store positioned node data for external access (save, PDF, etc.)
+        this._stencilNodeData = nodeData;
 
         // Build node lookup by id
         var nodeById = {};
@@ -307,7 +429,14 @@
                 + ' ' + tp.x + ',' + tp.y;
         }
 
-        this._stencilNodeData = nodeData;
+        // Cable color helper — physical cable color or speed color
+        function getCableColor(d) {
+            if (self.state.cableColorMode === 'speed') {
+                var spd = d.source_port_speed || d.target_port_speed;
+                return spd ? App.speedColor(spd) : '#6c757d';
+            }
+            return d.color || '#6c757d';
+        }
 
         // === Draw cables ===
         this.edgeElements = this.g.select('.edge-layer')
@@ -318,7 +447,7 @@
                 if (d._virtual) c += ' virtual';
                 return c;
             })
-            .attr('stroke', function(d) { return d.color || '#6c757d'; })
+            .attr('stroke', function(d) { return getCableColor(d); })
             .attr('stroke-width', 2).attr('fill', 'none')
             .attr('d', cablePath)
             .on('click', function(ev, d) { ev.stopPropagation(); if (d.url) window.open(d.url, '_blank'); });
@@ -415,12 +544,13 @@
         edgeData.forEach(function(d) {
             var sp = getPortPos(d.source_port, d.target);
             var tp = getPortPos(d.target_port, d.source);
+            var dColor = getCableColor(d);
             if (sp) connectorDots.append('circle').attr('class', 'connector-dot')
                 .attr('cx', sp.x).attr('cy', sp.y).attr('r', 3.5)
-                .attr('fill', d.color || '#6c757d');
+                .attr('fill', dColor);
             if (tp) connectorDots.append('circle').attr('class', 'connector-dot')
                 .attr('cx', tp.x).attr('cy', tp.y).attr('r', 3.5)
-                .attr('fill', d.color || '#6c757d');
+                .attr('fill', dColor);
         });
 
         // Show cable labels on cable hover
@@ -544,6 +674,129 @@
             self.state.selectedNode = d; self.events.emit('node:select', d);
         });
 
+        // Right-click context menu
+        cards.on('contextmenu', function(ev, d) {
+            ev.preventDefault();
+            ev.stopPropagation();
+            d3.selectAll('.topo-context-menu').remove();
+
+            var menu = d3.select('body').append('div')
+                .attr('class', 'topo-context-menu')
+                .style('left', ev.pageX + 'px')
+                .style('top', ev.pageY + 'px');
+
+            // --- Info header ---
+            menu.append('div').attr('class', 'ctx-header')
+                .html('<span class="ctx-dot" style="background:' + (d.role_color || '#6c757d') + '"></span> '
+                    + '<strong>' + App.escapeHtml(d.name) + '</strong>');
+
+            menu.append('div').attr('class', 'ctx-divider');
+
+            // --- Open in NetBox ---
+            menu.append('div').attr('class', 'ctx-item')
+                .html('<i class="mdi mdi-open-in-new"></i> Open in NetBox')
+                .on('click', function() { window.open(d.url, '_blank'); menu.remove(); });
+
+            // --- Copy name ---
+            menu.append('div').attr('class', 'ctx-item')
+                .html('<i class="mdi mdi-content-copy"></i> Copy name')
+                .on('click', function() {
+                    navigator.clipboard.writeText(d.name || '');
+                    menu.remove();
+                });
+
+            // --- Copy IP ---
+            if (d.primary_ip) {
+                menu.append('div').attr('class', 'ctx-item')
+                    .html('<i class="mdi mdi-ip-network"></i> Copy IP (' + App.escapeHtml(d.primary_ip) + ')')
+                    .on('click', function() {
+                        navigator.clipboard.writeText(d.primary_ip);
+                        menu.remove();
+                    });
+            }
+
+            menu.append('div').attr('class', 'ctx-divider');
+
+            // --- Isolate (show only this device + neighbors) ---
+            menu.append('div').attr('class', 'ctx-item')
+                .html('<i class="mdi mdi-focus-field"></i> Isolate connections')
+                .on('click', function() {
+                    var connectedIds = new Set([d.id]);
+                    edgeData.forEach(function(e) {
+                        var s = typeof e.source === 'object' ? e.source.id : e.source;
+                        var t = typeof e.target === 'object' ? e.target.id : e.target;
+                        if (s === d.id) connectedIds.add(t);
+                        if (t === d.id) connectedIds.add(s);
+                    });
+                    self.filterNodes(connectedIds);
+                    menu.remove();
+                });
+
+            // --- Show all (reset isolation) ---
+            menu.append('div').attr('class', 'ctx-item')
+                .html('<i class="mdi mdi-eye-outline"></i> Show all devices')
+                .on('click', function() {
+                    self.filterNodes(null);
+                    menu.remove();
+                });
+
+            // --- Add neighbors (devices connected but not on canvas) ---
+            menu.append('div').attr('class', 'ctx-item')
+                .html('<i class="mdi mdi-plus-network-outline"></i> Add connected devices')
+                .on('click', function() {
+                    self.events.emit('device:add-neighbors', d);
+                    menu.remove();
+                });
+
+            menu.append('div').attr('class', 'ctx-divider');
+
+            // --- Center view ---
+            menu.append('div').attr('class', 'ctx-item')
+                .html('<i class="mdi mdi-crosshairs-gps"></i> Center on device')
+                .on('click', function() {
+                    var cx = d.x + CARD_W / 2;
+                    var cy = d.y + (d._cardH || 60) / 2;
+                    var w = self.width, h = self.height;
+                    self.svg.transition().duration(400).call(
+                        self.zoom.transform,
+                        d3.zoomIdentity.translate(w/2 - cx, h/2 - cy).scale(1)
+                    );
+                    menu.remove();
+                });
+
+            // --- Pin/Unpin position ---
+            var isPinned = d._pinned;
+            menu.append('div').attr('class', 'ctx-item')
+                .html('<i class="mdi mdi-pin' + (isPinned ? '-off' : '') + '-outline"></i> '
+                    + (isPinned ? 'Unpin position' : 'Pin position'))
+                .on('click', function() {
+                    d._pinned = !d._pinned;
+                    // Visual indicator
+                    var cardEl = d3.select(cards.nodes()[nodeData.indexOf(d)]);
+                    if (d._pinned) {
+                        cardEl.select('.stencil-bg').attr('stroke-dasharray', '4,2');
+                    } else {
+                        cardEl.select('.stencil-bg').attr('stroke-dasharray', null);
+                    }
+                    menu.remove();
+                });
+
+            menu.append('div').attr('class', 'ctx-divider');
+
+            // --- Remove ---
+            menu.append('div').attr('class', 'ctx-item ctx-danger')
+                .html('<i class="mdi mdi-close-circle-outline"></i> Remove from canvas')
+                .on('click', function() { self.events.emit('device:remove', d.id); menu.remove(); });
+
+            // Close on click elsewhere
+            setTimeout(function() {
+                d3.select('body').on('click.ctx', function() {
+                    d3.selectAll('.topo-context-menu').remove();
+                    d3.select('body').on('click.ctx', null);
+                });
+            }, 10);
+        });
+
         // Hover
         cards.on('mouseenter', function(ev, d) {
             self.edgeElements.attr('stroke-opacity', function(e) {
@@ -560,10 +813,28 @@
             self.edgeElements.attr('stroke-opacity', null).attr('stroke-width', 2);
         });
 
-        // Drag — update cables, dots follow automatically via textPath
+        // Drag — update cables, snap to grid if enabled or shift held
         cards.call(d3.drag()
+            .on('start', function(ev, d) {
+                // Store raw (unsnapped) position for smooth dragging
+                d._rawX = d.x;
+                d._rawY = d.y;
+            })
             .on('drag', function(ev, d) {
-                d.x += ev.dx; d.y += ev.dy;
+                // Accumulate raw movement
+                d._rawX += ev.dx;
+                d._rawY += ev.dy;
+
+                // Apply snap if enabled
+                if (self.state.snapToGrid || ev.sourceEvent.shiftKey) {
+                    var gs = self.state.gridSize;
+                    d.x = Math.round(d._rawX / gs) * gs;
+                    d.y = Math.round(d._rawY / gs) * gs;
+                } else {
+                    d.x = d._rawX;
+                    d.y = d._rawY;
+                }
+
                 d3.select(this).attr('transform', 'translate(' + d.x + ',' + d.y + ')');
                 var orig = self.state.nodes.find(function(n) { return n.id === d.id; });
                 if (orig) { orig.x = d.x; orig.y = d.y; }
@@ -582,10 +853,11 @@
                 edgeData.forEach(function(e) {
                     var sp = getPortPos(e.source_port, e.target);
                     var tp = getPortPos(e.target_port, e.source);
+                    var ec = getCableColor(e);
                     if (sp) connectorDots.append('circle').attr('class', 'connector-dot')
-                        .attr('cx', sp.x).attr('cy', sp.y).attr('r', 3.5).attr('fill', e.color || '#6c757d');
+                        .attr('cx', sp.x).attr('cy', sp.y).attr('r', 3.5).attr('fill', ec);
                     if (tp) connectorDots.append('circle').attr('class', 'connector-dot')
-                        .attr('cx', tp.x).attr('cy', tp.y).attr('r', 3.5).attr('fill', e.color || '#6c757d');
+                        .attr('cx', tp.x).attr('cy', tp.y).attr('r', 3.5).attr('fill', ec);
                 });
             })
         );
@@ -618,7 +890,13 @@
         this.edgeElements = this.g.select('.edge-layer')
             .selectAll('line').data(ed).enter().append('line')
             .attr('class', 'topo-edge')
-            .attr('stroke', function(d) { return d.color || '#6c757d'; })
+            .attr('stroke', function(d) {
+                if (self.state.cableColorMode === 'speed') {
+                    var spd = d.source_port_speed || d.target_port_speed;
+                    return spd ? App.speedColor(spd) : '#6c757d';
+                }
+                return d.color || '#6c757d';
+            })
             .attr('stroke-width', 2)
             .on('click', function(ev, d) { ev.stopPropagation(); if (d.url) window.open(d.url, '_blank'); });
 

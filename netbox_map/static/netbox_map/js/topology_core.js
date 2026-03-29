@@ -47,6 +47,11 @@ window.TopologyApp = (function() {
         this.layout = 'force';
         this.viewMode = 'stencil';
         this.cableStyle = 'curve'; // 'curve' or 'ortho'
+        this.cableColorMode = 'physical'; // 'physical' or 'speed'
+        this.snapToGrid = false;
+        this.gridSize = 20;
+        this.customHierarchy = null;
+        this.addedDeviceIds = new Set();
         this.searchQuery = '';
     }
 
@@ -97,19 +102,33 @@ window.TopologyApp = (function() {
 
     /* ===== Config Parser ===== */
 
+    function parseJsonScript(id) {
+        var el = document.getElementById(id);
+        if (!el) return {};
+        try { return JSON.parse(el.textContent || '{}'); } catch(e) { return {}; }
+    }
+
     function parseConfig(container) {
         var deviceDetailUrl = container.getAttribute('data-device-detail-url') || '';
         deviceDetailUrl = deviceDetailUrl.replace(/0\/$/, '');
 
-        var savedLayout = {};
-        try { savedLayout = JSON.parse(container.getAttribute('data-saved-layout') || '{}'); } catch(e) {}
+        // Read JSON data from safe <script> tags (avoids escaping issues)
+        var initialFilters = parseJsonScript('topo-initial-filters');
+        // initial-filters is double-encoded (json string inside json_script), parse inner string
+        if (typeof initialFilters === 'string') {
+            try { initialFilters = JSON.parse(initialFilters); } catch(e) { initialFilters = {}; }
+        }
+        var savedLayout = parseJsonScript('topo-saved-layout');
+        if (typeof savedLayout === 'string') {
+            try { savedLayout = JSON.parse(savedLayout); } catch(e) { savedLayout = {}; }
+        }
 
         return {
             topologyUrl: container.getAttribute('data-topology-url') || '',
             deviceDetailUrl: deviceDetailUrl,
             saveUrl: container.getAttribute('data-save-url') || '',
             csrfToken: getCsrfToken(container.getAttribute('data-csrf-token') || ''),
-            initialFilters: JSON.parse(container.getAttribute('data-initial-filters') || '{}'),
+            initialFilters: initialFilters,
             savedViewId: container.getAttribute('data-saved-view-id') || null,
             savedLayout: savedLayout,
         };

@@ -1212,13 +1212,13 @@ class TopologySavedViewForm(NetBoxModelForm):
     )
 
     fieldsets = (
-        FieldSet('name', 'description', 'site', 'view_mode', name=_('Saved View')),
+        FieldSet('name', 'description', 'site', name=_('Saved View')),
         FieldSet('tags', name=_('Tags')),
     )
 
     class Meta:
         model = TopologySavedView
-        fields = ['name', 'description', 'site', 'view_mode', 'tags']
+        fields = ['name', 'description', 'site', 'tags']
 
 
 class TopologySavedViewFilterForm(NetBoxModelFilterSetForm):
