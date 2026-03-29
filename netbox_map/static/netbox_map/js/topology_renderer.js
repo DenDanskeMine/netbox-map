@@ -180,6 +180,63 @@
             e._pairTotal = pairCount[key];
         });
 
+        // Find a safe Y for the ortho cable's horizontal middle segment.
+        // Only checks devices that are actually in the path of the horizontal segment.
+        function findSafeY(sp, tp, srcId, tgtId) {
+            var naiveY = (sp.y + tp.y) / 2;
+            var pad = 12;
+
+            // The horizontal segment runs between the two vertical drop points.
+            // These are offset from the port positions by outLen.
+            var dxAbs = Math.abs(sp.x - tp.x);
+            var sDir = sp.side === 'right' ? 1 : -1;
+            var tDir = tp.side === 'right' ? 1 : -1;
+            var outLen = Math.max(dxAbs * 0.2, 30);
+            var sx2 = sp.x + outLen * sDir;
+            var tx2 = tp.x + outLen * tDir;
+            var segLeft = Math.min(sx2, tx2);
+            var segRight = Math.max(sx2, tx2);
+
+            // Find devices whose card body overlaps with this horizontal segment
+            var obstacles = [];
+            nodeData.forEach(function(n) {
+                if (n.id === srcId || n.id === tgtId) return;
+                var cardH = n._cardH || 60;
+                // Does this card's X range overlap with the horizontal segment?
+                if (n.x + CARD_W <= segLeft || n.x >= segRight) return;
+                obstacles.push({
+                    top: n.y - pad,
+                    bottom: n.y + cardH + pad,
+                });
+            });
+
+            if (obstacles.length === 0) return naiveY;
+
+            var isBlocked = function(y) {
+                return obstacles.some(function(o) { return y >= o.top && y <= o.bottom; });
+            };
+
+            if (!isBlocked(naiveY)) return naiveY;
+
+            // Try just above/below each obstacle
+            var candidates = [];
+            obstacles.forEach(function(o) {
+                candidates.push(o.top - 1);
+                candidates.push(o.bottom + 1);
+            });
+
+            // Sort by distance from naive Y (closest first)
+            candidates.sort(function(a, b) {
+                return Math.abs(a - naiveY) - Math.abs(b - naiveY);
+            });
+
+            for (var i = 0; i < candidates.length; i++) {
+                if (!isBlocked(candidates[i])) return candidates[i];
+            }
+
+            return naiveY;
+        }
+
         // Cable path generator
         function cablePath(d) {
             var srcNode = typeof d.source === 'object' ? d.source : nodeById[d.source];
@@ -222,7 +279,9 @@
                 var outLen = Math.max(dxAbs * 0.2, 30);
                 var sx2 = sp.x + outLen * sDir;
                 var tx2 = tp.x + outLen * tDir;
-                var midY = (sp.y + tp.y) / 2 + fanOffset;
+                var srcId = typeof d.source === 'object' ? d.source.id : d.source;
+                var tgtId = typeof d.target === 'object' ? d.target.id : d.target;
+                var midY = findSafeY(sp, tp, srcId, tgtId) + fanOffset;
                 return 'M' + sp.x + ',' + sp.y
                     + ' L' + sx2 + ',' + sp.y
                     + ' L' + sx2 + ',' + midY
@@ -232,13 +291,19 @@
             }
 
             // Default: bezier curve with fan offset
+            // Check if naive curve would pass through a device and adjust
+            var srcId3 = typeof d.source === 'object' ? d.source.id : d.source;
+            var tgtId3 = typeof d.target === 'object' ? d.target.id : d.target;
+            var safeY = findSafeY(sp, tp, srcId3, tgtId3);
+            var yShift = safeY - (sp.y + tp.y) / 2 + fanOffset;
+
             var cp = Math.max(dxAbs * 0.45, 60);
             var sDir2 = sp.side === 'right' ? 1 : -1;
             var tDir2 = tp.side === 'right' ? 1 : -1;
 
             return 'M' + sp.x + ',' + sp.y
-                + ' C' + (sp.x + cp * sDir2) + ',' + (sp.y + fanOffset)
-                + ' ' + (tp.x + cp * tDir2) + ',' + (tp.y + fanOffset)
+                + ' C' + (sp.x + cp * sDir2) + ',' + (sp.y + yShift)
+                + ' ' + (tp.x + cp * tDir2) + ',' + (tp.y + yShift)
                 + ' ' + tp.x + ',' + tp.y;
         }
 
@@ -297,7 +362,9 @@
                 if (d._pairTotal > 1) {
                     fanOffset = (d._pairIdx - (d._pairTotal - 1) / 2) * 6;
                 }
-                var midY2 = (sp.y + tp.y) / 2 + fanOffset;
+                var lSrcId = typeof d.source === 'object' ? d.source.id : d.source;
+                var lTgtId = typeof d.target === 'object' ? d.target.id : d.target;
+                var midY2 = findSafeY(sp, tp, lSrcId, lTgtId) + fanOffset;
                 var leftX = Math.min(sx2, tx2);
                 var rightX = Math.max(sx2, tx2);
                 labelPath = 'M' + leftX + ',' + midY2 + ' L' + rightX + ',' + midY2;
