@@ -47,6 +47,11 @@
             if (nodeId === '_hierarchy') continue;
             var data = layout[nodeId];
             if (data.hidden) state.hiddenNodes.add(nodeId);
+            if (data.pinned) {
+                // Mark node as pinned — will be applied after nodes are loaded
+                state._pinnedNodes = state._pinnedNodes || new Set();
+                state._pinnedNodes.add(nodeId);
+            }
             if (data.port_overrides) {
                 for (var portId in data.port_overrides) {
                     state.portOverrides[portId] = data.port_overrides[portId];
@@ -63,6 +68,7 @@
         renderedNodes.forEach(function(n) {
             var entry = { x: n.x || 0, y: n.y || 0 };
             if (state.hiddenNodes.has(n.id)) entry.hidden = true;
+            if (n._pinned) entry.pinned = true;
 
             var portOverrides = {};
             (n.ports || []).forEach(function(p) {
@@ -138,6 +144,14 @@
 
             renderer.render(data.nodes, data.edges);
             events.emit('data:loaded', data);
+
+            // Restore pinned state
+            if (state._pinnedNodes) {
+                state.nodes.forEach(function(n) {
+                    if (state._pinnedNodes.has(n.id)) n._pinned = true;
+                });
+                delete state._pinnedNodes;
+            }
 
             // Show sidebar now that we have data
             if (sidebarEl) sidebarEl.classList.remove('hidden');
@@ -565,6 +579,20 @@
         events.emit('data:loaded', { nodes: state.nodes, edges: state.edges });
     });
 
+    // Auto-sort ports toggle
+    var autoSortBtn = document.getElementById('topo-auto-sort');
+    if (autoSortBtn) {
+        autoSortBtn.addEventListener('click', function() {
+            state.autoSortPorts = !state.autoSortPorts;
+            this.classList.toggle('active', state.autoSortPorts);
+            // Re-render to apply sort change (smart sort ON or natural order OFF)
+            var pos = getCurrentPositions();
+            state.savedLayout = pos;
+            renderer.render(state.nodes, state.edges, true);
+            events.emit('data:loaded', { nodes: state.nodes, edges: state.edges });
+        });
+    }
+
     // Snap to grid toggle
     var snapBtn = document.getElementById('topo-snap-grid');
     if (snapBtn) {
@@ -655,12 +683,18 @@
     var resetBtn = document.getElementById('topo-reset-layout');
     if (resetBtn) {
         resetBtn.addEventListener('click', function() {
-            // Clear ALL position data so renderer computes fresh layout
-            state.savedLayout = {};
+            // Clear position data — but preserve pinned nodes
+            var pinLayout = {};
+            state.nodes.forEach(function(n) {
+                if (n._pinned && n.x !== undefined) {
+                    pinLayout[n.id] = { x: n.x, y: n.y };
+                }
+                if (!n._pinned) { delete n.x; delete n.y; }
+            });
+            state.savedLayout = pinLayout;
             delete state._origNodes;
             delete state._origEdges;
             delete state._allPositionsBeforePP;
-            state.nodes.forEach(function(n) { delete n.x; delete n.y; });
             renderer.render(state.nodes, state.edges);
             events.emit('data:loaded', { nodes: state.nodes, edges: state.edges });
         });

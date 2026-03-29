@@ -4,6 +4,11 @@
 (function(App) {
     'use strict';
 
+    // Natural sort: "Gi0/2" before "Gi0/10" (not lexicographic)
+    function naturalCompare(a, b) {
+        return (a || '').localeCompare(b || '', undefined, { numeric: true, sensitivity: 'base' });
+    }
+
     var CARD_W = 180;
     var HEADER_H = 38;
     var PORT_H = 24;          // height of each port container
@@ -309,20 +314,24 @@
             if (e.target_port) portTargetDevice[e.target_port] = s;
         });
 
-        // Reorder ports on each device to minimize cable crossings
-        // Sort ports by the Y position of the device they connect to
+        // Sort ports on each device card
         nodeData.forEach(function(nd) {
-            nd.ports.sort(function(a, b) {
-                var targetA = portTargetDevice[a.id];
-                var targetB = portTargetDevice[b.id];
-                var devA = targetA ? nodeById[targetA] : null;
-                var devB = targetB ? nodeById[targetB] : null;
-                var yA = devA ? devA.y : 99999;
-                var yB = devB ? devB.y : 99999;
-                // If same Y (same device), sort by port name
-                if (yA === yB) return (a.name || '').localeCompare(b.name || '');
-                return yA - yB;
-            });
+            if (self.state.autoSortPorts) {
+                // Smart sort: by target device Y position (minimizes cable crossings)
+                nd.ports.sort(function(a, b) {
+                    var targetA = portTargetDevice[a.id];
+                    var targetB = portTargetDevice[b.id];
+                    var devA = targetA ? nodeById[targetA] : null;
+                    var devB = targetB ? nodeById[targetB] : null;
+                    var yA = devA ? devA.y : 99999;
+                    var yB = devB ? devB.y : 99999;
+                    if (yA === yB) return naturalCompare(a.name, b.name);
+                    return yA - yB;
+                });
+            } else {
+                // Natural sort: Gi0/1, Gi0/2, ... Gi0/10, Gi0/11 (not lexicographic)
+                nd.ports.sort(function(a, b) { return naturalCompare(a.name, b.name); });
+            }
         });
 
         // Port-to-node lookup
@@ -810,12 +819,29 @@
                     + (isPinned ? 'Unpin position' : 'Pin position'))
                 .on('click', function() {
                     d._pinned = !d._pinned;
-                    // Visual indicator
+                    // Sync to state.nodes
+                    var orig = self.state.nodes.find(function(n) { return n.id === d.id; });
+                    if (orig) orig._pinned = d._pinned;
+                    // Visual indicator — pin icon + colored border
                     var cardEl = d3.select(cards.nodes()[nodeData.indexOf(d)]);
                     if (d._pinned) {
-                        cardEl.select('.stencil-bg').attr('stroke-dasharray', '4,2');
+                        cardEl.select('.stencil-bg')
+                            .attr('stroke', '#f39c12')
+                            .attr('stroke-width', 2)
+                            .attr('stroke-dasharray', '6,3');
+                        // Add pin icon
+                        cardEl.selectAll('.pin-indicator').remove();
+                        cardEl.append('text').attr('class', 'pin-indicator')
+                            .attr('x', CARD_W - 14).attr('y', 16)
+                            .attr('font-family', 'Material Design Icons')
+                            .attr('font-size', 14).attr('fill', '#f39c12')
+                            .text('\uF403');
                     } else {
-                        cardEl.select('.stencil-bg').attr('stroke-dasharray', null);
+                        cardEl.select('.stencil-bg')
+                            .attr('stroke', null)
+                            .attr('stroke-width', null)
+                            .attr('stroke-dasharray', null);
+                        cardEl.selectAll('.pin-indicator').remove();
                     }
                     menu.remove();
                 });
@@ -866,7 +892,7 @@
 
                 // Apply snap if enabled
                 if (self.state.snapToGrid || ev.sourceEvent.shiftKey) {
-                    var gs = self.state.gridSize;
+                    var gs = self.state.gridSize || 20;
                     d.x = Math.round(d._rawX / gs) * gs;
                     d.y = Math.round(d._rawY / gs) * gs;
                 } else {
@@ -898,6 +924,22 @@
                     if (tp) connectorDots.append('circle').attr('class', 'connector-dot')
                         .attr('cx', tp.x).attr('cy', tp.y).attr('r', 3.5).attr('fill', ec);
                 });
+            })
+            .on('end', function(ev, d) {
+                // Auto-sort ports on drag end to minimize cable crossings
+                if (self.state.autoSortPorts) {
+                    // Sync all positions to state.nodes first
+                    nodeData.forEach(function(nd) {
+                        var orig = self.state.nodes.find(function(n) { return n.id === nd.id; });
+                        if (orig) { orig.x = nd.x; orig.y = nd.y; }
+                    });
+                    // Re-render with positions preserved
+                    var pos = {};
+                    nodeData.forEach(function(nd) { pos[nd.id] = { x: nd.x, y: nd.y }; });
+                    self.state.savedLayout = pos;
+                    self.render(self.state.nodes, self.state.edges, true);
+                    self.events.emit('data:loaded', { nodes: self.state.nodes, edges: self.state.edges });
+                }
             })
         );
 

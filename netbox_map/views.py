@@ -113,10 +113,8 @@ class TopologySaveLayoutView(LoginRequiredMixin, View):
             try:
                 view = TopologySavedView.objects.get(pk=view_id)
                 view.layout_data = layout_data
-                if filters:
-                    view.filters = filters
-                if view_mode:
-                    view.view_mode = view_mode
+                view.filters = filters
+                view.view_mode = view_mode or 'stencil'
                 view.save()
                 return JsonResponse({'id': view.pk, 'name': view.name, 'saved': True})
             except TopologySavedView.DoesNotExist:

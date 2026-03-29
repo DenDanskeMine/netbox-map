@@ -50,6 +50,7 @@ window.TopologyApp = (function() {
         this.cableColorMode = 'physical'; // 'physical' or 'speed'
         this.snapToGrid = false;
         this.gridSize = 20;
+        this.autoSortPorts = true;
         this.customHierarchy = null;
         this.addedDeviceIds = new Set();
         this.searchQuery = '';
