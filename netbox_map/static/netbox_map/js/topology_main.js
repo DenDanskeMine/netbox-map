@@ -619,7 +619,13 @@
                 if (statEdges) statEdges.textContent = topoData.stats.edge_count;
 
                 showToast(neighborIds.size + ' device(s) added');
+            }).catch(function(err) {
+                console.error('Failed to load neighbor topology:', err);
+                showToast('Error loading neighbors', true);
             });
+        }).catch(function(err) {
+            console.error('Failed to fetch device details:', err);
+            showToast('Error fetching device info', true);
         });
     });
 
@@ -649,8 +655,12 @@
     var resetBtn = document.getElementById('topo-reset-layout');
     if (resetBtn) {
         resetBtn.addEventListener('click', function() {
-            // Clear saved layout so renderer uses auto-layout
+            // Clear ALL position data so renderer computes fresh layout
             state.savedLayout = {};
+            delete state._origNodes;
+            delete state._origEdges;
+            delete state._allPositionsBeforePP;
+            state.nodes.forEach(function(n) { delete n.x; delete n.y; });
             renderer.render(state.nodes, state.edges);
             events.emit('data:loaded', { nodes: state.nodes, edges: state.edges });
         });

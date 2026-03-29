@@ -302,16 +302,7 @@ class TopologyDataView(LoginRequiredMixin, View):
                 if dev_id in device_map:
                     device_map[dev_id]['ports'].append(info)
 
-        # Update interface counts
-        for dev_id, node in device_map.items():
-            node['interface_count'] = sum(
-                1 for p in port_info_map.values()
-                if port_id_map.get(
-                    next((k for k, v in port_info_map.items() if v is p), None)
-                ) == dev_id and p['port_class'] == 'interface'
-            )
-
-        # Simpler interface count
+        # Interface counts
         iface_counts = Interface.objects.filter(
             device_id__in=device_ids,
         ).values('device_id').annotate(count=Count('id'))

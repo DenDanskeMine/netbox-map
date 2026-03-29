@@ -11,7 +11,7 @@
     var PORT_TEXT_PAD = 12;   // text padding inside port container
     var CARD_PAD = 10;
     var LAYER_GAP_X = 480;
-    var NODE_GAP_Y = 40;
+    var NODE_GAP_Y = 55;
 
     // Compute layer assignment from actual cable connections via BFS.
     // Devices with fewest connections or no "upstream" are placed left (layer 0).
@@ -222,15 +222,70 @@
         }
         var layerKeys = Object.keys(layers).map(Number).sort(function(a, b) { return a - b; });
 
+        // Build node lookup early (needed by layout)
+        var nodeById = {};
+        nodeData.forEach(function(n) { nodeById[n.id] = n; });
+
+        // Build adjacency for layout optimization
+        var adjList = {};
+        nodeData.forEach(function(n) { adjList[n.id] = []; });
+        edgeData.forEach(function(e) {
+            var s = typeof e.source === 'object' ? e.source.id : e.source;
+            var t = typeof e.target === 'object' ? e.target.id : e.target;
+            if (adjList[s]) adjList[s].push(t);
+            if (adjList[t]) adjList[t].push(s);
+        });
+
+        // Pass 1: Place first column, then subsequent columns aligned to connections
         layerKeys.forEach(function(lk, col) {
             var group = layers[lk];
-            group.sort(function(a, b) { return (a.name || '').localeCompare(b.name || ''); });
-            var curY = 80;
-            group.forEach(function(n) {
-                n.x = 100 + col * LAYER_GAP_X;
-                n.y = curY;
-                curY += n._cardH + NODE_GAP_Y;
-            });
+
+            // Set X for all nodes in this column
+            group.forEach(function(n) { n.x = 100 + col * LAYER_GAP_X; });
+
+            if (col === 0) {
+                // First column: just stack vertically
+                group.sort(function(a, b) { return (a.name || '').localeCompare(b.name || ''); });
+                var curY = 80;
+                group.forEach(function(n) {
+                    n.y = curY;
+                    curY += n._cardH + NODE_GAP_Y;
+                });
+            } else {
+                // Subsequent columns: place each device at the average Y of its
+                // connected devices in previous columns (connection-aligned layout)
+                group.forEach(function(n) {
+                    var neighbors = adjList[n.id] || [];
+                    var sumY = 0, countY = 0;
+                    neighbors.forEach(function(nid) {
+                        var nb = nodeById[nid];
+                        if (nb && nb.y !== undefined && nb.x < n.x) {
+                            sumY += nb.y + (nb._cardH || 60) / 2;
+                            countY++;
+                        }
+                    });
+                    n._targetY = countY > 0 ? sumY / countY - (n._cardH || 60) / 2 : 99999;
+                });
+
+                // Sort by target Y
+                group.sort(function(a, b) { return a._targetY - b._targetY; });
+
+                // Place with minimum gaps, trying to honor target positions
+                var placed = [];
+                group.forEach(function(n) {
+                    var idealY = n._targetY;
+                    if (idealY === 99999) idealY = placed.length > 0 ? placed[placed.length - 1].y + placed[placed.length - 1]._cardH + NODE_GAP_Y : 80;
+
+                    // Ensure no overlap with previously placed nodes
+                    var minY = 80;
+                    if (placed.length > 0) {
+                        var last = placed[placed.length - 1];
+                        minY = last.y + last._cardH + NODE_GAP_Y;
+                    }
+                    n.y = Math.max(idealY, minY);
+                    placed.push(n);
+                });
+            }
         });
 
         // Apply saved positions
@@ -245,9 +300,30 @@
         // Store positioned node data for external access (save, PDF, etc.)
         this._stencilNodeData = nodeData;
 
-        // Build node lookup by id
-        var nodeById = {};
-        nodeData.forEach(function(n) { nodeById[n.id] = n; });
+        // Build edge lookup: port_id -> target device id
+        var portTargetDevice = {};
+        edgeData.forEach(function(e) {
+            var s = typeof e.source === 'object' ? e.source.id : e.source;
+            var t = typeof e.target === 'object' ? e.target.id : e.target;
+            if (e.source_port) portTargetDevice[e.source_port] = t;
+            if (e.target_port) portTargetDevice[e.target_port] = s;
+        });
+
+        // Reorder ports on each device to minimize cable crossings
+        // Sort ports by the Y position of the device they connect to
+        nodeData.forEach(function(nd) {
+            nd.ports.sort(function(a, b) {
+                var targetA = portTargetDevice[a.id];
+                var targetB = portTargetDevice[b.id];
+                var devA = targetA ? nodeById[targetA] : null;
+                var devB = targetB ? nodeById[targetB] : null;
+                var yA = devA ? devA.y : 99999;
+                var yB = devB ? devB.y : 99999;
+                // If same Y (same device), sort by port name
+                if (yA === yB) return (a.name || '').localeCompare(b.name || '');
+                return yA - yB;
+            });
+        });
 
         // Port-to-node lookup
         var portToNode = {};
@@ -302,69 +378,52 @@
             e._pairTotal = pairCount[key];
         });
 
-        // Find a safe Y for the ortho cable's horizontal middle segment.
-        // Only checks devices that are actually in the path of the horizontal segment.
-        function findSafeY(sp, tp, srcId, tgtId) {
-            var naiveY = (sp.y + tp.y) / 2;
-            var pad = 12;
+        // Pre-compute channel-based ortho routes
+        var CHANNEL_SPACING = 10; // px between cables in a channel
 
-            // The horizontal segment runs between the two vertical drop points.
-            // These are offset from the port positions by outLen.
-            var dxAbs = Math.abs(sp.x - tp.x);
-            var sDir = sp.side === 'right' ? 1 : -1;
-            var tDir = tp.side === 'right' ? 1 : -1;
-            var outLen = Math.max(dxAbs * 0.2, 30);
-            var sx2 = sp.x + outLen * sDir;
-            var tx2 = tp.x + outLen * tDir;
-            var segLeft = Math.min(sx2, tx2);
-            var segRight = Math.max(sx2, tx2);
+        function precomputeOrthoChannels() {
+            // For each edge, compute its channel X position
+            // Group edges by column pair, then spread within channel
+            var channels = {};
 
-            // Find devices whose card body overlaps with this horizontal segment
-            var obstacles = [];
-            nodeData.forEach(function(n) {
-                if (n.id === srcId || n.id === tgtId) return;
-                var cardH = n._cardH || 60;
-                // Does this card's X range overlap with the horizontal segment?
-                if (n.x + CARD_W <= segLeft || n.x >= segRight) return;
-                obstacles.push({
-                    top: n.y - pad,
-                    bottom: n.y + cardH + pad,
+            edgeData.forEach(function(e) {
+                var sp = getPortPos(e.source_port, typeof e.target === 'object' ? e.target.id : e.target);
+                var tp = getPortPos(e.target_port, typeof e.source === 'object' ? e.source.id : e.source);
+                if (!sp || !tp) return;
+
+                var dxAbs = Math.abs(sp.x - tp.x);
+                if (dxAbs < CARD_W * 1.2) return; // same-column, handled by side rail
+
+                // Channel key: rounded source and target X positions
+                var leftX = Math.min(sp.x, tp.x);
+                var rightX = Math.max(sp.x, tp.x);
+                var key = Math.round(leftX / 100) + '|' + Math.round(rightX / 100);
+                var channelX = (leftX + rightX) / 2;
+
+                if (!channels[key]) channels[key] = { x: channelX, edges: [] };
+                channels[key].edges.push({
+                    edge: e,
+                    avgY: (sp.y + tp.y) / 2,
                 });
             });
 
-            if (obstacles.length === 0) return naiveY;
-
-            var isBlocked = function(y) {
-                return obstacles.some(function(o) { return y >= o.top && y <= o.bottom; });
-            };
-
-            if (!isBlocked(naiveY)) return naiveY;
-
-            // Try just above/below each obstacle
-            var candidates = [];
-            obstacles.forEach(function(o) {
-                candidates.push(o.top - 1);
-                candidates.push(o.bottom + 1);
+            // Sort and assign offsets (stored as relative offset, not absolute X)
+            Object.keys(channels).forEach(function(key) {
+                var ch = channels[key];
+                ch.edges.sort(function(a, b) { return a.avgY - b.avgY; });
+                var total = ch.edges.length;
+                ch.edges.forEach(function(item, idx) {
+                    item.edge._channelOffset = (idx - (total - 1) / 2) * CHANNEL_SPACING;
+                });
             });
-
-            // Sort by distance from naive Y (closest first)
-            candidates.sort(function(a, b) {
-                return Math.abs(a - naiveY) - Math.abs(b - naiveY);
-            });
-
-            for (var i = 0; i < candidates.length; i++) {
-                if (!isBlocked(candidates[i])) return candidates[i];
-            }
-
-            return naiveY;
         }
 
         // Cable path generator
         function cablePath(d) {
             var srcNode = typeof d.source === 'object' ? d.source : nodeById[d.source];
             var tgtNode = typeof d.target === 'object' ? d.target : nodeById[d.target];
-            var sp = getPortPos(d.source_port, d.target);
-            var tp = getPortPos(d.target_port, d.source);
+            var sp = getPortPos(d.source_port, typeof d.target === 'object' ? d.target.id : d.target);
+            var tp = getPortPos(d.target_port, typeof d.source === 'object' ? d.source.id : d.source);
             if (!sp || !tp) {
                 if (!srcNode || !tgtNode) return '';
                 return 'M' + (srcNode.x + CARD_W/2) + ',' + (srcNode.y + (srcNode._cardH||40)/2)
@@ -375,20 +434,16 @@
             var dxAbs = Math.abs(sp.x - tp.x);
             var isSameColumn = dxAbs < CARD_W * 1.2;
 
-            // Parallel cable offset (fan out multiple cables between same pair)
+            // Parallel cable offset
             var fanOffset = 0;
             if (d._pairTotal > 1) {
-                var spread = 6; // pixels between parallel cables
-                fanOffset = (d._pairIdx - (d._pairTotal - 1) / 2) * spread;
+                fanOffset = (d._pairIdx - (d._pairTotal - 1) / 2) * 6;
             }
 
             if (isSameColumn) {
-                // Same-column (HA/vertical): side rail pattern
-                // Cables go out to the right side as a vertical bus bar
+                // Same-column (HA): side rail
                 var railBase = Math.max(sp.x, tp.x) + 20;
-                var railX = railBase + d._pairIdx * 14; // each cable gets its own rail offset
-
-                // Orthogonal path: stub out → vertical → stub in
+                var railX = railBase + d._pairIdx * 14;
                 return 'M' + sp.x + ',' + sp.y
                     + ' L' + railX + ',' + sp.y
                     + ' L' + railX + ',' + tp.y
@@ -396,37 +451,33 @@
             }
 
             if (self.state.cableStyle === 'ortho') {
-                var sDir = sp.side === 'right' ? 1 : -1;
-                var tDir = tp.side === 'right' ? 1 : -1;
-                var outLen = Math.max(dxAbs * 0.2, 30);
-                var sx2 = sp.x + outLen * sDir;
-                var tx2 = tp.x + outLen * tDir;
-                var srcId = typeof d.source === 'object' ? d.source.id : d.source;
-                var tgtId = typeof d.target === 'object' ? d.target.id : d.target;
-                var midY = findSafeY(sp, tp, srcId, tgtId) + fanOffset;
+                // Channel-based routing: 3-segment path
+                // Compute channel X dynamically so it updates on drag
+                var chX = (sp.x + tp.x) / 2;
+                // Apply pre-computed offset for parallel cables in same channel
+                if (d._channelOffset !== undefined) {
+                    chX += d._channelOffset;
+                }
                 return 'M' + sp.x + ',' + sp.y
-                    + ' L' + sx2 + ',' + sp.y
-                    + ' L' + sx2 + ',' + midY
-                    + ' L' + tx2 + ',' + midY
-                    + ' L' + tx2 + ',' + tp.y
+                    + ' L' + chX + ',' + sp.y
+                    + ' L' + chX + ',' + tp.y
                     + ' L' + tp.x + ',' + tp.y;
             }
 
-            // Default: bezier curve with fan offset
-            // Check if naive curve would pass through a device and adjust
-            var srcId3 = typeof d.source === 'object' ? d.source.id : d.source;
-            var tgtId3 = typeof d.target === 'object' ? d.target.id : d.target;
-            var safeY = findSafeY(sp, tp, srcId3, tgtId3);
-            var yShift = safeY - (sp.y + tp.y) / 2 + fanOffset;
-
+            // Default: bezier curve
             var cp = Math.max(dxAbs * 0.45, 60);
-            var sDir2 = sp.side === 'right' ? 1 : -1;
-            var tDir2 = tp.side === 'right' ? 1 : -1;
+            var sDir = sp.side === 'right' ? 1 : -1;
+            var tDir = tp.side === 'right' ? 1 : -1;
 
             return 'M' + sp.x + ',' + sp.y
-                + ' C' + (sp.x + cp * sDir2) + ',' + (sp.y + yShift)
-                + ' ' + (tp.x + cp * tDir2) + ',' + (tp.y + yShift)
+                + ' C' + (sp.x + cp * sDir) + ',' + (sp.y + fanOffset)
+                + ' ' + (tp.x + cp * tDir) + ',' + (tp.y + fanOffset)
                 + ' ' + tp.x + ',' + tp.y;
+        }
+
+        // Run channel pre-computation for ortho mode
+        if (self.state.cableStyle === 'ortho') {
+            precomputeOrthoChannels();
         }
 
         // Cable color helper — physical cable color or speed color
@@ -464,8 +515,8 @@
 
         // Create label paths — always left-to-right, horizontal text
         function createLabelPath(d) {
-            var sp = getPortPos(d.source_port, d.target);
-            var tp = getPortPos(d.target_port, d.source);
+            var sp = getPortPos(d.source_port, typeof d.target === 'object' ? d.target.id : d.target);
+            var tp = getPortPos(d.target_port, typeof d.source === 'object' ? d.source.id : d.source);
             if (!sp || !tp) return;
 
             var pathId = 'cable-label-path-' + d.cable_id;
@@ -482,21 +533,9 @@
                 // Short horizontal path at the rail for the text
                 labelPath = 'M' + (railX + 4) + ',' + midY + ' L' + (railX + 80) + ',' + midY;
             } else if (self.state.cableStyle === 'ortho') {
-                var sDir = sp.side === 'right' ? 1 : -1;
-                var tDir = tp.side === 'right' ? 1 : -1;
-                var outLen = Math.max(dxAbs * 0.2, 30);
-                var sx2 = sp.x + outLen * sDir;
-                var tx2 = tp.x + outLen * tDir;
-                var fanOffset = 0;
-                if (d._pairTotal > 1) {
-                    fanOffset = (d._pairIdx - (d._pairTotal - 1) / 2) * 6;
-                }
-                var lSrcId = typeof d.source === 'object' ? d.source.id : d.source;
-                var lTgtId = typeof d.target === 'object' ? d.target.id : d.target;
-                var midY2 = findSafeY(sp, tp, lSrcId, lTgtId) + fanOffset;
-                var leftX = Math.min(sx2, tx2);
-                var rightX = Math.max(sx2, tx2);
-                labelPath = 'M' + leftX + ',' + midY2 + ' L' + rightX + ',' + midY2;
+                var chX2 = (sp.x + tp.x) / 2 + (d._channelOffset || 0);
+                var midY2 = (sp.y + tp.y) / 2;
+                labelPath = 'M' + (chX2 - 40) + ',' + midY2 + ' L' + (chX2 + 40) + ',' + midY2;
             } else {
                 // Bezier: left-to-right path
                 var lp, rp;
@@ -542,8 +581,8 @@
             }
         });
         edgeData.forEach(function(d) {
-            var sp = getPortPos(d.source_port, d.target);
-            var tp = getPortPos(d.target_port, d.source);
+            var sp = getPortPos(d.source_port, typeof d.target === 'object' ? d.target.id : d.target);
+            var tp = getPortPos(d.target_port, typeof d.source === 'object' ? d.source.id : d.source);
             var dColor = getCableColor(d);
             if (sp) connectorDots.append('circle').attr('class', 'connector-dot')
                 .attr('cx', sp.x).attr('cy', sp.y).attr('r', 3.5)
@@ -557,7 +596,7 @@
         this.edgeElements.on('mouseenter', function(ev, d) {
             // Find matching label
             cableLabels.each(function(ld) {
-                if (ld.id === d.id) d3.select(this).classed('visible', true);
+                if (ld.cable_id === d.cable_id) d3.select(this).classed('visible', true);
             });
         }).on('mouseleave', function() {
             cableLabels.classed('visible', false);
@@ -851,8 +890,8 @@
                 // Redraw connector dots
                 connectorDots.selectAll('circle.connector-dot').remove();
                 edgeData.forEach(function(e) {
-                    var sp = getPortPos(e.source_port, e.target);
-                    var tp = getPortPos(e.target_port, e.source);
+                    var sp = getPortPos(e.source_port, typeof e.target === 'object' ? e.target.id : e.target);
+                    var tp = getPortPos(e.target_port, typeof e.source === 'object' ? e.source.id : e.source);
                     var ec = getCableColor(e);
                     if (sp) connectorDots.append('circle').attr('class', 'connector-dot')
                         .attr('cx', sp.x).attr('cy', sp.y).attr('r', 3.5).attr('fill', ec);
