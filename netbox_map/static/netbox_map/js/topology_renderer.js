@@ -159,7 +159,28 @@
             };
         }
 
-        // Cable path generator — supports curve and orthogonal styles
+        // Detect parallel cables (multiple edges between same device pair)
+        // Assign each an offset index so they fan out instead of overlapping
+        var pairCount = {};  // "devA-devB" -> count
+        var pairIndex = {};  // edge.id -> index within its pair
+        edgeData.forEach(function(e) {
+            var s = typeof e.source === 'object' ? e.source.id : e.source;
+            var t = typeof e.target === 'object' ? e.target.id : e.target;
+            var key = s < t ? s + '|' + t : t + '|' + s;
+            if (!pairCount[key]) pairCount[key] = 0;
+            pairIndex[e.id] = pairCount[key];
+            pairCount[key]++;
+        });
+        // Store total count per edge
+        edgeData.forEach(function(e) {
+            var s = typeof e.source === 'object' ? e.source.id : e.source;
+            var t = typeof e.target === 'object' ? e.target.id : e.target;
+            var key = s < t ? s + '|' + t : t + '|' + s;
+            e._pairIdx = pairIndex[e.id];
+            e._pairTotal = pairCount[key];
+        });
+
+        // Cable path generator
         function cablePath(d) {
             var srcNode = typeof d.source === 'object' ? d.source : nodeById[d.source];
             var tgtNode = typeof d.target === 'object' ? d.target : nodeById[d.target];
@@ -171,33 +192,53 @@
                     + ' L' + (tgtNode.x + CARD_W/2) + ',' + (tgtNode.y + (tgtNode._cardH||40)/2);
             }
 
+            // Check if devices are in the same column (vertical/HA link)
+            var dxAbs = Math.abs(sp.x - tp.x);
+            var isSameColumn = dxAbs < CARD_W * 1.2;
+
+            // Parallel cable offset (fan out multiple cables between same pair)
+            var fanOffset = 0;
+            if (d._pairTotal > 1) {
+                var spread = 6; // pixels between parallel cables
+                fanOffset = (d._pairIdx - (d._pairTotal - 1) / 2) * spread;
+            }
+
+            if (isSameColumn) {
+                // Same-column (HA/vertical): side rail pattern
+                // Cables go out to the right side as a vertical bus bar
+                var railBase = Math.max(sp.x, tp.x) + 20;
+                var railX = railBase + d._pairIdx * 14; // each cable gets its own rail offset
+
+                // Orthogonal path: stub out → vertical → stub in
+                return 'M' + sp.x + ',' + sp.y
+                    + ' L' + railX + ',' + sp.y
+                    + ' L' + railX + ',' + tp.y
+                    + ' L' + tp.x + ',' + tp.y;
+            }
+
             if (self.state.cableStyle === 'ortho') {
-                // Orthogonal: horizontal out, vertical, horizontal in
                 var sDir = sp.side === 'right' ? 1 : -1;
                 var tDir = tp.side === 'right' ? 1 : -1;
-                var midX = (sp.x + tp.x) / 2;
-                var outLen = Math.max(Math.abs(tp.x - sp.x) * 0.2, 30);
+                var outLen = Math.max(dxAbs * 0.2, 30);
                 var sx2 = sp.x + outLen * sDir;
                 var tx2 = tp.x + outLen * tDir;
-                // Use midpoint X for the vertical segment
-                var vx = (sx2 + tx2) / 2;
+                var midY = (sp.y + tp.y) / 2 + fanOffset;
                 return 'M' + sp.x + ',' + sp.y
                     + ' L' + sx2 + ',' + sp.y
-                    + ' L' + sx2 + ',' + ((sp.y + tp.y) / 2)
-                    + ' L' + tx2 + ',' + ((sp.y + tp.y) / 2)
+                    + ' L' + sx2 + ',' + midY
+                    + ' L' + tx2 + ',' + midY
                     + ' L' + tx2 + ',' + tp.y
                     + ' L' + tp.x + ',' + tp.y;
             }
 
-            // Default: bezier curve
-            var dx = Math.abs(tp.x - sp.x);
-            var cp = Math.max(dx * 0.45, 60);
+            // Default: bezier curve with fan offset
+            var cp = Math.max(dxAbs * 0.45, 60);
             var sDir2 = sp.side === 'right' ? 1 : -1;
             var tDir2 = tp.side === 'right' ? 1 : -1;
 
             return 'M' + sp.x + ',' + sp.y
-                + ' C' + (sp.x + cp * sDir2) + ',' + sp.y
-                + ' ' + (tp.x + cp * tDir2) + ',' + tp.y
+                + ' C' + (sp.x + cp * sDir2) + ',' + (sp.y + fanOffset)
+                + ' ' + (tp.x + cp * tDir2) + ',' + (tp.y + fanOffset)
                 + ' ' + tp.x + ',' + tp.y;
         }
 
@@ -227,41 +268,55 @@
         // Connector dots container
         var connectorDots = this.g.select('.edge-layer');
 
-        // Create label paths — always left-to-right for readable text
-        // For curves: reversed bezier when cable goes right-to-left
-        // For ortho: a simple horizontal line at the midpoint
+        // Create label paths — always left-to-right, horizontal text
         function createLabelPath(d) {
             var sp = getPortPos(d.source_port, d.target);
             var tp = getPortPos(d.target_port, d.source);
             if (!sp || !tp) return;
 
             var pathId = 'cable-label-path-' + d.cable_id;
-            var lp, rp; // left point, right point
-
-            if (sp.x <= tp.x) { lp = sp; rp = tp; }
-            else { lp = tp; rp = sp; }
+            var dxAbs = Math.abs(sp.x - tp.x);
+            var isSameColumn = dxAbs < CARD_W * 1.2;
 
             var labelPath;
-            if (self.state.cableStyle === 'ortho') {
-                // Horizontal line at vertical midpoint
+
+            if (isSameColumn) {
+                // Same-column: horizontal label at the rail midpoint
+                var railBase = Math.max(sp.x, tp.x) + 20;
+                var railX = railBase + (d._pairIdx || 0) * 14;
                 var midY = (sp.y + tp.y) / 2;
+                // Short horizontal path at the rail for the text
+                labelPath = 'M' + (railX + 4) + ',' + midY + ' L' + (railX + 80) + ',' + midY;
+            } else if (self.state.cableStyle === 'ortho') {
                 var sDir = sp.side === 'right' ? 1 : -1;
                 var tDir = tp.side === 'right' ? 1 : -1;
-                var outLen = Math.max(Math.abs(tp.x - sp.x) * 0.2, 30);
+                var outLen = Math.max(dxAbs * 0.2, 30);
                 var sx2 = sp.x + outLen * sDir;
                 var tx2 = tp.x + outLen * tDir;
+                var fanOffset = 0;
+                if (d._pairTotal > 1) {
+                    fanOffset = (d._pairIdx - (d._pairTotal - 1) / 2) * 6;
+                }
+                var midY2 = (sp.y + tp.y) / 2 + fanOffset;
                 var leftX = Math.min(sx2, tx2);
                 var rightX = Math.max(sx2, tx2);
-                labelPath = 'M' + leftX + ',' + midY + ' L' + rightX + ',' + midY;
+                labelPath = 'M' + leftX + ',' + midY2 + ' L' + rightX + ',' + midY2;
             } else {
-                // Bezier from left to right
+                // Bezier: left-to-right path
+                var lp, rp;
+                if (sp.x <= tp.x) { lp = sp; rp = tp; }
+                else { lp = tp; rp = sp; }
                 var dx = Math.abs(rp.x - lp.x);
                 var cp = Math.max(dx * 0.45, 60);
+                var fanOff = 0;
+                if (d._pairTotal > 1) {
+                    fanOff = (d._pairIdx - (d._pairTotal - 1) / 2) * 6;
+                }
                 var lDir = lp === sp ? (sp.side === 'right' ? 1 : -1) : (tp.side === 'right' ? 1 : -1);
                 var rDir = rp === sp ? (sp.side === 'right' ? 1 : -1) : (tp.side === 'right' ? 1 : -1);
                 labelPath = 'M' + lp.x + ',' + lp.y
-                    + ' C' + (lp.x + cp * lDir) + ',' + lp.y
-                    + ' ' + (rp.x + cp * rDir) + ',' + rp.y
+                    + ' C' + (lp.x + cp * lDir) + ',' + (lp.y + fanOff)
+                    + ' ' + (rp.x + cp * rDir) + ',' + (rp.y + fanOff)
                     + ' ' + rp.x + ',' + rp.y;
             }
 
