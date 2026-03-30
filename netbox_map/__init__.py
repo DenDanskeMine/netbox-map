@@ -6,7 +6,7 @@ class MapConfig(PluginConfig):
     verbose_name = 'NetBox Map'
     author = 'Christian Rose'
     description = 'Interactive floor plan visualization for NetBox sites'
-    version = '0.9.0'
+    version = '0.9.1'
     base_url = 'map'
     min_version = '4.5.0'
     default_settings = {
