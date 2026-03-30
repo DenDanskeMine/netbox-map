@@ -4,7 +4,7 @@
 (function() {
     'use strict';
 
-    var CARD_W = 180;
+    var CARD_W = 200;
     var HEADER_H = 38;
     var PORT_H = 24;
     var PORT_GAP = 3;
