@@ -33,10 +33,14 @@ class TopologyView(LoginRequiredMixin, View):
         filter_form = forms.TopologyFilterForm(data=request.GET or None)
 
         initial_filters = {}
-        for key in ('site_id', 'tenant_id', 'location_id', 'rack_id', 'role_id', 'cable_type', 'device_ids'):
+        for key in ('site_id', 'tenant_id', 'location_id', 'rack_id', 'cable_type', 'device_ids'):
             val = request.GET.get(key)
             if val:
                 initial_filters[key] = val
+        # role_id supports multiple values
+        role_ids = request.GET.getlist('role_id')
+        if role_ids:
+            initial_filters['role_id'] = role_ids
 
         # Load saved view if requested
         saved_view = None
@@ -150,7 +154,7 @@ class TopologyDataView(LoginRequiredMixin, View):
         tenant_id = request.GET.get('tenant_id')
         location_id = request.GET.get('location_id')
         rack_id = request.GET.get('rack_id')
-        role_id = request.GET.get('role_id')
+        role_ids = request.GET.getlist('role_id')
         cable_type = request.GET.get('cable_type')
         device_ids_param = request.GET.get('device_ids')
 
@@ -173,11 +177,11 @@ class TopologyDataView(LoginRequiredMixin, View):
                 devices = devices.filter(location_id=location_id)
             if rack_id:
                 devices = devices.filter(rack_id=rack_id)
-            if role_id:
-                devices = devices.filter(role_id=role_id)
+            if role_ids:
+                devices = devices.filter(role_id__in=role_ids)
 
             # Require at least one filter when not using device_ids
-            if not any([site_id, tenant_id, location_id, rack_id, role_id]):
+            if not any([site_id, tenant_id, location_id, rack_id, role_ids]):
                 return JsonResponse({'nodes': [], 'edges': [], 'stats': {'node_count': 0, 'edge_count': 0}})
 
         device_map = {}

@@ -9,7 +9,7 @@
         return (a || '').localeCompare(b || '', undefined, { numeric: true, sensitivity: 'base' });
     }
 
-    var CARD_W = 180;
+    var CARD_W = 200;
     var HEADER_H = 38;
     var PORT_H = 24;          // height of each port container
     var PORT_GAP = 3;         // gap between port containers
@@ -490,12 +490,29 @@
         }
 
         // Cable color helper — physical cable color or speed color
+        // Lightens very dark cables so they're visible on dark backgrounds
+        function lightenIfDark(hex) {
+            if (!hex) return '#6c757d';
+            var c = hex.replace('#', '');
+            if (c.length === 3) c = c[0]+c[0]+c[1]+c[1]+c[2]+c[2];
+            var r = parseInt(c.substring(0,2), 16);
+            var g = parseInt(c.substring(2,4), 16);
+            var b = parseInt(c.substring(4,6), 16);
+            // If cable is too dark (brightness < 40), lighten it
+            if ((r + g + b) / 3 < 40) {
+                return '#' + Math.min(r+80,255).toString(16).padStart(2,'0')
+                    + Math.min(g+80,255).toString(16).padStart(2,'0')
+                    + Math.min(b+80,255).toString(16).padStart(2,'0');
+            }
+            return hex;
+        }
+
         function getCableColor(d) {
             if (self.state.cableColorMode === 'speed') {
                 var spd = d.source_port_speed || d.target_port_speed;
                 return spd ? App.speedColor(spd) : '#6c757d';
             }
-            return d.color || '#6c757d';
+            return lightenIfDark(d.color) || '#6c757d';
         }
 
         // === Draw cables ===
@@ -643,20 +660,32 @@
             .attr('clip-path', function(d) { return 'url(#clip-' + d.id + ')'; })
             .attr('fill', function(d) { return d.role_color || '#6c757d'; });
 
-        // Device name
+        // Device name — auto-fits to card width
+        var maxTextW = CARD_W - 16;
         cards.append('text').attr('class', 'stencil-name')
             .attr('x', CARD_W / 2).attr('y', 18).attr('text-anchor', 'middle')
-            .text(function(d) {
-                var n = d.name || '';
-                return n.length > 20 ? n.substring(0, 18) + '\u2026' : n;
+            .text(function(d) { return d.name || ''; })
+            .each(function(d) {
+                // After rendering, check if text is wider than card and compress
+                var textW = this.getComputedTextLength();
+                if (textW > maxTextW) {
+                    d3.select(this)
+                        .attr('textLength', maxTextW)
+                        .attr('lengthAdjust', 'spacingAndGlyphs');
+                }
             });
 
-        // Device type
+        // Device type — auto-fits to card width
         cards.append('text').attr('class', 'stencil-type')
             .attr('x', CARD_W / 2).attr('y', 30).attr('text-anchor', 'middle')
-            .text(function(d) {
-                var t = d.device_type || '';
-                return t.length > 24 ? t.substring(0, 22) + '\u2026' : t;
+            .text(function(d) { return d.device_type || ''; })
+            .each(function(d) {
+                var textW = this.getComputedTextLength();
+                if (textW > maxTextW) {
+                    d3.select(this)
+                        .attr('textLength', maxTextW)
+                        .attr('lengthAdjust', 'spacingAndGlyphs');
+                }
             });
 
         // Separator
@@ -695,7 +724,7 @@
                     .attr('y', py + PORT_H / 2 + 4)
                     .text(function() {
                         var n = p.name;
-                        return n.length > 14 ? n.substring(0, 12) + '..' : n;
+                        return n.length > 16 ? n.substring(0, 14) + '..' : n;
                     });
 
                 // Speed/type text (right side, no pill — cleaner)

@@ -122,7 +122,16 @@
         if (loadingEl) loadingEl.classList.remove('d-none');
         if (emptyEl) emptyEl.classList.add('d-none');
 
-        var params = new URLSearchParams(state.initialFilters);
+        // Build URL params — handle arrays (e.g. role_id=[1,2] → role_id=1&role_id=2)
+        var params = new URLSearchParams();
+        Object.keys(state.initialFilters).forEach(function(key) {
+            var val = state.initialFilters[key];
+            if (Array.isArray(val)) {
+                val.forEach(function(v) { params.append(key, v); });
+            } else {
+                params.append(key, val);
+            }
+        });
         var url = state.topologyUrl + '?' + params.toString();
 
         api.get(url).then(function(data) {
