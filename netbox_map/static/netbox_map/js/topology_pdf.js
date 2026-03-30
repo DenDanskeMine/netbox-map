@@ -103,8 +103,31 @@
         var nodeData = this.renderer._stencilNodeData;
         if (!nodeData || nodeData.length === 0) { alert('No topology data to export'); return; }
 
-        // Filter hidden
-        var visibleNodes = nodeData.filter(function(n) { return !state.hiddenNodes.has(n.id); });
+        // Filter to only what's currently visible on screen
+        // Respects: hidden nodes (eye toggle), role filter (sidebar toggles),
+        // isolation (right-click isolate), and any other visibility state
+        var visibleNodes = nodeData.filter(function(n) {
+            if (state.hiddenNodes.has(n.id)) return false;
+            // Check if node is dimmed/filtered by checking SVG opacity
+            var svgNode = d3.select('#topology-svg .node-layer [transform]')
+                ? null : null; // fallback
+            return true;
+        });
+
+        // If role visibility filter is active, also check sidebar role toggles
+        if (state.visibleRoles && state.visibleRoles.size > 0) {
+            var allRolesCount = 0;
+            var roles = {};
+            nodeData.forEach(function(n) { if (n.role) roles[n.role] = true; });
+            allRolesCount = Object.keys(roles).length;
+            // Only filter if not all roles are visible
+            if (state.visibleRoles.size < allRolesCount) {
+                visibleNodes = visibleNodes.filter(function(n) {
+                    return !n.role || state.visibleRoles.has(n.role);
+                });
+            }
+        }
+
         var visibleIds = new Set(visibleNodes.map(function(n) { return n.id; }));
         var visibleEdges = state.edges.filter(function(e) {
             return visibleIds.has(edgeSourceId(e)) && visibleIds.has(edgeTargetId(e));
@@ -223,82 +246,106 @@
             doc.circle(tx(tp.x), ty(tp.y), Math.max(ts(2.5), 0.4), 'F');
         });
 
-        // ===== Cable Labels =====
-        visibleEdges.forEach(function(edge) {
-            var sid = edgeSourceId(edge), tid = edgeTargetId(edge);
-            var sp = getPortPos(edge.source_port, tid);
-            var tp = getPortPos(edge.target_port, sid);
-            if (!sp || !tp) return;
+        // ===== Cable Labels (only if toggle is ON in the web UI) =====
+        var edgeLayer = document.querySelector('.edge-layer');
+        var showLabels = edgeLayer && edgeLayer.classList.contains('show-cable-labels');
+        if (showLabels) {
+            // Simple approach: place each label at a spread position along its cable
+            // No collision avoidance — just spread + small white bg for readability
+            var labelT = [0.3, 0.5, 0.7, 0.35, 0.65, 0.4, 0.6, 0.45, 0.55];
 
-            var label = '#' + edge.cable_id;
-            if (edge.cable_type) label += ' ' + edge.cable_type;
+            visibleEdges.forEach(function(edge, idx) {
+                var sid = edgeSourceId(edge), tid = edgeTargetId(edge);
+                var sp = getPortPos(edge.source_port, tid);
+                var tp = getPortPos(edge.target_port, sid);
+                if (!sp || !tp) return;
 
-            var midX, midY, angle = 0;
-            if (state.cableStyle === 'ortho') {
-                var sD = sp.side === 'right' ? 1 : -1;
-                var tD = tp.side === 'right' ? 1 : -1;
-                var out = Math.max(Math.abs(tp.x - sp.x) * 0.2, 30);
-                midX = (sp.x + out*sD + tp.x + out*tD) / 2;
-                midY = (sp.y + tp.y) / 2;
-            } else {
-                var dx = Math.abs(tp.x - sp.x);
-                var cp = Math.max(dx * 0.45, 60);
-                var sD2 = sp.side === 'right' ? 1 : -1;
-                var tD2 = tp.side === 'right' ? 1 : -1;
-                var mid = bezierMidpoint(sp.x, sp.y, sp.x+cp*sD2, sp.y, tp.x+cp*tD2, tp.y, tp.x, tp.y);
-                midX = mid.x; midY = mid.y; angle = mid.angle;
-                if (angle > 90) angle -= 180;
-                if (angle < -90) angle += 180;
-            }
+                // Short label: just #ID + abbreviated type
+                var label = '#' + edge.cable_id;
+                if (edge.cable_type) {
+                    var ct = edge.cable_type;
+                    // Abbreviate common types
+                    ct = ct.replace('Single-mode Fiber', 'SMF').replace('Multimode Fiber', 'MMF');
+                    label += ' ' + ct;
+                }
 
-            doc.setFontSize(Math.max(fs(8), 2.5));
-            doc.setFont('helvetica', 'normal');
-            doc.setTextColor(120, 120, 130);
-            doc.text(label, tx(midX), ty(midY) - Math.max(ts(4), 0.8), { angle: -angle, align: 'center' });
-        });
+                var t = labelT[idx % labelT.length];
+                var lx, ly;
+
+                if (state.cableStyle === 'ortho') {
+                    lx = sp.x + (tp.x - sp.x) * t;
+                    ly = (sp.y + tp.y) / 2;
+                } else {
+                    var dx = Math.abs(tp.x - sp.x);
+                    var cp = Math.max(dx * 0.45, 60);
+                    var sD = sp.side === 'right' ? 1 : -1;
+                    var tD = tp.side === 'right' ? 1 : -1;
+                    var mt = 1 - t;
+                    lx = mt*mt*mt*sp.x + 3*mt*mt*t*(sp.x+cp*sD) + 3*mt*t*t*(tp.x+cp*tD) + t*t*t*tp.x;
+                    ly = mt*mt*mt*sp.y + 3*mt*mt*t*sp.y + 3*mt*t*t*tp.y + t*t*t*tp.y;
+                }
+
+                doc.setFontSize(Math.max(fs(5), 1.3));
+                doc.setFont('helvetica', 'normal');
+
+                var tw = doc.getTextWidth(label);
+                var th = doc.getFontSize() * 0.35;
+
+                // Small white background
+                doc.setFillColor(255, 255, 255);
+                doc.rect(tx(lx) - tw/2 - 0.3, ty(ly) - th - 0.2, tw + 0.6, th + 0.4, 'F');
+
+                // Text in dark gray
+                doc.setTextColor(80, 80, 90);
+                doc.text(label, tx(lx), ty(ly), { align: 'center' });
+            });
+        }
 
         // ===== Device Cards =====
         visibleNodes.forEach(function(node) {
             var cx = tx(node.x), cy = ty(node.y);
             var cw = ts(CARD_W), ch = ts(node._cardH || 60);
-            var cr = Math.max(ts(6), 0.6);
+            var cr = Math.max(ts(5), 0.4);
 
-            // Shadow
-            doc.setFillColor(215, 215, 220);
-            doc.roundedRect(cx + 0.4, cy + 0.4, cw, ch, cr, cr, 'F');
-
-            // Card body
+            // Card body — clean white with thin border
             doc.setFillColor(255, 255, 255);
-            doc.setDrawColor(195, 195, 200);
+            doc.setDrawColor(210, 210, 215);
             doc.setLineWidth(0.15);
             doc.roundedRect(cx, cy, cw, ch, cr, cr, 'FD');
 
-            // Role stripe
+            // Role stripe — thin 2px line at top
             var rRgb = hexToRgb(node.role_color);
             doc.setFillColor(rRgb.r, rRgb.g, rRgb.b);
-            var stripeH = Math.max(ts(4), 0.5);
-            doc.rect(cx + cr, cy, cw - cr * 2, stripeH, 'F');
+            doc.rect(cx, cy, cw, Math.max(ts(3), 0.4), 'F');
 
-            // Name
-            doc.setFontSize(Math.max(fs(11.5), 4));
+            // Name — shrink font until it fits, show full text
+            var name = node.name || '';
+            var maxNameW = cw - ts(6);
             doc.setFont('helvetica', 'bold');
             doc.setTextColor(25, 25, 30);
-            var name = node.name || '';
-            if (name.length > 20) name = name.substring(0, 18) + '..';
-            doc.text(name, cx + cw / 2, cy + ts(18), { align: 'center' });
+            // Start at normal size and shrink until it fits
+            var nameSizes = [Math.max(fs(11), 3.5), Math.max(fs(9), 3), Math.max(fs(7.5), 2.5), Math.max(fs(6), 2), Math.max(fs(5), 1.8)];
+            for (var ni = 0; ni < nameSizes.length; ni++) {
+                doc.setFontSize(nameSizes[ni]);
+                if (doc.getTextWidth(name) <= maxNameW) break;
+            }
+            doc.text(name, cx + cw / 2, cy + ts(16), { align: 'center' });
 
-            // Type
-            doc.setFontSize(Math.max(fs(8.5), 2.5));
-            doc.setFont('helvetica', 'normal');
-            doc.setTextColor(120, 125, 150);
+            // Type — same shrink approach
             var typeStr = node.device_type || '';
-            if (typeStr.length > 24) typeStr = typeStr.substring(0, 22) + '..';
-            doc.text(typeStr, cx + cw / 2, cy + ts(30), { align: 'center' });
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(130, 130, 145);
+            var typeSizes = [Math.max(fs(8), 2.5), Math.max(fs(6.5), 2), Math.max(fs(5), 1.8)];
+            for (var ti = 0; ti < typeSizes.length; ti++) {
+                doc.setFontSize(typeSizes[ti]);
+                if (doc.getTextWidth(typeStr) <= maxNameW) break;
+            }
+            doc.text(typeStr, cx + cw / 2, cy + ts(27), { align: 'center' });
 
-            // Separator
-            doc.setDrawColor(225, 225, 230);
-            doc.setLineWidth(0.1);
-            doc.line(cx + ts(4), cy + ts(HEADER_H - 1), cx + cw - ts(4), cy + ts(HEADER_H - 1));
+            // Separator — subtle line
+            doc.setDrawColor(230, 230, 235);
+            doc.setLineWidth(0.08);
+            doc.line(cx + ts(4), cy + ts(HEADER_H - 2), cx + cw - ts(4), cy + ts(HEADER_H - 2));
 
             // Ports
             (node.ports || []).forEach(function(port, i) {
@@ -306,29 +353,32 @@
                 var ph = ts(PORT_H);
 
                 // Alternating row
-                doc.setFillColor(i % 2 === 0 ? 247 : 252, i % 2 === 0 ? 247 : 252, i % 2 === 0 ? 250 : 254);
+                doc.setFillColor(i % 2 === 0 ? 248 : 253, i % 2 === 0 ? 248 : 253, i % 2 === 0 ? 251 : 255);
                 doc.rect(cx, py, cw, ph, 'F');
 
                 // Accent bar
                 var pRgb = hexToRgb(portColorHex(port));
                 doc.setFillColor(pRgb.r, pRgb.g, pRgb.b);
-                doc.rect(cx, py + ts(2), Math.max(ts(3), 0.3), Math.max(ph - ts(4), 1), 'F');
+                doc.rect(cx, py + ts(2), Math.max(ts(3), 0.3), Math.max(ph - ts(4), 0.8), 'F');
 
                 // Port name
-                doc.setFontSize(Math.max(fs(10), 2.5));
+                doc.setFontSize(Math.max(fs(9), 2));
                 doc.setFont('courier', 'normal');
-                doc.setTextColor(35, 35, 45);
+                doc.setTextColor(40, 40, 50);
                 var pn = port.name;
-                if (pn.length > 14) pn = pn.substring(0, 12) + '..';
-                doc.text(pn, cx + ts(10), py + ph * 0.65);
+                var maxPortW = cw * 0.55;
+                while (doc.getTextWidth(pn) > maxPortW && pn.length > 3) {
+                    pn = pn.substring(0, pn.length - 2) + '..';
+                }
+                doc.text(pn, cx + ts(8), py + ph * 0.62);
 
                 // Speed text
                 var badge = portBadge(port);
                 if (badge) {
-                    doc.setFontSize(Math.max(fs(9), 2));
+                    doc.setFontSize(Math.max(fs(8), 1.8));
                     doc.setFont('helvetica', 'bold');
                     doc.setTextColor(pRgb.r, pRgb.g, pRgb.b);
-                    doc.text(badge, cx + cw - ts(8), py + ph * 0.65, { align: 'right' });
+                    doc.text(badge, cx + cw - ts(6), py + ph * 0.62, { align: 'right' });
                 }
             });
         });

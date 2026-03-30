@@ -660,20 +660,32 @@
             .attr('clip-path', function(d) { return 'url(#clip-' + d.id + ')'; })
             .attr('fill', function(d) { return d.role_color || '#6c757d'; });
 
-        // Device name
+        // Device name — auto-fits to card width
+        var maxTextW = CARD_W - 16;
         cards.append('text').attr('class', 'stencil-name')
             .attr('x', CARD_W / 2).attr('y', 18).attr('text-anchor', 'middle')
-            .text(function(d) {
-                var n = d.name || '';
-                return n.length > 24 ? n.substring(0, 22) + '\u2026' : n;
+            .text(function(d) { return d.name || ''; })
+            .each(function(d) {
+                // After rendering, check if text is wider than card and compress
+                var textW = this.getComputedTextLength();
+                if (textW > maxTextW) {
+                    d3.select(this)
+                        .attr('textLength', maxTextW)
+                        .attr('lengthAdjust', 'spacingAndGlyphs');
+                }
             });
 
-        // Device type
+        // Device type — auto-fits to card width
         cards.append('text').attr('class', 'stencil-type')
             .attr('x', CARD_W / 2).attr('y', 30).attr('text-anchor', 'middle')
-            .text(function(d) {
-                var t = d.device_type || '';
-                return t.length > 28 ? t.substring(0, 26) + '\u2026' : t;
+            .text(function(d) { return d.device_type || ''; })
+            .each(function(d) {
+                var textW = this.getComputedTextLength();
+                if (textW > maxTextW) {
+                    d3.select(this)
+                        .attr('textLength', maxTextW)
+                        .attr('lengthAdjust', 'spacingAndGlyphs');
+                }
             });
 
         // Separator
