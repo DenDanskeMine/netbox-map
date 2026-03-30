@@ -8,7 +8,7 @@ class Migration(migrations.Migration):
     dependencies = [
         ('dcim', '0001_initial'),
         ('extras', '0001_initial'),
-        ('netbox_map', '0015_cablepath_cable_type'),
+        ('netbox_map', '0016_topologysavedview'),
     ]
 
     operations = [
