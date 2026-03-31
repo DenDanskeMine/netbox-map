@@ -1357,6 +1357,72 @@ span.topo-iface-dot.empty {
     background: #c0392b;
 }
 
+/* ===== App Stencil Cards ===== */
+
+.topo-stencil-app .stencil-bg {
+    fill: #1a2030;
+    stroke: rgba(255,255,255,0.08);
+    stroke-width: 1;
+    transition: stroke 0.15s ease, filter 0.15s ease;
+}
+
+.topo-stencil-app:hover .stencil-bg {
+    stroke: rgba(255,255,255,0.22);
+}
+
+.topo-stencil-app.selected .stencil-bg {
+    stroke: #4a9eff;
+    stroke-width: 3;
+}
+
+.topo-stencil-app .app-left-bar {
+    pointer-events: none;
+}
+
+.topo-stencil-app .app-name {
+    font-size: 11.5px;
+    font-weight: 700;
+    fill: #e8eaf0;
+    pointer-events: none;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+}
+
+.topo-stencil-app .app-type {
+    font-size: 8.5px;
+    fill: #7880a0;
+    pointer-events: none;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+}
+
+.topo-stencil-app .app-status {
+    font-size: 9px;
+    pointer-events: none;
+}
+
+.topo-stencil-app .app-criticality {
+    font-size: 8px;
+    font-weight: 700;
+    pointer-events: none;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+}
+
+/* Dependency edges */
+.topo-dep-edge {
+    stroke-opacity: 0.6;
+    fill: none;
+    transition: stroke-opacity 0.15s ease;
+}
+
+.topo-dep-edge:hover {
+    stroke-opacity: 1;
+    stroke-width: 3 !important;
+    cursor: pointer;
+}
+
+.topo-dep-edge.soft {
+    stroke-dasharray: 8, 4;
+}
+
 /* ===== Responsive ===== */
 
 @media (max-width: 768px) {

@@ -34,6 +34,10 @@ urlpatterns = (
     path('topology/views/<int:pk>/delete/', views.TopologySavedViewDeleteView.as_view(), name='topologysavedview_delete'),
     path('topology/views/<int:pk>/changelog/', ObjectChangeLogView.as_view(), name='topologysavedview_changelog', kwargs={'model': models.TopologySavedView}),
 
+    # App Topology
+    path('topology/app-data/', views.AppTopologyDataView.as_view(), name='topology_app_data'),
+    path('topology/app/<int:app_id>/', views.AppTopologyDetailView.as_view(), name='topology_app_detail'),
+
     # AJAX marker detail
     path('marker-detail/drop/<int:tile_id>/', views.DropDetailView.as_view(), name='drop_detail'),
     path('marker-detail/<str:object_type>/<int:object_id>/', views.MarkerDetailView.as_view(), name='marker_detail'),

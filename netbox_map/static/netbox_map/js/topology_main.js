@@ -195,6 +195,118 @@
     if (zoomOut) zoomOut.addEventListener('click', function() { renderer.zoomOut(); });
     if (zoomFit) zoomFit.addEventListener('click', function() { renderer.fitToView(); });
 
+    // Topology mode toggle (network / apps / mixed)
+    var modeNetwork = document.getElementById('mode-network');
+    var modeApps = document.getElementById('mode-apps');
+    var modeMixed = document.getElementById('mode-mixed');
+
+    function setModeActive(btn) {
+        [modeNetwork, modeApps, modeMixed].forEach(function(b) { if (b) b.classList.remove('active'); });
+        if (btn) btn.classList.add('active');
+    }
+
+    function switchToMode(mode) {
+        state.topologyMode = mode;
+        setModeActive(mode === 'apps' ? modeApps : modeNetwork);
+
+        // Update toolbar visibility for network-only controls
+        var networkOnlyBtns = ['topo-add-devices', 'topo-edit-hierarchy', 'topo-auto-sort',
+            'topo-collapse-pp', 'cable-color-physical', 'cable-color-speed', 'cable-curve',
+            'cable-ortho', 'topo-toggle-labels', 'view-stencil', 'view-node'];
+        networkOnlyBtns.forEach(function(id) {
+            var el = document.getElementById(id);
+            if (el) el.style.display = (mode === 'apps') ? 'none' : '';
+        });
+
+        // Update stats labels
+        var statNodes = document.getElementById('stat-nodes');
+        var statEdges = document.getElementById('stat-edges');
+        if (statNodes && statNodes.nextSibling) {
+            var nodesLabel = statNodes.parentNode;
+            if (nodesLabel) {
+                // The text node after stat-nodes
+                var walker = document.createTreeWalker(nodesLabel, NodeFilter.SHOW_TEXT);
+                var textNode;
+                while (textNode = walker.nextNode()) {
+                    if (textNode.textContent.indexOf('devices') !== -1) {
+                        textNode.textContent = mode === 'apps' ? ' apps' : ' devices';
+                    }
+                    if (textNode.textContent.indexOf('cables') !== -1 || textNode.textContent.indexOf('deps') !== -1) {
+                        textNode.textContent = mode === 'apps' ? ' deps' : ' cables';
+                    }
+                }
+            }
+        }
+
+        // Clear state and reload
+        state.nodes = [];
+        state.edges = [];
+        state.savedLayout = {};
+        state.hiddenNodes.clear();
+        state.selectedNode = null;
+        events.emit('node:deselect');
+
+        if (mode === 'apps') {
+            loadAppTopology();
+        } else {
+            loadTopology();
+        }
+    }
+
+    if (modeNetwork) modeNetwork.addEventListener('click', function() { switchToMode('network'); });
+    if (modeApps) modeApps.addEventListener('click', function() { switchToMode('apps'); });
+
+    function loadAppTopology() {
+        if (loadingEl) loadingEl.classList.remove('d-none');
+        if (emptyEl) emptyEl.classList.add('d-none');
+
+        var params = new URLSearchParams();
+        Object.keys(state.initialFilters).forEach(function(key) {
+            var val = state.initialFilters[key];
+            if (Array.isArray(val)) {
+                val.forEach(function(v) { params.append(key, v); });
+            } else {
+                params.append(key, val);
+            }
+        });
+
+        var url = state.appDataUrl + (params.toString() ? '?' + params.toString() : '');
+
+        api.get(url).then(function(data) {
+            if (loadingEl) loadingEl.classList.add('d-none');
+
+            state.nodes = data.nodes;
+            state.edges = data.edges;
+
+            if (data.nodes.length === 0) {
+                if (emptyEl) {
+                    emptyEl.classList.remove('d-none');
+                    emptyEl.querySelector('p').textContent = 'No applications found. Create applications and dependencies to see the topology.';
+                }
+                if (sidebarEl) sidebarEl.classList.add('hidden');
+                return;
+            }
+
+            renderer.render(data.nodes, data.edges);
+            events.emit('data:loaded', data);
+
+            if (sidebarEl) sidebarEl.classList.remove('hidden');
+
+            var statNodes = document.getElementById('stat-nodes');
+            var statEdges = document.getElementById('stat-edges');
+            if (statNodes) statNodes.textContent = data.stats.node_count;
+            if (statEdges) statEdges.textContent = data.stats.edge_count;
+
+        }).catch(function(err) {
+            if (loadingEl) loadingEl.classList.add('d-none');
+            if (emptyEl) {
+                emptyEl.classList.remove('d-none');
+                emptyEl.querySelector('p').textContent = 'Error loading application topology data.';
+            }
+            console.error('App topology load error:', err);
+        });
+    }
+
     // View mode toggle
     var viewStencil = document.getElementById('view-stencil');
     var viewNode = document.getElementById('view-node');

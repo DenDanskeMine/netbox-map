@@ -1308,6 +1308,201 @@ class ApplicationDependencyBulkDeleteView(generic.BulkDeleteView):
 
 
 #
+# App Topology Data Views
+#
+
+class AppTopologyDataView(LoginRequiredMixin, View):
+    """AJAX endpoint returning application topology graph data (nodes + edges)."""
+
+    CRITICALITY_COLORS = {
+        'critical': '#e74c3c',
+        'high': '#e67e22',
+        'medium': '#f39c12',
+        'low': '#3498db',
+    }
+
+    def get(self, request):
+        environments = request.GET.getlist('environment')
+        criticalities = request.GET.getlist('criticality')
+        statuses = request.GET.getlist('status')
+        tenant_id = request.GET.get('tenant_id')
+        site_id = request.GET.get('site_id')
+        group_id = request.GET.get('group_id')
+        app_ids_param = request.GET.get('app_ids')
+        tags = request.GET.getlist('tag')
+
+        apps = Application.objects.select_related('group', 'tenant', 'site').annotate(
+            deploy_count=Count('deployments', distinct=True),
+            dep_out_count=Count('dependencies', distinct=True),
+            dep_in_count=Count('dependents', distinct=True),
+        )
+
+        if app_ids_param:
+            ids = [int(x) for x in app_ids_param.split(',') if x.strip().isdigit()]
+            apps = apps.filter(pk__in=ids)
+        else:
+            if environments:
+                apps = apps.filter(environment__in=environments)
+            if criticalities:
+                apps = apps.filter(criticality__in=criticalities)
+            if statuses:
+                apps = apps.filter(status__in=statuses)
+            if tenant_id:
+                apps = apps.filter(tenant_id=tenant_id)
+            if site_id:
+                apps = apps.filter(site_id=site_id)
+            if group_id:
+                apps = apps.filter(group_id=group_id)
+            if tags:
+                apps = apps.filter(tags__slug__in=tags).distinct()
+
+            # Require at least one filter when not using app_ids
+            if not any([environments, criticalities, statuses, tenant_id, site_id, group_id, tags]):
+                # Return all apps if no filter (app topology is typically smaller than device topology)
+                pass
+
+        app_map = {}
+        nodes = []
+        for app in apps:
+            crit_color = self.CRITICALITY_COLORS.get(app.criticality, '#6c757d')
+            group_color = app.group.color if app.group else '#6c757d'
+
+            node = {
+                'id': f'app-{app.pk}',
+                'app_id': app.pk,
+                'node_type': 'application',
+                'name': app.name,
+                'category': app.get_environment_display(),
+                'category_color': group_color,
+                'role_color': group_color,
+                'status': app.get_status_display(),
+                'status_value': app.status,
+                'criticality': app.criticality,
+                'criticality_color': crit_color,
+                'environment': app.get_environment_display(),
+                'environment_value': app.environment,
+                'version': app.version,
+                'owner': app.tenant.name if app.tenant else '',
+                'group': app.group.name if app.group else '',
+                'site': app.site.name if app.site else '',
+                'description': app.description,
+                'url': app.get_absolute_url(),
+                'ports': [],
+                'deploy_count': app.deploy_count,
+                'dependency_count': app.dep_out_count + app.dep_in_count,
+            }
+            app_map[app.pk] = node
+            nodes.append(node)
+
+        if not app_map:
+            return JsonResponse({'nodes': [], 'edges': [], 'stats': {'node_count': 0, 'edge_count': 0}})
+
+        app_ids = set(app_map.keys())
+
+        # Get dependencies where both source and target are in scope
+        deps = ApplicationDependency.objects.filter(
+            source_application_id__in=app_ids,
+            target_application_id__in=app_ids,
+        ).select_related('source_application', 'target_application')
+
+        edges = []
+        for dep in deps:
+            crit = dep.source_application.criticality
+            crit_color = self.CRITICALITY_COLORS.get(crit, '#6c757d')
+
+            label_parts = []
+            if dep.protocol:
+                label_parts.append(dep.get_protocol_display())
+            if dep.port:
+                label_parts.append(f':{dep.port}')
+
+            edges.append({
+                'id': f'dep-{dep.pk}',
+                'edge_type': 'dependency',
+                'source': f'app-{dep.source_application_id}',
+                'target': f'app-{dep.target_application_id}',
+                'directed': True,
+                'dependency_type': dep.dependency_type,
+                'protocol': dep.get_protocol_display() if dep.protocol else '',
+                'port': dep.port,
+                'color': crit_color,
+                'label': ' '.join(label_parts) if label_parts else '',
+                'status': dep.get_status_display(),
+                'status_value': dep.status,
+                'description': dep.description,
+            })
+
+        return JsonResponse({
+            'nodes': nodes,
+            'edges': edges,
+            'stats': {'node_count': len(nodes), 'edge_count': len(edges)},
+        })
+
+
+class AppTopologyDetailView(LoginRequiredMixin, View):
+    """AJAX endpoint returning dependency details for an application."""
+
+    def get(self, request, app_id):
+        try:
+            app = Application.objects.select_related('group', 'tenant', 'site').get(pk=app_id)
+        except Application.DoesNotExist:
+            return JsonResponse({'error': 'Application not found'}, status=404)
+
+        # Upstream: what this app depends on
+        upstream = []
+        for dep in ApplicationDependency.objects.filter(
+            source_application=app,
+        ).select_related('target_application'):
+            upstream.append({
+                'id': dep.pk,
+                'app_id': dep.target_application.pk,
+                'app_name': dep.target_application.name,
+                'dependency_type': dep.dependency_type,
+                'protocol': dep.get_protocol_display() if dep.protocol else '',
+                'port': dep.port,
+                'status': dep.get_status_display(),
+            })
+
+        # Downstream: what depends on this app
+        downstream = []
+        for dep in ApplicationDependency.objects.filter(
+            target_application=app,
+        ).select_related('source_application'):
+            downstream.append({
+                'id': dep.pk,
+                'app_id': dep.source_application.pk,
+                'app_name': dep.source_application.name,
+                'dependency_type': dep.dependency_type,
+                'protocol': dep.get_protocol_display() if dep.protocol else '',
+                'port': dep.port,
+                'status': dep.get_status_display(),
+            })
+
+        # Deployments
+        deployments = []
+        for deploy in ApplicationDeployment.objects.filter(
+            application=app,
+        ).select_related('host_type'):
+            host_obj = deploy.host
+            deployments.append({
+                'id': deploy.pk,
+                'host_name': str(host_obj) if host_obj else 'Unknown',
+                'host_type': deploy.host_type.model if deploy.host_type else '',
+                'role': deploy.get_role_display(),
+                'port': deploy.port,
+                'protocol': deploy.protocol,
+            })
+
+        return JsonResponse({
+            'app_name': app.name,
+            'app_url': app.get_absolute_url(),
+            'upstream': upstream,
+            'downstream': downstream,
+            'deployments': deployments,
+        })
+
+
+#
 # AJAX: Split Cable at Marker
 #
 

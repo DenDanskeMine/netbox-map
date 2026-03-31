@@ -174,6 +174,15 @@
                 self._deselectAll(); self.events.emit('node:deselect');
             }
         });
+
+        // Arrow markers for dependency edges (one per criticality color)
+        var defs = this.svg.append('defs');
+        ['e74c3c','e67e22','f39c12','3498db','6c757d'].forEach(function(hex) {
+            defs.append('marker').attr('id','arrow-'+hex)
+                .attr('viewBox','0 0 10 6').attr('refX',10).attr('refY',3)
+                .attr('markerWidth',8).attr('markerHeight',6).attr('orient','auto')
+                .append('path').attr('d','M0,0L10,3L0,6Z').attr('fill','#'+hex);
+        });
     };
 
     Renderer.prototype._updateSize = function() {
@@ -184,7 +193,8 @@
 
     Renderer.prototype.render = function(nodes, edges, skipFit) {
         this._skipFit = !!skipFit;
-        if (this.state.viewMode === 'stencil') this._renderStencil(nodes, edges);
+        if (this.state.topologyMode === 'apps') this._renderAppStencil(nodes, edges);
+        else if (this.state.viewMode === 'stencil') this._renderStencil(nodes, edges);
         else this._renderNodes(nodes, edges);
     };
 
@@ -976,6 +986,347 @@
         );
 
         // Sync final positions back to state.nodes so save/toggle works
+        nodeData.forEach(function(d) {
+            var orig = self.state.nodes.find(function(n) { return n.id === d.id; });
+            if (orig) { orig.x = d.x; orig.y = d.y; }
+        });
+
+        if (!self._skipFit) {
+            setTimeout(function() { self.fitToView(); }, 50);
+        }
+    };
+
+    /* ================================================================
+       APP STENCIL VIEW — Application cards with dependency edges
+       ================================================================ */
+
+    var APP_CARD_W = 200;
+    var APP_CARD_H = 80;
+    var APP_CARD_R = 12;
+    var APP_BAR_W = 6;
+
+    // Returns the edge midpoint {x, y, side} for connecting a bezier to a card edge
+    function getNodeEdgePos(nd, otherNd) {
+        if (!nd) return null;
+        var cx = nd.x + APP_CARD_W / 2;
+        var cy = nd.y + APP_CARD_H / 2;
+        var ox = otherNd ? otherNd.x + APP_CARD_W / 2 : cx + 1;
+        var oy = otherNd ? otherNd.y + APP_CARD_H / 2 : cy;
+        var dx = ox - cx;
+        var dy = oy - cy;
+        // Determine which side the edge exits from
+        if (Math.abs(dx) * APP_CARD_H > Math.abs(dy) * APP_CARD_W) {
+            // Left or right
+            if (dx > 0) return { x: nd.x + APP_CARD_W, y: cy, side: 'right' };
+            else return { x: nd.x, y: cy, side: 'left' };
+        } else {
+            // Top or bottom
+            if (dy > 0) return { x: cx, y: nd.y + APP_CARD_H, side: 'bottom' };
+            else return { x: cx, y: nd.y, side: 'top' };
+        }
+    }
+
+    Renderer.prototype._renderAppStencil = function(nodes, edges) {
+        var self = this;
+        this._updateSize();
+        this.g.selectAll('.edge-layer > *, .node-layer > *').remove();
+        if (this.simulation) { this.simulation.stop(); this.simulation = null; }
+        if (nodes.length === 0) return;
+
+        var nodeData = nodes.map(function(n) {
+            return Object.assign({}, n, { _cardW: APP_CARD_W, _cardH: APP_CARD_H });
+        });
+        var edgeData = edges.map(function(e) { return Object.assign({}, e); });
+
+        var nodeById = {};
+        nodeData.forEach(function(n) { nodeById[n.id] = n; });
+
+        // Apply saved positions
+        var savedLayout = self.state.savedLayout;
+        if (savedLayout && typeof savedLayout === 'object') {
+            nodeData.forEach(function(n) {
+                var saved = savedLayout[n.id];
+                if (saved && saved.x !== undefined) {
+                    n.x = saved.x;
+                    n.y = saved.y;
+                    n.fx = saved.x;
+                    n.fy = saved.y;
+                }
+            });
+        }
+
+        // Store for external access
+        this._stencilNodeData = nodeData;
+
+        // Dependency edge bezier path
+        function depPath(d) {
+            var srcNode = typeof d.source === 'object' ? d.source : nodeById[d.source];
+            var tgtNode = typeof d.target === 'object' ? d.target : nodeById[d.target];
+            if (!srcNode || !tgtNode) return '';
+            var sp = getNodeEdgePos(srcNode, tgtNode);
+            var tp = getNodeEdgePos(tgtNode, srcNode);
+            if (!sp || !tp) return '';
+            var dx = Math.abs(sp.x - tp.x);
+            var cp = Math.max(dx * 0.4, 60);
+            var sDir = sp.side === 'right' ? 1 : (sp.side === 'left' ? -1 : 0);
+            var tDir = tp.side === 'right' ? 1 : (tp.side === 'left' ? -1 : 0);
+            var sdy = sp.side === 'bottom' ? 1 : (sp.side === 'top' ? -1 : 0);
+            var tdy = tp.side === 'bottom' ? 1 : (tp.side === 'top' ? -1 : 0);
+            return 'M' + sp.x + ',' + sp.y
+                + ' C' + (sp.x + cp * sDir) + ',' + (sp.y + cp * sdy)
+                + ' ' + (tp.x + cp * tDir) + ',' + (tp.y + cp * tdy)
+                + ' ' + tp.x + ',' + tp.y;
+        }
+
+        // Get arrow marker ID from edge color
+        function arrowId(color) {
+            var hex = (color || '#6c757d').replace('#', '');
+            return 'arrow-' + hex;
+        }
+
+        // === Draw dependency edges ===
+        this.edgeElements = this.g.select('.edge-layer')
+            .selectAll('path').data(edgeData).enter().append('path')
+            .attr('class', function(d) {
+                var c = 'topo-edge topo-dep-edge';
+                if (d.dependency_type === 'soft') c += ' soft';
+                return c;
+            })
+            .attr('stroke', function(d) { return d.color || '#6c757d'; })
+            .attr('stroke-width', 2)
+            .attr('fill', 'none')
+            .attr('marker-end', function(d) { return 'url(#' + arrowId(d.color) + ')'; })
+            .attr('d', depPath);
+
+        this.edgeElements.append('title').text(function(d) {
+            var parts = [d.dependency_type];
+            if (d.label) parts.push(d.label);
+            return parts.join(' | ');
+        });
+
+        // === Draw app cards ===
+        var cards = this.g.select('.node-layer')
+            .selectAll('g').data(nodeData).enter().append('g')
+            .attr('class', 'topo-stencil-node topo-stencil-app')
+            .attr('transform', function(d) { return 'translate(' + (d.x || 0) + ',' + (d.y || 0) + ')'; });
+
+        this.nodeElements = cards;
+
+        // Card shadow
+        cards.append('rect').attr('class', 'stencil-shadow')
+            .attr('x', 2).attr('y', 2)
+            .attr('width', APP_CARD_W).attr('height', APP_CARD_H)
+            .attr('rx', APP_CARD_R).attr('ry', APP_CARD_R)
+            .attr('fill', 'rgba(0,0,0,0.15)');
+
+        // Card body
+        cards.append('rect').attr('class', 'stencil-bg')
+            .attr('width', APP_CARD_W).attr('height', APP_CARD_H)
+            .attr('rx', APP_CARD_R).attr('ry', APP_CARD_R);
+
+        // Left color bar (clipped to rounded corners)
+        cards.append('clipPath')
+            .attr('id', function(d) { return 'appclip-' + d.id; })
+            .append('rect')
+            .attr('width', APP_CARD_W).attr('height', APP_CARD_H)
+            .attr('rx', APP_CARD_R).attr('ry', APP_CARD_R);
+
+        cards.append('rect').attr('class', 'app-left-bar')
+            .attr('width', APP_BAR_W).attr('height', APP_CARD_H)
+            .attr('clip-path', function(d) { return 'url(#appclip-' + d.id + ')'; })
+            .attr('fill', function(d) { return d.category_color || d.role_color || '#6c757d'; });
+
+        // App name — auto-fits
+        var maxTextW = APP_CARD_W - APP_BAR_W - 16;
+        cards.append('text').attr('class', 'app-name stencil-name')
+            .attr('x', APP_BAR_W + 10).attr('y', 24)
+            .text(function(d) { return d.name || ''; })
+            .each(function() {
+                var textW = this.getComputedTextLength();
+                if (textW > maxTextW) {
+                    d3.select(this)
+                        .attr('textLength', maxTextW)
+                        .attr('lengthAdjust', 'spacingAndGlyphs');
+                }
+            });
+
+        // Environment/type subtitle
+        cards.append('text').attr('class', 'app-type stencil-type')
+            .attr('x', APP_BAR_W + 10).attr('y', 38)
+            .text(function(d) {
+                var parts = [];
+                if (d.environment) parts.push(d.environment);
+                if (d.group) parts.push(d.group);
+                return parts.join(' \u2022 ') || '';
+            })
+            .each(function() {
+                var textW = this.getComputedTextLength();
+                if (textW > maxTextW) {
+                    d3.select(this)
+                        .attr('textLength', maxTextW)
+                        .attr('lengthAdjust', 'spacingAndGlyphs');
+                }
+            });
+
+        // Status dot
+        cards.append('circle').attr('class', 'app-status')
+            .attr('cx', APP_BAR_W + 14).attr('cy', 56)
+            .attr('r', 4)
+            .attr('fill', function(d) { return App.statusColor(d.status_value); });
+
+        // Status text
+        cards.append('text').attr('class', 'app-status')
+            .attr('x', APP_BAR_W + 22).attr('y', 59)
+            .attr('font-size', '9px').attr('fill', '#a0a8c0')
+            .text(function(d) { return d.status || ''; });
+
+        // Criticality badge
+        cards.append('text').attr('class', 'app-criticality')
+            .attr('x', APP_CARD_W - 10).attr('y', 59)
+            .attr('text-anchor', 'end')
+            .attr('fill', function(d) { return d.criticality_color || '#6c757d'; })
+            .text(function(d) {
+                return d.criticality ? d.criticality.toUpperCase() : '';
+            });
+
+        // Separator line
+        cards.append('line')
+            .attr('x1', APP_BAR_W + 4).attr('x2', APP_CARD_W - 4)
+            .attr('y1', APP_CARD_H - 18).attr('y2', APP_CARD_H - 18)
+            .attr('stroke', 'rgba(255,255,255,0.06)');
+
+        // Owner / deploy count
+        cards.append('text')
+            .attr('x', APP_BAR_W + 10).attr('y', APP_CARD_H - 5)
+            .attr('font-size', '8px').attr('fill', '#6070a0')
+            .text(function(d) {
+                var parts = [];
+                if (d.owner) parts.push(d.owner);
+                if (d.deploy_count) parts.push(d.deploy_count + ' hosts');
+                return parts.join(' \u2022 ');
+            });
+
+        // Click to select
+        cards.on('click', function(ev, d) {
+            ev.stopPropagation(); self._deselectAll();
+            d3.select(this).classed('selected', true);
+            self.state.selectedNode = d; self.events.emit('node:select', d);
+        });
+
+        // Right-click context menu
+        cards.on('contextmenu', function(ev, d) {
+            ev.preventDefault();
+            ev.stopPropagation();
+            d3.selectAll('.topo-context-menu').remove();
+
+            var menu = d3.select('body').append('div')
+                .attr('class', 'topo-context-menu')
+                .style('left', ev.pageX + 'px')
+                .style('top', ev.pageY + 'px');
+
+            menu.append('div').attr('class', 'ctx-header')
+                .html('<span class="ctx-dot" style="background:' + (d.category_color || '#6c757d') + '"></span> '
+                    + '<strong>' + App.escapeHtml(d.name) + '</strong>');
+
+            menu.append('div').attr('class', 'ctx-divider');
+
+            menu.append('div').attr('class', 'ctx-item')
+                .html('<i class="mdi mdi-open-in-new"></i> Open in NetBox')
+                .on('click', function() { window.open(d.url, '_blank'); menu.remove(); });
+
+            menu.append('div').attr('class', 'ctx-item')
+                .html('<i class="mdi mdi-content-copy"></i> Copy name')
+                .on('click', function() {
+                    navigator.clipboard.writeText(d.name || '');
+                    menu.remove();
+                });
+
+            menu.append('div').attr('class', 'ctx-divider');
+
+            menu.append('div').attr('class', 'ctx-item')
+                .html('<i class="mdi mdi-crosshairs-gps"></i> Center on app')
+                .on('click', function() {
+                    var cx = d.x + APP_CARD_W / 2;
+                    var cy = d.y + APP_CARD_H / 2;
+                    var w = self.width, h = self.height;
+                    self.svg.transition().duration(400).call(
+                        self.zoom.transform,
+                        d3.zoomIdentity.translate(w/2 - cx, h/2 - cy).scale(1)
+                    );
+                    menu.remove();
+                });
+
+            // Pin/Unpin
+            var isPinned = d._pinned;
+            menu.append('div').attr('class', 'ctx-item')
+                .html('<i class="mdi mdi-pin' + (isPinned ? '-off' : '') + '-outline"></i> '
+                    + (isPinned ? 'Unpin position' : 'Pin position'))
+                .on('click', function() {
+                    d._pinned = !d._pinned;
+                    if (d._pinned) {
+                        d.fx = d.x; d.fy = d.y;
+                    } else {
+                        d.fx = null; d.fy = null;
+                        if (self.simulation) self.simulation.alpha(0.3).restart();
+                    }
+                    menu.remove();
+                });
+
+            setTimeout(function() {
+                d3.select('body').on('click.ctx', function() {
+                    d3.selectAll('.topo-context-menu').remove();
+                    d3.select('body').on('click.ctx', null);
+                });
+            }, 10);
+        });
+
+        // Hover: highlight connected edges
+        cards.on('mouseenter', function(ev, d) {
+            self.edgeElements.attr('stroke-opacity', function(e) {
+                var s = typeof e.source === 'object' ? e.source.id : e.source;
+                var t = typeof e.target === 'object' ? e.target.id : e.target;
+                return (s === d.id || t === d.id) ? 1 : 0.08;
+            }).attr('stroke-width', function(e) {
+                var s = typeof e.source === 'object' ? e.source.id : e.source;
+                var t = typeof e.target === 'object' ? e.target.id : e.target;
+                return (s === d.id || t === d.id) ? 3 : 1.5;
+            });
+        });
+        cards.on('mouseleave', function() {
+            self.edgeElements.attr('stroke-opacity', null).attr('stroke-width', 2);
+        });
+
+        // Force-directed layout
+        this.simulation = d3.forceSimulation(nodeData)
+            .force('link', d3.forceLink(edgeData).id(function(d) { return d.id; }).distance(250).strength(0.5))
+            .force('charge', d3.forceManyBody().strength(-500).distanceMax(800))
+            .force('center', d3.forceCenter(this.width / 2, this.height / 2))
+            .force('collision', d3.forceCollide().radius(110))
+            .alphaDecay(0.03)
+            .on('tick', function() {
+                cards.attr('transform', function(d) { return 'translate(' + d.x + ',' + d.y + ')'; });
+                self.edgeElements.attr('d', depPath);
+            });
+        this.simulation.on('end', function() {
+            if (!self._skipFit) self.fitToView();
+        });
+
+        // Drag with force sim
+        cards.call(d3.drag()
+            .on('start', function(ev, d) {
+                if (!ev.active && self.simulation) self.simulation.alphaTarget(0.1).restart();
+                d.fx = d.x; d.fy = d.y;
+            })
+            .on('drag', function(ev, d) {
+                d.fx = ev.x; d.fy = ev.y;
+            })
+            .on('end', function(ev, d) {
+                if (!ev.active && self.simulation) self.simulation.alphaTarget(0);
+                if (!d._pinned) { d.fx = null; d.fy = null; }
+            })
+        );
+
+        // Sync positions to state
         nodeData.forEach(function(d) {
             var orig = self.state.nodes.find(function(n) { return n.id === d.id; });
             if (orig) { orig.x = d.x; orig.y = d.y; }
