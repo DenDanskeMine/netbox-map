@@ -10,5 +10,9 @@ router.register('tile-port-assignments', views.TilePortAssignmentViewSet)
 router.register('cable-paths', views.CablePathViewSet)
 router.register('map-markers', views.MapMarkerViewSet)
 router.register('topology-saved-views', views.TopologySavedViewViewSet)
+router.register('application-groups', views.ApplicationGroupViewSet)
+router.register('applications', views.ApplicationViewSet)
+router.register('application-deployments', views.ApplicationDeploymentViewSet)
+router.register('application-dependencies', views.ApplicationDependencyViewSet)
 
 urlpatterns = router.urls

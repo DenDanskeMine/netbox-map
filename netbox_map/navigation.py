@@ -89,6 +89,64 @@ menu = PluginMenu(
                 )
             ),
         )),
+        (_('Applications'), (
+            PluginMenuItem(
+                link='plugins:netbox_map:application_list',
+                link_text=_('Applications'),
+                permissions=['netbox_map.view_application'],
+                buttons=(
+                    PluginMenuButton(
+                        link='plugins:netbox_map:application_add',
+                        title=_('Add'),
+                        icon_class='mdi mdi-plus-thick',
+                        color=ButtonColorChoices.GREEN,
+                        permissions=['netbox_map.add_application'],
+                    ),
+                )
+            ),
+            PluginMenuItem(
+                link='plugins:netbox_map:applicationgroup_list',
+                link_text=_('Groups'),
+                permissions=['netbox_map.view_applicationgroup'],
+                buttons=(
+                    PluginMenuButton(
+                        link='plugins:netbox_map:applicationgroup_add',
+                        title=_('Add'),
+                        icon_class='mdi mdi-plus-thick',
+                        color=ButtonColorChoices.GREEN,
+                        permissions=['netbox_map.add_applicationgroup'],
+                    ),
+                )
+            ),
+            PluginMenuItem(
+                link='plugins:netbox_map:applicationdeployment_list',
+                link_text=_('Deployments'),
+                permissions=['netbox_map.view_applicationdeployment'],
+                buttons=(
+                    PluginMenuButton(
+                        link='plugins:netbox_map:applicationdeployment_add',
+                        title=_('Add'),
+                        icon_class='mdi mdi-plus-thick',
+                        color=ButtonColorChoices.GREEN,
+                        permissions=['netbox_map.add_applicationdeployment'],
+                    ),
+                )
+            ),
+            PluginMenuItem(
+                link='plugins:netbox_map:applicationdependency_list',
+                link_text=_('Dependencies'),
+                permissions=['netbox_map.view_applicationdependency'],
+                buttons=(
+                    PluginMenuButton(
+                        link='plugins:netbox_map:applicationdependency_add',
+                        title=_('Add'),
+                        icon_class='mdi mdi-plus-thick',
+                        color=ButtonColorChoices.GREEN,
+                        permissions=['netbox_map.add_applicationdependency'],
+                    ),
+                )
+            ),
+        )),
         (_('Configuration'), (
             PluginMenuItem(
                 link='plugins:netbox_map:custommarkertype_list',

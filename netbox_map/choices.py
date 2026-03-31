@@ -136,3 +136,91 @@ def get_all_type_configs():
             'builtin': False,
         })
     return configs
+
+
+#
+# Application choices
+#
+
+class ApplicationStatusChoices(ChoiceSet):
+    STATUS_ACTIVE = 'active'
+    STATUS_PLANNED = 'planned'
+    STATUS_DEPRECATED = 'deprecated'
+    STATUS_DECOMMISSIONED = 'decommissioned'
+
+    CHOICES = [
+        (STATUS_ACTIVE, _('Active'), 'green'),
+        (STATUS_PLANNED, _('Planned'), 'cyan'),
+        (STATUS_DEPRECATED, _('Deprecated'), 'yellow'),
+        (STATUS_DECOMMISSIONED, _('Decommissioned'), 'red'),
+    ]
+
+
+class ApplicationCriticalityChoices(ChoiceSet):
+    CRITICALITY_LOW = 'low'
+    CRITICALITY_MEDIUM = 'medium'
+    CRITICALITY_HIGH = 'high'
+    CRITICALITY_CRITICAL = 'critical'
+
+    CHOICES = [
+        (CRITICALITY_LOW, _('Low'), 'blue'),
+        (CRITICALITY_MEDIUM, _('Medium'), 'yellow'),
+        (CRITICALITY_HIGH, _('High'), 'orange'),
+        (CRITICALITY_CRITICAL, _('Critical'), 'red'),
+    ]
+
+
+class ApplicationEnvironmentChoices(ChoiceSet):
+    ENV_PRODUCTION = 'production'
+    ENV_STAGING = 'staging'
+    ENV_DEVELOPMENT = 'development'
+    ENV_TESTING = 'testing'
+
+    CHOICES = [
+        (ENV_PRODUCTION, _('Production'), 'green'),
+        (ENV_STAGING, _('Staging'), 'yellow'),
+        (ENV_DEVELOPMENT, _('Development'), 'cyan'),
+        (ENV_TESTING, _('Testing'), 'blue'),
+    ]
+
+
+class DependencyTypeChoices(ChoiceSet):
+    TYPE_HARD = 'hard'
+    TYPE_SOFT = 'soft'
+
+    CHOICES = [
+        (TYPE_HARD, _('Hard'), 'red'),
+        (TYPE_SOFT, _('Soft'), 'blue'),
+    ]
+
+
+class DependencyProtocolChoices(ChoiceSet):
+    PROTO_API = 'api'
+    PROTO_DATABASE = 'database'
+    PROTO_MESSAGING = 'messaging'
+    PROTO_GRPC = 'grpc'
+    PROTO_FILESYSTEM = 'filesystem'
+    PROTO_OTHER = 'other'
+
+    CHOICES = [
+        (PROTO_API, _('API (HTTP/REST)'), 'blue'),
+        (PROTO_DATABASE, _('Database'), 'green'),
+        (PROTO_MESSAGING, _('Messaging/Queue'), 'purple'),
+        (PROTO_GRPC, _('gRPC'), 'cyan'),
+        (PROTO_FILESYSTEM, _('Filesystem/NFS'), 'yellow'),
+        (PROTO_OTHER, _('Other'), 'gray'),
+    ]
+
+
+class DeploymentRoleChoices(ChoiceSet):
+    ROLE_PRIMARY = 'primary'
+    ROLE_REPLICA = 'replica'
+    ROLE_WORKER = 'worker'
+    ROLE_STANDBY = 'standby'
+
+    CHOICES = [
+        (ROLE_PRIMARY, _('Primary'), 'green'),
+        (ROLE_REPLICA, _('Replica'), 'blue'),
+        (ROLE_WORKER, _('Worker'), 'cyan'),
+        (ROLE_STANDBY, _('Standby'), 'yellow'),
+    ]

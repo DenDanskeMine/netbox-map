@@ -7,7 +7,10 @@ from netbox.api.fields import ContentTypeField
 from netbox.api.serializers import NetBoxModelSerializer
 from utilities.api import get_serializer_for_model
 from ..choices import BUILTIN_TYPE_SLUGS
-from ..models import FloorPlan, FloorPlanTile, CustomMarkerType, LocationCoordinates, MapMarker, TilePortAssignment, CablePath, TopologySavedView
+from ..models import (
+    FloorPlan, FloorPlanTile, CustomMarkerType, LocationCoordinates, MapMarker, TilePortAssignment, CablePath, TopologySavedView,
+    ApplicationGroup, Application, ApplicationDeployment, ApplicationDependency,
+)
 
 
 class CustomMarkerTypeSerializer(NetBoxModelSerializer):
@@ -201,3 +204,73 @@ class TopologySavedViewSerializer(NetBoxModelSerializer):
             'tags', 'custom_fields', 'created', 'last_updated',
         ]
         brief_fields = ('id', 'url', 'display', 'name')
+
+
+class ApplicationGroupSerializer(NetBoxModelSerializer):
+    class Meta:
+        model = ApplicationGroup
+        fields = [
+            'id', 'url', 'display_url', 'display',
+            'name', 'slug', 'color', 'description',
+            'tags', 'custom_fields', 'created', 'last_updated',
+        ]
+        brief_fields = ('id', 'url', 'display', 'name', 'slug', 'color')
+
+
+class ApplicationSerializer(NetBoxModelSerializer):
+    group = ApplicationGroupSerializer(nested=True, required=False, allow_null=True, default=None)
+    site = SiteSerializer(nested=True, required=False, allow_null=True, default=None)
+
+    class Meta:
+        model = Application
+        fields = [
+            'id', 'url', 'display_url', 'display',
+            'name', 'status', 'criticality', 'environment', 'version',
+            'description', 'comments', 'external_url',
+            'group', 'site', 'tenant',
+            'tags', 'custom_fields', 'created', 'last_updated',
+        ]
+        brief_fields = ('id', 'url', 'display', 'name', 'status', 'environment')
+
+
+class ApplicationDeploymentSerializer(NetBoxModelSerializer):
+    application = ApplicationSerializer(nested=True)
+    host_type = ContentTypeField(
+        queryset=ContentType.objects.filter(
+            app_label__in=['dcim', 'virtualization'],
+            model__in=['device', 'virtualmachine'],
+        ),
+    )
+    host = serializers.SerializerMethodField(read_only=True)
+
+    class Meta:
+        model = ApplicationDeployment
+        fields = [
+            'id', 'url', 'display_url', 'display',
+            'application', 'host_type', 'host_id', 'host',
+            'role', 'port', 'protocol', 'description',
+            'tags', 'custom_fields', 'created', 'last_updated',
+        ]
+        brief_fields = ('id', 'url', 'display', 'application', 'role')
+
+    def get_host(self, obj):
+        if obj.host is not None:
+            serializer = get_serializer_for_model(obj.host)
+            return serializer(obj.host, nested=True, context=self.context).data
+        return None
+
+
+class ApplicationDependencySerializer(NetBoxModelSerializer):
+    source_application = ApplicationSerializer(nested=True)
+    target_application = ApplicationSerializer(nested=True)
+
+    class Meta:
+        model = ApplicationDependency
+        fields = [
+            'id', 'url', 'display_url', 'display',
+            'source_application', 'target_application',
+            'dependency_type', 'protocol', 'port', 'status',
+            'description',
+            'tags', 'custom_fields', 'created', 'last_updated',
+        ]
+        brief_fields = ('id', 'url', 'display', 'source_application', 'target_application', 'dependency_type')

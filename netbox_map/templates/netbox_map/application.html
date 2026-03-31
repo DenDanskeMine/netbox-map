@@ -1,0 +1,68 @@
+{% extends 'generic/object.html' %}
+{% load helpers %}
+{% load i18n %}
+
+{% block content %}
+  <div class="row mb-3">
+    <div class="col-md-6">
+      <div class="card">
+        <h5 class="card-header">{% trans "Application" %}</h5>
+        <table class="table table-hover attr-table">
+          <tr>
+            <th scope="row">{% trans "Name" %}</th>
+            <td>{{ object.name }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Status" %}</th>
+            <td>{% badge object.get_status_display bg_color=object.get_status_color %}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Criticality" %}</th>
+            <td>{% badge object.get_criticality_display bg_color=object.get_criticality_color %}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Environment" %}</th>
+            <td>{% badge object.get_environment_display bg_color=object.get_environment_color %}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Version" %}</th>
+            <td>{{ object.version|placeholder }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Group" %}</th>
+            <td>{% if object.group %}<a href="{{ object.group.get_absolute_url }}">{{ object.group }}</a>{% else %}&mdash;{% endif %}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Site" %}</th>
+            <td>{% if object.site %}<a href="{{ object.site.get_absolute_url }}">{{ object.site }}</a>{% else %}&mdash;{% endif %}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Tenant" %}</th>
+            <td>{% if object.tenant %}<a href="{{ object.tenant.get_absolute_url }}">{{ object.tenant }}</a>{% else %}&mdash;{% endif %}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Description" %}</th>
+            <td>{{ object.description|placeholder }}</td>
+          </tr>
+          {% if object.external_url %}
+          <tr>
+            <th scope="row">{% trans "External URL" %}</th>
+            <td><a href="{{ object.external_url }}" target="_blank">{{ object.external_url }}</a></td>
+          </tr>
+          {% endif %}
+        </table>
+      </div>
+    </div>
+    <div class="col-md-6">
+      {% include 'inc/panels/tags.html' %}
+      <div class="card">
+        <h5 class="card-header">{% trans "Actions" %}</h5>
+        <div class="card-body">
+          <a href="{% url 'plugins:netbox_map:topology' %}" class="btn btn-primary">
+            <i class="mdi mdi-sitemap"></i> {% trans "View in Topology" %}
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}

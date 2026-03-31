@@ -86,4 +86,45 @@ urlpatterns = (
     path('map-markers/<int:pk>/edit/', views.MapMarkerEditView.as_view(), name='mapmarker_edit'),
     path('map-markers/<int:pk>/delete/', views.MapMarkerDeleteView.as_view(), name='mapmarker_delete'),
     path('map-markers/<int:pk>/changelog/', ObjectChangeLogView.as_view(), name='mapmarker_changelog', kwargs={'model': models.MapMarker}),
+
+    # ApplicationGroup
+    path('application-groups/', views.ApplicationGroupListView.as_view(), name='applicationgroup_list'),
+    path('application-groups/add/', views.ApplicationGroupEditView.as_view(), name='applicationgroup_add'),
+    path('application-groups/edit/', views.ApplicationGroupBulkEditView.as_view(), name='applicationgroup_bulk_edit'),
+    path('application-groups/delete/', views.ApplicationGroupBulkDeleteView.as_view(), name='applicationgroup_bulk_delete'),
+    path('application-groups/<int:pk>/', views.ApplicationGroupView.as_view(), name='applicationgroup'),
+    path('application-groups/<int:pk>/edit/', views.ApplicationGroupEditView.as_view(), name='applicationgroup_edit'),
+    path('application-groups/<int:pk>/delete/', views.ApplicationGroupDeleteView.as_view(), name='applicationgroup_delete'),
+    path('application-groups/<int:pk>/changelog/', ObjectChangeLogView.as_view(), name='applicationgroup_changelog', kwargs={'model': models.ApplicationGroup}),
+
+    # Application
+    path('applications/', views.ApplicationListView.as_view(), name='application_list'),
+    path('applications/add/', views.ApplicationEditView.as_view(), name='application_add'),
+    path('applications/import/', views.ApplicationBulkImportView.as_view(), name='application_bulk_import'),
+    path('applications/edit/', views.ApplicationBulkEditView.as_view(), name='application_bulk_edit'),
+    path('applications/delete/', views.ApplicationBulkDeleteView.as_view(), name='application_bulk_delete'),
+    path('applications/<int:pk>/', views.ApplicationView.as_view(), name='application'),
+    path('applications/<int:pk>/edit/', views.ApplicationEditView.as_view(), name='application_edit'),
+    path('applications/<int:pk>/delete/', views.ApplicationDeleteView.as_view(), name='application_delete'),
+    path('applications/<int:pk>/changelog/', ObjectChangeLogView.as_view(), name='application_changelog', kwargs={'model': models.Application}),
+
+    # ApplicationDeployment
+    path('application-deployments/', views.ApplicationDeploymentListView.as_view(), name='applicationdeployment_list'),
+    path('application-deployments/add/', views.ApplicationDeploymentEditView.as_view(), name='applicationdeployment_add'),
+    path('application-deployments/delete/', views.ApplicationDeploymentBulkDeleteView.as_view(), name='applicationdeployment_bulk_delete'),
+    path('application-deployments/<int:pk>/', views.ApplicationDeploymentView.as_view(), name='applicationdeployment'),
+    path('application-deployments/<int:pk>/edit/', views.ApplicationDeploymentEditView.as_view(), name='applicationdeployment_edit'),
+    path('application-deployments/<int:pk>/delete/', views.ApplicationDeploymentDeleteView.as_view(), name='applicationdeployment_delete'),
+    path('application-deployments/<int:pk>/changelog/', ObjectChangeLogView.as_view(), name='applicationdeployment_changelog', kwargs={'model': models.ApplicationDeployment}),
+
+    # ApplicationDependency
+    path('application-dependencies/', views.ApplicationDependencyListView.as_view(), name='applicationdependency_list'),
+    path('application-dependencies/add/', views.ApplicationDependencyEditView.as_view(), name='applicationdependency_add'),
+    path('application-dependencies/import/', views.ApplicationDependencyBulkImportView.as_view(), name='applicationdependency_bulk_import'),
+    path('application-dependencies/edit/', views.ApplicationDependencyBulkEditView.as_view(), name='applicationdependency_bulk_edit'),
+    path('application-dependencies/delete/', views.ApplicationDependencyBulkDeleteView.as_view(), name='applicationdependency_bulk_delete'),
+    path('application-dependencies/<int:pk>/', views.ApplicationDependencyView.as_view(), name='applicationdependency'),
+    path('application-dependencies/<int:pk>/edit/', views.ApplicationDependencyEditView.as_view(), name='applicationdependency_edit'),
+    path('application-dependencies/<int:pk>/delete/', views.ApplicationDependencyDeleteView.as_view(), name='applicationdependency_delete'),
+    path('application-dependencies/<int:pk>/changelog/', ObjectChangeLogView.as_view(), name='applicationdependency_changelog', kwargs={'model': models.ApplicationDependency}),
 )

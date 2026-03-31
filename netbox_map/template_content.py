@@ -54,4 +54,44 @@ class DeviceFloorPlanLink(PluginTemplateExtension):
         )
 
 
-template_extensions = [SiteFloorPlanLink, DeviceFloorPlanLink]
+class DeviceApplicationPanel(PluginTemplateExtension):
+    models = ['dcim.device']
+
+    def right_page(self):
+        device = self.context['object']
+        device_ct = ContentType.objects.get_for_model(device)
+        from .models import ApplicationDeployment
+        deployments = (
+            ApplicationDeployment.objects
+            .filter(host_type=device_ct, host_id=device.pk)
+            .select_related('application')[:5]
+        )
+        if not deployments:
+            return ''
+        return self.render(
+            'netbox_map/inc/device_applications_panel.html',
+            extra_context={'deployments': deployments}
+        )
+
+
+class VMApplicationPanel(PluginTemplateExtension):
+    models = ['virtualization.virtualmachine']
+
+    def right_page(self):
+        vm = self.context['object']
+        vm_ct = ContentType.objects.get_for_model(vm)
+        from .models import ApplicationDeployment
+        deployments = (
+            ApplicationDeployment.objects
+            .filter(host_type=vm_ct, host_id=vm.pk)
+            .select_related('application')[:5]
+        )
+        if not deployments:
+            return ''
+        return self.render(
+            'netbox_map/inc/device_applications_panel.html',
+            extra_context={'deployments': deployments}
+        )
+
+
+template_extensions = [SiteFloorPlanLink, DeviceFloorPlanLink, DeviceApplicationPanel, VMApplicationPanel]

@@ -18,7 +18,10 @@ from utilities.views import ViewTab, register_model_view
 
 from . import filtersets, forms, tables
 from .choices import get_all_type_configs
-from .models import FloorPlan, FloorPlanTile, CustomMarkerType, LocationCoordinates, MapMarker, MapSettings, TilePortAssignment, CablePath, TopologySavedView
+from .models import (
+    FloorPlan, FloorPlanTile, CustomMarkerType, LocationCoordinates, MapMarker, MapSettings, TilePortAssignment, CablePath, TopologySavedView,
+    ApplicationGroup, Application, ApplicationDeployment, ApplicationDependency,
+)
 
 
 #
@@ -1139,6 +1142,169 @@ class CablePathBulkDeleteView(generic.BulkDeleteView):
     queryset = CablePath.objects.all()
     filterset = filtersets.CablePathFilterSet
     table = tables.CablePathTable
+
+
+#
+# ApplicationGroup views
+#
+
+class ApplicationGroupListView(generic.ObjectListView):
+    queryset = ApplicationGroup.objects.all()
+    filterset = filtersets.ApplicationGroupFilterSet
+    filterset_form = forms.ApplicationGroupFilterForm
+    table = tables.ApplicationGroupTable
+
+
+@register_model_view(ApplicationGroup)
+class ApplicationGroupView(generic.ObjectView):
+    queryset = ApplicationGroup.objects.all()
+
+
+@register_model_view(ApplicationGroup, 'edit')
+class ApplicationGroupEditView(generic.ObjectEditView):
+    queryset = ApplicationGroup.objects.all()
+    form = forms.ApplicationGroupForm
+
+
+@register_model_view(ApplicationGroup, 'delete')
+class ApplicationGroupDeleteView(generic.ObjectDeleteView):
+    queryset = ApplicationGroup.objects.all()
+
+
+class ApplicationGroupBulkEditView(generic.BulkEditView):
+    queryset = ApplicationGroup.objects.all()
+    filterset = filtersets.ApplicationGroupFilterSet
+    table = tables.ApplicationGroupTable
+    form = forms.ApplicationGroupFilterForm
+
+
+class ApplicationGroupBulkDeleteView(generic.BulkDeleteView):
+    queryset = ApplicationGroup.objects.all()
+    filterset = filtersets.ApplicationGroupFilterSet
+    table = tables.ApplicationGroupTable
+
+
+#
+# Application views
+#
+
+class ApplicationListView(generic.ObjectListView):
+    queryset = Application.objects.select_related('group', 'site', 'tenant')
+    filterset = filtersets.ApplicationFilterSet
+    filterset_form = forms.ApplicationFilterForm
+    table = tables.ApplicationTable
+
+
+@register_model_view(Application)
+class ApplicationView(generic.ObjectView):
+    queryset = Application.objects.select_related('group', 'site', 'tenant')
+
+
+@register_model_view(Application, 'edit')
+class ApplicationEditView(generic.ObjectEditView):
+    queryset = Application.objects.all()
+    form = forms.ApplicationForm
+
+
+@register_model_view(Application, 'delete')
+class ApplicationDeleteView(generic.ObjectDeleteView):
+    queryset = Application.objects.all()
+
+
+class ApplicationBulkEditView(generic.BulkEditView):
+    queryset = Application.objects.all()
+    filterset = filtersets.ApplicationFilterSet
+    table = tables.ApplicationTable
+    form = forms.ApplicationBulkEditForm
+
+
+class ApplicationBulkImportView(generic.BulkImportView):
+    queryset = Application.objects.all()
+    model_form = forms.ApplicationImportForm
+
+
+class ApplicationBulkDeleteView(generic.BulkDeleteView):
+    queryset = Application.objects.all()
+    filterset = filtersets.ApplicationFilterSet
+    table = tables.ApplicationTable
+
+
+#
+# ApplicationDeployment views
+#
+
+class ApplicationDeploymentListView(generic.ObjectListView):
+    queryset = ApplicationDeployment.objects.select_related('application', 'host_type')
+    filterset = filtersets.ApplicationDeploymentFilterSet
+    filterset_form = forms.ApplicationDeploymentFilterForm
+    table = tables.ApplicationDeploymentTable
+
+
+@register_model_view(ApplicationDeployment)
+class ApplicationDeploymentView(generic.ObjectView):
+    queryset = ApplicationDeployment.objects.select_related('application', 'host_type')
+
+
+@register_model_view(ApplicationDeployment, 'edit')
+class ApplicationDeploymentEditView(generic.ObjectEditView):
+    queryset = ApplicationDeployment.objects.all()
+    form = forms.ApplicationDeploymentForm
+
+
+@register_model_view(ApplicationDeployment, 'delete')
+class ApplicationDeploymentDeleteView(generic.ObjectDeleteView):
+    queryset = ApplicationDeployment.objects.all()
+
+
+class ApplicationDeploymentBulkDeleteView(generic.BulkDeleteView):
+    queryset = ApplicationDeployment.objects.all()
+    filterset = filtersets.ApplicationDeploymentFilterSet
+    table = tables.ApplicationDeploymentTable
+
+
+#
+# ApplicationDependency views
+#
+
+class ApplicationDependencyListView(generic.ObjectListView):
+    queryset = ApplicationDependency.objects.select_related('source_application', 'target_application')
+    filterset = filtersets.ApplicationDependencyFilterSet
+    filterset_form = forms.ApplicationDependencyFilterForm
+    table = tables.ApplicationDependencyTable
+
+
+@register_model_view(ApplicationDependency)
+class ApplicationDependencyView(generic.ObjectView):
+    queryset = ApplicationDependency.objects.select_related('source_application', 'target_application')
+
+
+@register_model_view(ApplicationDependency, 'edit')
+class ApplicationDependencyEditView(generic.ObjectEditView):
+    queryset = ApplicationDependency.objects.all()
+    form = forms.ApplicationDependencyForm
+
+
+@register_model_view(ApplicationDependency, 'delete')
+class ApplicationDependencyDeleteView(generic.ObjectDeleteView):
+    queryset = ApplicationDependency.objects.all()
+
+
+class ApplicationDependencyBulkEditView(generic.BulkEditView):
+    queryset = ApplicationDependency.objects.all()
+    filterset = filtersets.ApplicationDependencyFilterSet
+    table = tables.ApplicationDependencyTable
+    form = forms.ApplicationDependencyBulkEditForm
+
+
+class ApplicationDependencyBulkImportView(generic.BulkImportView):
+    queryset = ApplicationDependency.objects.all()
+    model_form = forms.ApplicationDependencyForm
+
+
+class ApplicationDependencyBulkDeleteView(generic.BulkDeleteView):
+    queryset = ApplicationDependency.objects.all()
+    filterset = filtersets.ApplicationDependencyFilterSet
+    table = tables.ApplicationDependencyTable
 
 
 #

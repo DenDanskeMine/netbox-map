@@ -1,0 +1,28 @@
+{% load i18n %}
+<div class="card">
+  <h5 class="card-header">{% trans "Applications" %}</h5>
+  <div class="card-body">
+    {% if deployments %}
+    <table class="table table-hover mb-0">
+      <thead>
+        <tr>
+          <th>{% trans "Application" %}</th>
+          <th>{% trans "Role" %}</th>
+          <th>{% trans "Port" %}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for dep in deployments %}
+        <tr>
+          <td><a href="{{ dep.application.get_absolute_url }}">{{ dep.application }}</a></td>
+          <td>{{ dep.get_role_display }}</td>
+          <td>{{ dep.port|default:"-" }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <span class="text-muted">{% trans "None" %}</span>
+    {% endif %}
+  </div>
+</div>

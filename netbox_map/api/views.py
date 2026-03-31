@@ -2,11 +2,16 @@ from django.contrib.contenttypes.prefetch import GenericPrefetch
 from dcim.models import FrontPort, RearPort
 from netbox.api.viewsets import NetBoxModelViewSet
 from .. import filtersets
-from ..models import FloorPlan, FloorPlanTile, CustomMarkerType, LocationCoordinates, MapMarker, TilePortAssignment, CablePath, TopologySavedView
+from ..models import (
+    FloorPlan, FloorPlanTile, CustomMarkerType, LocationCoordinates, MapMarker, TilePortAssignment, CablePath, TopologySavedView,
+    ApplicationGroup, Application, ApplicationDeployment, ApplicationDependency,
+)
 from .serializers import (
     FloorPlanSerializer, FloorPlanTileSerializer, CustomMarkerTypeSerializer,
     LocationCoordinatesSerializer, MapMarkerSerializer, TilePortAssignmentSerializer,
     CablePathSerializer, TopologySavedViewSerializer,
+    ApplicationGroupSerializer, ApplicationSerializer,
+    ApplicationDeploymentSerializer, ApplicationDependencySerializer,
 )
 
 
@@ -57,3 +62,27 @@ class TopologySavedViewViewSet(NetBoxModelViewSet):
     queryset = TopologySavedView.objects.all()
     serializer_class = TopologySavedViewSerializer
     filterset_class = filtersets.TopologySavedViewFilterSet
+
+
+class ApplicationGroupViewSet(NetBoxModelViewSet):
+    queryset = ApplicationGroup.objects.all()
+    serializer_class = ApplicationGroupSerializer
+    filterset_class = filtersets.ApplicationGroupFilterSet
+
+
+class ApplicationViewSet(NetBoxModelViewSet):
+    queryset = Application.objects.select_related('group', 'site', 'tenant')
+    serializer_class = ApplicationSerializer
+    filterset_class = filtersets.ApplicationFilterSet
+
+
+class ApplicationDeploymentViewSet(NetBoxModelViewSet):
+    queryset = ApplicationDeployment.objects.select_related('application', 'host_type')
+    serializer_class = ApplicationDeploymentSerializer
+    filterset_class = filtersets.ApplicationDeploymentFilterSet
+
+
+class ApplicationDependencyViewSet(NetBoxModelViewSet):
+    queryset = ApplicationDependency.objects.select_related('source_application', 'target_application')
+    serializer_class = ApplicationDependencySerializer
+    filterset_class = filtersets.ApplicationDependencyFilterSet

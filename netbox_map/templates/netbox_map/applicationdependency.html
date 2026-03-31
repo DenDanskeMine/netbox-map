@@ -1,0 +1,46 @@
+{% extends 'generic/object.html' %}
+{% load helpers %}
+{% load i18n %}
+
+{% block content %}
+  <div class="row mb-3">
+    <div class="col-md-6">
+      <div class="card">
+        <h5 class="card-header">{% trans "Application Dependency" %}</h5>
+        <table class="table table-hover attr-table">
+          <tr>
+            <th scope="row">{% trans "Source Application" %}</th>
+            <td><a href="{{ object.source_application.get_absolute_url }}">{{ object.source_application }}</a></td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Target Application" %}</th>
+            <td><a href="{{ object.target_application.get_absolute_url }}">{{ object.target_application }}</a></td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Dependency Type" %}</th>
+            <td>{% badge object.get_dependency_type_display bg_color=object.get_dependency_type_color %}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Protocol" %}</th>
+            <td>{{ object.get_protocol_display|placeholder }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Port" %}</th>
+            <td>{{ object.port|placeholder }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Status" %}</th>
+            <td>{% badge object.get_status_display bg_color=object.get_status_color %}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Description" %}</th>
+            <td>{{ object.description|placeholder }}</td>
+          </tr>
+        </table>
+      </div>
+    </div>
+    <div class="col-md-6">
+      {% include 'inc/panels/tags.html' %}
+    </div>
+  </div>
+{% endblock %}
