@@ -12,6 +12,7 @@ from utilities.forms.fields import (
     DynamicModelChoiceField,
     DynamicModelMultipleChoiceField,
     CommentField,
+    SlugField,
 )
 from utilities.forms.rendering import FieldSet
 from .models import (
@@ -1244,6 +1245,8 @@ class TopologySavedViewFilterForm(NetBoxModelFilterSetForm):
 #
 
 class ApplicationGroupForm(NetBoxModelForm):
+    slug = SlugField()
+
     fieldsets = (
         FieldSet(
             'name', 'slug', 'color', 'description', 'tags',

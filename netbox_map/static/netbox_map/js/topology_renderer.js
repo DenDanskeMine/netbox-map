@@ -175,14 +175,22 @@
             }
         });
 
-        // Arrow markers for dependency edges (one per criticality color)
+        // Arrow markers for directed edges — created dynamically per color
         var defs = this.svg.append('defs');
-        ['e74c3c','e67e22','f39c12','3498db','6c757d'].forEach(function(hex) {
-            defs.append('marker').attr('id','arrow-'+hex)
-                .attr('viewBox','0 0 10 6').attr('refX',10).attr('refY',3)
-                .attr('markerWidth',8).attr('markerHeight',6).attr('orient','auto')
-                .append('path').attr('d','M0,0L10,3L0,6Z').attr('fill','#'+hex);
-        });
+        this._arrowDefs = defs;
+        this._arrowColors = {};
+        this._ensureArrow = function(hex) {
+            hex = hex.replace('#', '');
+            if (this._arrowColors[hex]) return;
+            this._arrowColors[hex] = true;
+            this._arrowDefs.append('marker').attr('id', 'arrow-' + hex)
+                .attr('viewBox', '0 0 10 6').attr('refX', 10).attr('refY', 3)
+                .attr('markerWidth', 8).attr('markerHeight', 6).attr('orient', 'auto')
+                .append('path').attr('d', 'M0,0L10,3L0,6Z').attr('fill', '#' + hex);
+        };
+        // Pre-create common ones
+        var self2 = this;
+        ['e74c3c','e67e22','f39c12','3498db','6c757d'].forEach(function(hex) { self2._ensureArrow(hex); });
     };
 
     Renderer.prototype._updateSize = function() {
@@ -193,9 +201,12 @@
 
     Renderer.prototype.render = function(nodes, edges, skipFit) {
         this._skipFit = !!skipFit;
-        if (this.state.topologyMode === 'apps') this._renderAppStencil(nodes, edges);
-        else if (this.state.viewMode === 'stencil') this._renderStencil(nodes, edges);
-        else this._renderNodes(nodes, edges);
+        // All modes use _renderStencil — it handles both device and app nodes
+        if (this.state.viewMode === 'stencil' || this.state.topologyMode === 'apps') {
+            this._renderStencil(nodes, edges);
+        } else {
+            this._renderNodes(nodes, edges);
+        }
     };
 
     /* ================================================================
@@ -216,9 +227,14 @@
 
         // Compute card heights
         nodeData.forEach(function(nd) {
-            var portCount = nd.ports.length;
-            nd._cardH = HEADER_H + portCount * (PORT_H + PORT_GAP) + CARD_PAD;
-            if (portCount === 0) nd._cardH = HEADER_H + CARD_PAD;
+            if (nd.node_type === 'application') {
+                nd._cardH = 76; // fixed height for app cards (no ports)
+                nd.ports = nd.ports || [];
+            } else {
+                var portCount = (nd.ports || []).length;
+                nd._cardH = HEADER_H + portCount * (PORT_H + PORT_GAP) + CARD_PAD;
+                if (portCount === 0) nd._cardH = HEADER_H + CARD_PAD;
+            }
         });
 
         // Hierarchical layout — use custom hierarchy if set, otherwise auto-detect
@@ -535,8 +551,20 @@
                 return c;
             })
             .attr('stroke', function(d) { return getCableColor(d); })
-            .attr('stroke-width', 2).attr('fill', 'none')
+            .attr('stroke-width', function(d) { return d.edge_type === 'deployed_on' ? 1.5 : 2; })
+            .attr('stroke-dasharray', function(d) {
+                if (d.dependency_type === 'soft') return '8,4';
+                if (d.edge_type === 'deployed_on') return '3,6';
+                return null;
+            })
+            .attr('fill', 'none')
             .attr('d', cablePath)
+            .attr('marker-end', function(d) {
+                if (!d.directed) return null;
+                var color = getCableColor(d).replace('#', '');
+                self._ensureArrow(color);
+                return 'url(#arrow-' + color + ')';
+            })
             .on('click', function(ev, d) { ev.stopPropagation(); if (d.url) window.open(d.url, '_blank'); });
 
         this.edgeElements.append('title').text(function(d) {
@@ -704,10 +732,45 @@
             .attr('y1', HEADER_H - 1).attr('y2', HEADER_H - 1)
             .attr('stroke', 'rgba(255,255,255,0.08)');
 
-        // Draw ports
-        cards.each(function(d) {
+        // App cards: extra body content (status, criticality, group, env)
+        cards.filter(function(d) { return d.node_type === 'application'; }).each(function(d) {
             var g = d3.select(this);
-            d.ports.forEach(function(p, i) {
+            // Left color bar (6px, group color)
+            g.append('rect').attr('x', 0).attr('y', 0)
+                .attr('width', 5).attr('height', d._cardH)
+                .attr('rx', 3).attr('fill', d.category_color || d.role_color || '#6c757d');
+            // More rounded corners for app cards
+            g.select('.stencil-bg').attr('rx', 10).attr('ry', 10);
+            g.select('.stencil-shadow').attr('rx', 10).attr('ry', 10);
+            // Status dot
+            var statusColor = App.statusColor(d.status_value);
+            g.append('circle').attr('cx', 14).attr('cy', HEADER_H + 10)
+                .attr('r', 4).attr('fill', statusColor);
+            g.append('text').attr('class', 'app-status-text')
+                .attr('x', 22).attr('y', HEADER_H + 14)
+                .attr('fill', '#a0a8b8').attr('font-size', '9px')
+                .text(d.status);
+            // Criticality badge
+            var critColor = d.criticality_color || '#6c757d';
+            g.append('text').attr('class', 'app-crit-text')
+                .attr('x', CARD_W - 10).attr('y', HEADER_H + 14)
+                .attr('text-anchor', 'end').attr('fill', critColor)
+                .attr('font-size', '9px').attr('font-weight', '700')
+                .text(d.criticality ? d.criticality.toUpperCase() : '');
+            // Group/environment
+            if (d.group || d.environment) {
+                g.append('text')
+                    .attr('x', CARD_W / 2).attr('y', HEADER_H + 30)
+                    .attr('text-anchor', 'middle').attr('fill', '#707888')
+                    .attr('font-size', '8px')
+                    .text((d.group || '') + (d.group && d.environment ? ' · ' : '') + (d.environment || ''));
+            }
+        });
+
+        // Draw ports (device nodes only)
+        cards.filter(function(d) { return d.node_type !== 'application'; }).each(function(d) {
+            var g = d3.select(this);
+            (d.ports || []).forEach(function(p, i) {
                 var py = HEADER_H + i * (PORT_H + PORT_GAP);
                 var color = p.speed ? App.speedColor(p.speed) : '#556';
                 if (p.port_class === 'front-port') color = '#ff9800';

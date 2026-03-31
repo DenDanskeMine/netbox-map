@@ -158,6 +158,7 @@
                 self._applyVisibilityFilter();
             });
         });
+    };
 
     Sidebar.prototype._renderDeviceList = function() {
         if (!this.deviceListEl) return;

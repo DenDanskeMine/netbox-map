@@ -1432,6 +1432,56 @@ class AppTopologyDataView(LoginRequiredMixin, View):
                 'description': dep.description,
             })
 
+        # Also include devices that apps are deployed on + deployed-on edges
+        deployments = ApplicationDeployment.objects.filter(
+            application_id__in=app_ids,
+        ).select_related('host_type')
+
+        device_ct = ContentType.objects.get_for_model(Device)
+        device_ids = set()
+        for dep in deployments:
+            if dep.host_type_id == device_ct.pk:
+                device_ids.add(dep.host_id)
+
+        # Add device nodes
+        if device_ids:
+            devices = Device.objects.filter(pk__in=device_ids).select_related(
+                'device_type__manufacturer', 'role', 'site', 'rack',
+            )
+            for device in devices:
+                device_node = {
+                    'id': f'device-{device.pk}',
+                    'device_id': device.pk,
+                    'node_type': 'device',
+                    'name': device.name or str(device),
+                    'role': device.role.name if device.role else '',
+                    'role_slug': device.role.slug if device.role else '',
+                    'role_color': f'#{device.role.color}' if device.role and device.role.color else '#6c757d',
+                    'device_type': str(device.device_type) if device.device_type else '',
+                    'status': device.get_status_display(),
+                    'status_value': device.status,
+                    'site': device.site.name if device.site else '',
+                    'rack': device.rack.name if device.rack else '',
+                    'url': device.get_absolute_url(),
+                    'ports': [],
+                    'interface_count': 0,
+                }
+                nodes.append(device_node)
+
+        # Add deployed-on edges
+        for dep in deployments:
+            if dep.host_type_id == device_ct.pk and dep.host_id in device_ids:
+                edges.append({
+                    'id': f'deploy-{dep.pk}',
+                    'edge_type': 'deployed_on',
+                    'source': f'app-{dep.application_id}',
+                    'target': f'device-{dep.host_id}',
+                    'directed': False,
+                    'color': '#5a6080',
+                    'label': dep.get_role_display(),
+                    'cable_type': f'{dep.get_role_display()} :{dep.port}' if dep.port else dep.get_role_display(),
+                })
+
         return JsonResponse({
             'nodes': nodes,
             'edges': edges,
