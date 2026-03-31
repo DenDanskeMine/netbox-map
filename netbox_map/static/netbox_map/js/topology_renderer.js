@@ -184,9 +184,9 @@
             if (this._arrowColors[hex]) return;
             this._arrowColors[hex] = true;
             this._arrowDefs.append('marker').attr('id', 'arrow-' + hex)
-                .attr('viewBox', '0 0 10 6').attr('refX', 10).attr('refY', 3)
-                .attr('markerWidth', 8).attr('markerHeight', 6).attr('orient', 'auto')
-                .append('path').attr('d', 'M0,0L10,3L0,6Z').attr('fill', '#' + hex);
+                .attr('viewBox', '0 -6 12 12').attr('refX', 12).attr('refY', 0)
+                .attr('markerWidth', 12).attr('markerHeight', 12).attr('orient', 'auto')
+                .append('path').attr('d', 'M0,-5L12,0L0,5Z').attr('fill', '#' + hex);
         };
         // Pre-create common ones
         var self2 = this;
@@ -228,8 +228,17 @@
         // Compute card heights
         nodeData.forEach(function(nd) {
             if (nd.node_type === 'application') {
-                nd._cardH = 76; // fixed height for app cards (no ports)
                 nd.ports = nd.ports || [];
+                var portCount = nd.ports.length;
+                var appInfoH = 38; // status/criticality/group section
+                // Add space for section headers (DEPENDS ON / NEEDED BY)
+                var sectionHeaders = 0;
+                if (nd.outgoing_count > 0) sectionHeaders++;
+                if (nd.incoming_count > 0) sectionHeaders++;
+                var headerSpace = sectionHeaders * 14;
+                nd._cardH = HEADER_H + appInfoH + headerSpace + portCount * (PORT_H + PORT_GAP) + CARD_PAD;
+                if (portCount === 0) nd._cardH = HEADER_H + appInfoH + CARD_PAD;
+                nd._appInfoH = appInfoH + headerSpace; // includes section header space
             } else {
                 var portCount = (nd.ports || []).length;
                 nd._cardH = HEADER_H + portCount * (PORT_H + PORT_GAP) + CARD_PAD;
@@ -237,9 +246,90 @@
             }
         });
 
-        // Hierarchical layout — use custom hierarchy if set, otherwise auto-detect
+        // Hierarchical layout
         var layers;
-        if (self.state.customHierarchy && Object.keys(self.state.customHierarchy).length > 0) {
+        var hasApps = nodeData.some(function(n) { return n.node_type === 'application'; });
+        var hasDevices = nodeData.some(function(n) { return n.node_type !== 'application'; });
+
+        if (hasApps && hasDevices) {
+            // Mixed mode: devices in left columns, apps in right columns
+            // Separate nodes by type
+            var deviceNodes = nodeData.filter(function(n) { return n.node_type !== 'application'; });
+            var appNodes = nodeData.filter(function(n) { return n.node_type === 'application'; });
+
+            // Compute device layers using existing logic (only device edges)
+            var deviceEdges = edgeData.filter(function(e) { return e.edge_type !== 'dependency' && e.edge_type !== 'deployed_on'; });
+            var deviceLayers = computeLayers(deviceNodes, deviceEdges);
+            var maxDeviceLayer = 0;
+            Object.keys(deviceLayers).forEach(function(k) { maxDeviceLayer = Math.max(maxDeviceLayer, parseInt(k)); });
+
+            // Compute app layers using BFS on dependency edges
+            var depEdges = edgeData.filter(function(e) { return e.edge_type === 'dependency'; });
+            var appAdj = {};
+            var appInDeg = {};
+            appNodes.forEach(function(n) { appAdj[n.id] = []; appInDeg[n.id] = 0; });
+            depEdges.forEach(function(e) {
+                var s = typeof e.source === 'object' ? e.source.id : e.source;
+                var t = typeof e.target === 'object' ? e.target.id : e.target;
+                if (appAdj[s]) appAdj[s].push(t);
+                if (appInDeg[t] !== undefined) appInDeg[t]++;
+            });
+
+            // BFS from apps with 0 in-degree (leaf/consumer apps)
+            var appLayers = {};
+            var visited = {};
+            var queue = [];
+            appNodes.forEach(function(n) {
+                if (appInDeg[n.id] === 0) {
+                    queue.push({ node: n, level: 0 });
+                    visited[n.id] = true;
+                }
+            });
+            // If no root found, start from first
+            if (queue.length === 0 && appNodes.length > 0) {
+                queue.push({ node: appNodes[0], level: 0 });
+                visited[appNodes[0].id] = true;
+            }
+            while (queue.length > 0) {
+                var item = queue.shift();
+                var lvl = item.level;
+                if (!appLayers[lvl]) appLayers[lvl] = [];
+                appLayers[lvl].push(item.node);
+                item.node._layer = maxDeviceLayer + 1 + lvl;
+                (appAdj[item.node.id] || []).forEach(function(nid) {
+                    if (!visited[nid]) {
+                        visited[nid] = true;
+                        var nb = nodeData.find(function(n) { return n.id === nid; });
+                        if (nb) queue.push({ node: nb, level: lvl + 1 });
+                    }
+                });
+            }
+            // Handle disconnected apps
+            appNodes.forEach(function(n) {
+                if (!visited[n.id]) {
+                    var maxAppLayer = Object.keys(appLayers).length;
+                    if (!appLayers[maxAppLayer]) appLayers[maxAppLayer] = [];
+                    appLayers[maxAppLayer].push(n);
+                    n._layer = maxDeviceLayer + 1 + maxAppLayer;
+                }
+            });
+
+            // Merge layers: devices first, then apps
+            layers = {};
+            Object.keys(deviceLayers).forEach(function(k) {
+                layers[k] = deviceLayers[k];
+            });
+            Object.keys(appLayers).forEach(function(k) {
+                var newKey = maxDeviceLayer + 1 + parseInt(k);
+                layers[newKey] = appLayers[k];
+            });
+
+        } else if (hasApps && !hasDevices) {
+            // App-only: use BFS on dependency edges
+            var depEdges2 = edgeData.filter(function(e) { return e.edge_type === 'dependency'; });
+            layers = computeLayers(nodeData, depEdges2);
+
+        } else if (self.state.customHierarchy && Object.keys(self.state.customHierarchy).length > 0) {
             layers = {};
             nodeData.forEach(function(n) {
                 var l = self.state.customHierarchy[n.role_slug];
@@ -368,7 +458,8 @@
 
         // Compute port Y positions (relative to card top)
         function portRelY(nd, portIdx) {
-            return HEADER_H + portIdx * (PORT_H + PORT_GAP) + PORT_H / 2;
+            var startY = nd._appInfoH ? HEADER_H + nd._appInfoH : HEADER_H;
+            return startY + portIdx * (PORT_H + PORT_GAP) + PORT_H / 2;
         }
 
         // Port position: cable attaches at port container edge (flush with card)
@@ -453,12 +544,27 @@
             });
         }
 
+        // Edge position for portless nodes (apps) — attaches at card edge midpoint
+        function getNodeEdgePos(nd, otherNd) {
+            if (!nd) return null;
+            var side = 'right';
+            if (otherNd && otherNd.x < nd.x) side = 'left';
+            return {
+                x: side === 'right' ? nd.x + CARD_W : nd.x,
+                y: nd.y + (nd._cardH || 60) / 2,
+                side: side,
+            };
+        }
+
         // Cable path generator
         function cablePath(d) {
             var srcNode = typeof d.source === 'object' ? d.source : nodeById[d.source];
             var tgtNode = typeof d.target === 'object' ? d.target : nodeById[d.target];
             var sp = getPortPos(d.source_port, typeof d.target === 'object' ? d.target.id : d.target);
             var tp = getPortPos(d.target_port, typeof d.source === 'object' ? d.source.id : d.source);
+            // Fallback for portless nodes (apps): use card edge midpoint
+            if (!sp) sp = getNodeEdgePos(srcNode, tgtNode);
+            if (!tp) tp = getNodeEdgePos(tgtNode, srcNode);
             if (!sp || !tp) {
                 if (!srcNode || !tgtNode) return '';
                 return 'M' + (srcNode.x + CARD_W/2) + ',' + (srcNode.y + (srcNode._cardH||40)/2)
@@ -551,7 +657,11 @@
                 return c;
             })
             .attr('stroke', function(d) { return getCableColor(d); })
-            .attr('stroke-width', function(d) { return d.edge_type === 'deployed_on' ? 1.5 : 2; })
+            .attr('stroke-width', function(d) {
+                if (d.edge_type === 'deployed_on') return 1.5;
+                if (d.directed) return 2.5;
+                return 2;
+            })
             .attr('stroke-dasharray', function(d) {
                 if (d.dependency_type === 'soft') return '8,4';
                 if (d.edge_type === 'deployed_on') return '3,6';
@@ -767,14 +877,37 @@
             }
         });
 
-        // Draw ports (device nodes only)
-        cards.filter(function(d) { return d.node_type !== 'application'; }).each(function(d) {
+        // Draw ports / service slots
+        cards.each(function(d) {
+            if (!d.ports || d.ports.length === 0) return;
             var g = d3.select(this);
-            (d.ports || []).forEach(function(p, i) {
-                var py = HEADER_H + i * (PORT_H + PORT_GAP);
+            var portStartY = d._appInfoH ? HEADER_H + d._appInfoH : HEADER_H;
+            var isApp = d.node_type === 'application';
+
+            // For app cards: draw section headers
+            if (isApp && d.outgoing_count > 0) {
+                g.append('text').attr('class', 'app-section-header')
+                    .attr('x', 10).attr('y', portStartY - 2)
+                    .attr('fill', '#00857D').attr('font-size', '7.5px')
+                    .attr('font-weight', '700').attr('letter-spacing', '0.5px')
+                    .text('DEPENDS ON');
+            }
+            if (isApp && d.incoming_count > 0) {
+                var incomingStartY = portStartY + d.outgoing_count * (PORT_H + PORT_GAP);
+                g.append('text').attr('class', 'app-section-header')
+                    .attr('x', 10).attr('y', incomingStartY - 2)
+                    .attr('fill', '#e67e22').attr('font-size', '7.5px')
+                    .attr('font-weight', '700').attr('letter-spacing', '0.5px')
+                    .text('NEEDED BY');
+            }
+
+            d.ports.forEach(function(p, i) {
+                var py = portStartY + i * (PORT_H + PORT_GAP);
                 var color = p.speed ? App.speedColor(p.speed) : '#556';
                 if (p.port_class === 'front-port') color = '#ff9800';
                 if (p.port_class === 'rear-port') color = '#795548';
+                if (p.port_class === 'dep-outgoing') color = '#00857D';
+                if (p.port_class === 'dep-incoming') color = '#e67e22';
 
                 var pg = g.append('g').attr('class', 'port-container');
 

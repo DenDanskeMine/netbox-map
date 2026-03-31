@@ -1405,32 +1405,73 @@ class AppTopologyDataView(LoginRequiredMixin, View):
             target_application_id__in=app_ids,
         ).select_related('source_application', 'target_application')
 
+        # Build "service ports" on each app from its dependencies
+        # Split into DEPENDS ON (outgoing) and NEEDED BY (incoming) sections
+        app_ports = {}  # app_pk -> [port_dicts]
+        for app_pk in app_ids:
+            app_ports[app_pk] = []
+
         edges = []
         for dep in deps:
             crit = dep.source_application.criticality
             crit_color = self.CRITICALITY_COLORS.get(crit, '#6c757d')
 
-            label_parts = []
-            if dep.protocol:
-                label_parts.append(dep.get_protocol_display())
-            if dep.port:
-                label_parts.append(f':{dep.port}')
+            proto_display = dep.get_protocol_display() if dep.protocol else ''
+            port_str = f':{dep.port}' if dep.port else ''
+            label = f'{proto_display}{port_str}' if proto_display else ''
+
+            # Port on SOURCE app (outgoing — "DEPENDS ON" section)
+            src_port_id = f'dep-out-{dep.pk}'
+            target_name = dep.target_application.name
+            app_ports[dep.source_application_id].append({
+                'id': src_port_id,
+                'name': target_name,
+                'port_class': 'dep-outgoing',
+                'type': label,
+                'speed': None,
+                'cabled': True,
+            })
+
+            # Port on TARGET app (incoming — "NEEDED BY" section)
+            tgt_port_id = f'dep-in-{dep.pk}'
+            source_name = dep.source_application.name
+            app_ports[dep.target_application_id].append({
+                'id': tgt_port_id,
+                'name': source_name,
+                'port_class': 'dep-incoming',
+                'type': label,
+                'speed': None,
+                'cabled': True,
+            })
 
             edges.append({
                 'id': f'dep-{dep.pk}',
                 'edge_type': 'dependency',
                 'source': f'app-{dep.source_application_id}',
                 'target': f'app-{dep.target_application_id}',
+                'source_port': src_port_id,
+                'target_port': tgt_port_id,
+                'source_port_name': target_name,
+                'target_port_name': source_name,
                 'directed': True,
                 'dependency_type': dep.dependency_type,
-                'protocol': dep.get_protocol_display() if dep.protocol else '',
-                'port': dep.port,
                 'color': crit_color,
-                'label': ' '.join(label_parts) if label_parts else '',
+                'cable_type': label,
+                'cable_label': f'#{dep.pk} {label}',
+                'cable_id': f'd{dep.pk}',
                 'status': dep.get_status_display(),
                 'status_value': dep.status,
-                'description': dep.description,
             })
+
+        # Sort ports: DEPENDS ON first, then NEEDED BY, with section headers
+        for app_pk, ports in app_ports.items():
+            outgoing = [p for p in ports if p['port_class'] == 'dep-outgoing']
+            incoming = [p for p in ports if p['port_class'] == 'dep-incoming']
+            sorted_ports = outgoing + incoming
+            if app_pk in app_map:
+                app_map[app_pk]['ports'] = sorted_ports
+                app_map[app_pk]['outgoing_count'] = len(outgoing)
+                app_map[app_pk]['incoming_count'] = len(incoming)
 
         # Also include devices that apps are deployed on + deployed-on edges
         deployments = ApplicationDeployment.objects.filter(
