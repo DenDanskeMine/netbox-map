@@ -89,8 +89,11 @@
             html += '<div class="adp-info">' + esc(infoParts.join(' \u00B7 ')) + '</div>';
         }
 
-        // ── Open in NetBox ──
+        // ── Actions ──
+        html += '<div class="adp-actions">';
         html += '<a href="' + esc(node.url) + '" target="_blank" class="adp-link">Open in NetBox \u2197</a>';
+        html += '<button class="adp-sim-btn" id="adp-simulate-btn" data-node-id="' + esc(node.id) + '">Simulate failure</button>';
+        html += '</div>';
 
         // ── Dependencies (async) ──
         html += '<div id="topo-app-deps-section">'
@@ -98,6 +101,15 @@
             + '</div>';
 
         this.contentEl.innerHTML = html;
+
+        // Wire simulate button
+        var simBtn = document.getElementById('adp-simulate-btn');
+        if (simBtn) {
+            simBtn.addEventListener('click', function() {
+                var nid = this.getAttribute('data-node-id');
+                self.events.emit('app:simulate', nid);
+            });
+        }
 
         // Load dependency details from API
         var cacheKey = 'app-' + node.app_id;

@@ -122,6 +122,11 @@
         renderer.applyHiddenNodes(state.hiddenNodes);
     });
 
+    // Wire simulate failure from detail panel
+    events.on('app:simulate', function(nodeId) {
+        if (appRenderer) appRenderer.simulateFailure(nodeId);
+    });
+
     // ── Alert overlay for down/degraded services ──
     var alertsEl = document.getElementById('topo-alerts');
     events.on('data:loaded', function(data) {
@@ -151,6 +156,8 @@
         }
         html += '<button class="topo-alert-toggle" id="topo-alert-toggle">'
             + '<i class="mdi mdi-chevron-down"></i></button>';
+        html += '<button class="topo-alert-dismiss" id="topo-alert-dismiss">'
+            + '<i class="mdi mdi-close"></i></button>';
         html += '</div>';
 
         // Expandable list
@@ -183,6 +190,15 @@
             toggleBtn.addEventListener('click', function() {
                 var hidden = listEl.classList.toggle('d-none');
                 toggleBtn.querySelector('i').className = 'mdi mdi-chevron-' + (hidden ? 'down' : 'up');
+            });
+        }
+
+        // Dismiss button
+        var dismissBtn = document.getElementById('topo-alert-dismiss');
+        if (dismissBtn) {
+            dismissBtn.addEventListener('click', function() {
+                alertsEl.classList.add('d-none');
+                alertsEl.innerHTML = '';
             });
         }
 

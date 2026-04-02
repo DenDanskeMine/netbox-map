@@ -62,12 +62,13 @@ class DeviceApplicationPanel(PluginTemplateExtension):
         device_ct = ContentType.objects.get_for_model(device)
         from .models import ApplicationDeployment
         from django.urls import reverse
-        deployments = list(
+        all_deployments = list(
             ApplicationDeployment.objects
             .filter(host_type=device_ct, host_id=device.pk)
-            .select_related('application')[:5]
+            .select_related('application')[:6]  # fetch 6 to know if there are more than 5
         )
-        total = ApplicationDeployment.objects.filter(
+        deployments = all_deployments[:5]
+        total = len(all_deployments) if len(all_deployments) <= 5 else ApplicationDeployment.objects.filter(
             host_type=device_ct, host_id=device.pk,
         ).count()
         add_url = reverse('plugins:netbox_map:applicationdeployment_add')
@@ -90,12 +91,13 @@ class VMApplicationPanel(PluginTemplateExtension):
         vm_ct = ContentType.objects.get_for_model(vm)
         from .models import ApplicationDeployment
         from django.urls import reverse
-        deployments = list(
+        all_deployments = list(
             ApplicationDeployment.objects
             .filter(host_type=vm_ct, host_id=vm.pk)
-            .select_related('application')[:5]
+            .select_related('application')[:6]
         )
-        total = ApplicationDeployment.objects.filter(
+        deployments = all_deployments[:5]
+        total = len(all_deployments) if len(all_deployments) <= 5 else ApplicationDeployment.objects.filter(
             host_type=vm_ct, host_id=vm.pk,
         ).count()
         add_url = reverse('plugins:netbox_map:applicationdeployment_add')

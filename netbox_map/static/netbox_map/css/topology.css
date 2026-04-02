@@ -1578,15 +1578,34 @@ span.topo-iface-dot.empty {
 }
 
 /* NetBox link */
-.adp-link, .adp-link:hover, .adp-link:focus {
-    display: block;
+/* Actions row */
+.adp-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
     padding: 6px 14px;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+.adp-link, .adp-link:hover, .adp-link:focus {
     font-size: 10px;
     color: #4a6eaa;
     text-decoration: none;
-    border-bottom: 1px solid rgba(255,255,255,0.04);
 }
 .adp-link:hover { color: #6a8ecc; }
+.adp-sim-btn {
+    font-size: 10px;
+    color: #f85149;
+    background: none;
+    border: 1px solid rgba(248,81,73,0.2);
+    border-radius: 3px;
+    padding: 2px 8px;
+    cursor: pointer;
+    margin-left: auto;
+}
+.adp-sim-btn:hover {
+    background: rgba(248,81,73,0.1);
+    border-color: rgba(248,81,73,0.4);
+}
 
 /* Loading */
 .adp-loading {
@@ -1723,6 +1742,16 @@ span.topo-iface-dot.empty {
     line-height: 1;
 }
 .topo-alert-toggle:hover { color: #9ca3af; }
+.topo-alert-dismiss {
+    background: none;
+    border: none;
+    color: #4b5563;
+    cursor: pointer;
+    padding: 2px;
+    font-size: 12px;
+    line-height: 1;
+}
+.topo-alert-dismiss:hover { color: #9ca3af; }
 .topo-alert-list {
     border-top: 1px solid #1f2937;
     max-height: 180px;
@@ -1774,32 +1803,32 @@ span.topo-iface-dot.empty {
 .acard.dragging { opacity: 0.5; }
 .acard.acard-dim { opacity: 0.1; }
 .acard .acard-name { font-size: 13px; font-weight: 600; fill: #c9d1d9; }
-.acard .acard-sub { font-size: 9px; fill: #484f58; }
-.acard .acard-alert { font-size: 9px; font-weight: 500; fill: #f85149; }
+.acard .acard-sub { font-size: 10px; fill: #8b949e; }                /* P2-12: WCAG AA fix */
+.acard .acard-alert { font-size: 10px; font-weight: 500; fill: #f85149; }
 .acard .acard-sep { stroke: rgba(255,255,255,0.06); stroke-width: 0.5; }
-.acard .acard-footer { font-size: 8.5px; fill: #484f58; }
+.acard .acard-footer { font-size: 9px; fill: #484f58; cursor: default; }
 .acard:hover .acard-footer { fill: #8b949e; }
-.aport-row-bg { fill: rgba(255,255,255,0.02); }
+.aport-row-bg { fill: rgba(255,255,255,0.04); }                      /* P2-15: visible now */
 
 /* Port section headers */
 .aport-section-hdr {
-    font-size: 7px;
-    fill: #30363d;
+    font-size: 9px;                                                    /* P2-13: above browser min */
+    fill: #484f58;
     font-weight: 600;
     letter-spacing: 0.5px;
 }
-.acard:hover .aport-section-hdr { fill: #484f58; }
+.acard:hover .aport-section-hdr { fill: #8b949e; }
 
 /* Port labels + ticks */
-.aport-label { font-size: 9px; fill: #484f58; }
+.aport-label { font-size: 9px; fill: #6e7681; }
 .acard:hover .aport-label { fill: #8b949e; }
-.aport-tick { fill: #30363d; stroke: none; }
-.acard:hover .aport-tick { fill: #484f58; }
+.aport-tick { fill: #484f58; stroke: none; }                          /* P2-14: more visible */
+.acard:hover .aport-tick { fill: #8b949e; }
 
 /* Edges */
 .aedge { fill: none; pointer-events: stroke; stroke-linejoin: round; }
-.aedge-hard { stroke-width: 1; stroke-opacity: 0.4; }
-.aedge-soft { stroke-width: 1; stroke-opacity: 0.25; stroke-dasharray: 4,3; }
+.aedge-hard { stroke-width: 1.5; stroke-opacity: 0.45; }             /* P2-17: bolder */
+.aedge-soft { stroke-width: 1; stroke-opacity: 0.3; stroke-dasharray: 8,4; } /* P2-17: bolder dash */
 .aedge-dim { stroke-opacity: 0.03 !important; }
 .aedge-hi { stroke-opacity: 0.8 !important; stroke-width: 1.5 !important; }
 

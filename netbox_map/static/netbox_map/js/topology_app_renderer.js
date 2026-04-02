@@ -5,7 +5,7 @@
     'use strict';
 
     /* ── Constants ── */
-    var CARD_W    = 200;
+    var CARD_W    = 220;
     var CARD_R    = 5;
     var HEADER_H  = 36;     // name + subtitle area
     var PORT_H    = 16;     // height per port row
@@ -394,9 +394,17 @@
             attempts++;
         }
 
+        // Rounded corners at bends (radius 6px)
+        var r = 6;
+        var dySign = ty > sy ? 1 : -1;
+        var dxSign1 = candidateX > sx ? 1 : -1;
+        var dxSign2 = tx > candidateX ? 1 : -1;
+
         return 'M' + sx + ',' + sy
-             + ' L' + candidateX + ',' + sy
-             + ' L' + candidateX + ',' + ty
+             + ' L' + (candidateX - r * dxSign1) + ',' + sy
+             + ' Q' + candidateX + ',' + sy + ' ' + candidateX + ',' + (sy + r * dySign)
+             + ' L' + candidateX + ',' + (ty - r * dySign)
+             + ' Q' + candidateX + ',' + ty + ' ' + (candidateX + r * dxSign2) + ',' + ty
              + ' L' + tx + ',' + ty;
     };
 
@@ -434,14 +442,15 @@
 
             // Name (bold, left-aligned)
             var nameText = d.name || '';
-            if (nameText.length > 22) nameText = nameText.substring(0, 20) + '\u2026';
+            if (nameText.length > 26) nameText = nameText.substring(0, 24) + '\u2026';
             g.append('text').attr('class', 'acard-name')
                 .attr('x', 10).attr('y', 17).text(nameText);
 
             // Status dot
             var dotColor = hs === 'down' ? '#ef4444' : hs === 'degraded' ? '#f97316' : App.statusColor(d.status_value);
             g.append('circle').attr('cx', CARD_W - 10).attr('cy', 13)
-                .attr('r', 3).attr('fill', dotColor);
+                .attr('r', 4).attr('fill', dotColor)
+                .attr('stroke', dotColor).attr('stroke-width', 1).attr('stroke-opacity', 0.3);
 
             // Subtitle line
             var subText;
@@ -506,7 +515,7 @@
                     .attr('text-anchor', 'end')
                     .text(function() {
                         var t = p.name || '';
-                        return t.length > 16 ? t.substring(0, 14) + '..' : t;
+                        return t.length > 20 ? t.substring(0, 18) + '..' : t;
                     });
                 g.append('circle').attr('class', 'aport-tick')
                     .attr('cx', CARD_W).attr('cy', p._y).attr('r', 2);
@@ -518,7 +527,7 @@
                     .attr('x', 6).attr('y', p._y + 3)
                     .text(function() {
                         var t = p.name || '';
-                        return t.length > 16 ? t.substring(0, 14) + '..' : t;
+                        return t.length > 20 ? t.substring(0, 18) + '..' : t;
                     });
                 g.append('circle').attr('class', 'aport-tick')
                     .attr('cx', 0).attr('cy', p._y).attr('r', 2);
@@ -593,18 +602,26 @@
                 self._lines.classed('aedge-dim', false).classed('aedge-hi', false);
             });
 
-        // Drag — matches network map: raw accumulation + snap + shift support
+        // Drag — with 3px threshold to avoid accidental repositioning
         this._cards.call(d3.drag()
             .on('start', function(ev, d) {
-                d3.select(this).raise().classed('dragging', true);
                 d._rawX = d.x;
                 d._rawY = d.y;
                 d._dragStartX = d.x;
                 d._dragStartY = d.y;
+                d._dragActive = false;
             })
             .on('drag', function(ev, d) {
                 d._rawX += ev.dx;
                 d._rawY += ev.dy;
+
+                // 3px threshold before activating drag
+                if (!d._dragActive) {
+                    var dist = Math.abs(d._rawX - d._dragStartX) + Math.abs(d._rawY - d._dragStartY);
+                    if (dist < 3) return;
+                    d._dragActive = true;
+                    d3.select(this).raise().classed('dragging', true);
+                }
 
                 if (self.state.snapToGrid || ev.sourceEvent.shiftKey) {
                     var gs = self.state.gridSize || 20;
@@ -626,10 +643,11 @@
             })
             .on('end', function(ev, d) {
                 d3.select(this).classed('dragging', false);
-                // Reassign port sides after drag (card may have changed position relative to neighbors)
-                self._assignPortSides(edges);
-                // Rebuild card internals would be too expensive — just redraw edges
-                self._lines.attr('d', function(e) { return self._orthoPath(e); });
+                if (d._dragActive) {
+                    // Reassign port sides after drag
+                    self._assignPortSides(edges);
+                    self._lines.attr('d', function(e) { return self._orthoPath(e); });
+                }
             })
         );
 
@@ -693,6 +711,51 @@
         this.base.svg.on('click.app', function() {
             self._cards.classed('selected', false);
             self.events.emit('node:deselect');
+        });
+
+        // P3-20: Invisible wider hit area for edges
+        var hitLayer = this.base.g.select('.edge-layer');
+        hitLayer.selectAll('.aedge-hit')
+            .data(edges).enter().append('path')
+            .attr('class', 'aedge-hit')
+            .attr('d', function(d) { return self._orthoPath(d); })
+            .attr('fill', 'none')
+            .attr('stroke', 'transparent')
+            .attr('stroke-width', 12)
+            .attr('pointer-events', 'stroke')
+            .on('mouseenter', function(ev, d) {
+                self._lines.classed('aedge-dim', true);
+                self._lines.filter(function(e) { return e === d; })
+                    .classed('aedge-dim', false).classed('aedge-hi', true);
+            })
+            .on('mouseleave', function() {
+                self._lines.classed('aedge-dim', false).classed('aedge-hi', false);
+            });
+
+        // P3-19: Keyboard navigation
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                // Clear simulation if active
+                if (self._simulationActive) {
+                    self.clearSimulation();
+                    return;
+                }
+                // Dismiss context menu
+                d3.selectAll('.topo-context-menu').remove();
+                // Deselect
+                self._cards.classed('selected', false);
+                self.events.emit('node:deselect');
+            }
+            // Tab cycles through nodes
+            if (e.key === 'Tab' && self._nodes && self._nodes.length > 0) {
+                e.preventDefault();
+                var current = self.state.selectedNode;
+                var idx = current ? self._nodes.indexOf(current) : -1;
+                var next = e.shiftKey
+                    ? (idx <= 0 ? self._nodes.length - 1 : idx - 1)
+                    : (idx + 1) % self._nodes.length;
+                self.focusNode(self._nodes[next].id);
+            }
         });
     };
 
