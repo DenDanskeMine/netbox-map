@@ -122,6 +122,79 @@
         renderer.applyHiddenNodes(state.hiddenNodes);
     });
 
+    // ── Alert overlay for down/degraded services ──
+    var alertsEl = document.getElementById('topo-alerts');
+    events.on('data:loaded', function(data) {
+        if (!alertsEl) return;
+        var nodes = data.nodes || [];
+        var down = [], degraded = [];
+        nodes.forEach(function(n) {
+            if (n.node_type !== 'application') return;
+            var hs = n.host_status || 'healthy';
+            if (hs === 'down') down.push(n);
+            else if (hs === 'degraded') degraded.push(n);
+        });
+
+        if (down.length === 0 && degraded.length === 0) {
+            alertsEl.classList.add('d-none');
+            alertsEl.innerHTML = '';
+            return;
+        }
+
+        var html = '<div class="topo-alert-bar">';
+        html += '<div class="topo-alert-summary">';
+        if (down.length > 0) {
+            html += '<span class="topo-alert-count alert-down">' + down.length + ' down</span>';
+        }
+        if (degraded.length > 0) {
+            html += '<span class="topo-alert-count alert-degraded">' + degraded.length + ' degraded</span>';
+        }
+        html += '<button class="topo-alert-toggle" id="topo-alert-toggle">'
+            + '<i class="mdi mdi-chevron-down"></i></button>';
+        html += '</div>';
+
+        // Expandable list
+        html += '<div class="topo-alert-list d-none" id="topo-alert-list">';
+        down.forEach(function(n) {
+            var reasons = (n.host_down_reasons || []).join(', ');
+            html += '<div class="topo-alert-item alert-down" data-node-id="' + App.escapeHtml(n.id) + '">'
+                + '<span class="topo-alert-dot" style="background:#e74c3c;"></span>'
+                + '<span class="topo-alert-name">' + App.escapeHtml(n.name) + '</span>'
+                + '<span class="topo-alert-reason">' + App.escapeHtml(reasons) + '</span>'
+                + '</div>';
+        });
+        degraded.forEach(function(n) {
+            var reasons = (n.host_down_reasons || []).join(', ');
+            html += '<div class="topo-alert-item alert-degraded" data-node-id="' + App.escapeHtml(n.id) + '">'
+                + '<span class="topo-alert-dot" style="background:#e67e22;"></span>'
+                + '<span class="topo-alert-name">' + App.escapeHtml(n.name) + '</span>'
+                + '<span class="topo-alert-reason">' + App.escapeHtml(reasons) + '</span>'
+                + '</div>';
+        });
+        html += '</div></div>';
+
+        alertsEl.innerHTML = html;
+        alertsEl.classList.remove('d-none');
+
+        // Toggle expand/collapse
+        var toggleBtn = document.getElementById('topo-alert-toggle');
+        var listEl = document.getElementById('topo-alert-list');
+        if (toggleBtn && listEl) {
+            toggleBtn.addEventListener('click', function() {
+                var hidden = listEl.classList.toggle('d-none');
+                toggleBtn.querySelector('i').className = 'mdi mdi-chevron-' + (hidden ? 'down' : 'up');
+            });
+        }
+
+        // Click item → focus on map
+        alertsEl.querySelectorAll('.topo-alert-item').forEach(function(el) {
+            el.addEventListener('click', function() {
+                var nodeId = this.getAttribute('data-node-id');
+                events.emit('renderer:highlight', nodeId);
+            });
+        });
+    });
+
     // Load topology data
     function loadTopology() {
         var hasFilters = Object.keys(state.initialFilters).length > 0;

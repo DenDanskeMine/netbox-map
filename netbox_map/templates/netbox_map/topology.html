@@ -162,6 +162,7 @@
      data-app-detail-url="{% url 'plugins:netbox_map:topology_app_detail' app_id=0 %}">
   <div class="topology-graph-area">
     <svg id="topology-svg"></svg>
+    <div id="topo-alerts" class="topo-alerts d-none"></div>
     <div id="topology-loading" class="topology-overlay d-none">
       <div class="spinner-border text-primary" role="status"></div>
       <span class="ms-2">{% trans "Loading topology..." %}</span>

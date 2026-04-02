@@ -58,6 +58,12 @@
     };
 
     Sidebar.prototype.build = function() {
+        // Update search placeholder for mode
+        if (this.searchInput) {
+            this.searchInput.placeholder = this.state.topologyMode === 'apps'
+                ? 'Search applications...'
+                : 'Search devices...';
+        }
         this._buildRoleToggles();
         this._renderDeviceList();
     };
@@ -194,21 +200,36 @@
 
         var html = '';
         if (isAppMode) {
+            // Filter: only show application nodes (no devices)
+            filtered = filtered.filter(function(n) { return n.node_type === 'application'; });
+
             filtered.forEach(function(n) {
                 var selected = self.state.selectedNode && self.state.selectedNode.id === n.id ? ' selected' : '';
                 var isHidden = self.state.hiddenNodes.has(n.id);
-                var dotColor = n.criticality_color || n.category_color || '#6c757d';
+                var hs = n.host_status || 'healthy';
+                var statusColor = hs === 'down' ? '#e74c3c' : hs === 'degraded' ? '#e67e22' : App.statusColor(n.status_value);
+                var critColor = n.criticality_color || '#6c757d';
+
                 html += '<div class="topo-device-item' + selected + (isHidden ? ' hidden-node' : '') + '" data-node-id="' + App.escapeHtml(n.id) + '">'
-                    + '<span class="role-dot" style="background:' + App.escapeHtml(dotColor) + ';' + (isHidden ? 'opacity:0.3;' : '') + '"></span>'
+                    + '<span class="role-dot" style="background:' + App.escapeHtml(statusColor) + ';' + (isHidden ? 'opacity:0.3;' : '') + '"></span>'
                     + '<div class="device-info">'
                     + '<div class="device-name">' + App.escapeHtml(n.name) + '</div>'
-                    + '<div class="device-meta">' + App.escapeHtml(n.environment || '');
+                    + '<div class="device-meta">'
+                    + App.escapeHtml(n.environment || '');
                 if (n.group) html += ' &middot; ' + App.escapeHtml(n.group);
-                html += '</div></div>'
-                    + '<span class="device-ports" style="font-size:9px;text-transform:uppercase;color:' + App.escapeHtml(dotColor) + ';">' + App.escapeHtml(n.criticality || '') + '</span>'
-                    + '<button class="topo-hide-btn" data-hide-id="' + App.escapeHtml(n.id) + '" title="' + (isHidden ? 'Show' : 'Hide') + '">'
-                    + '<i class="mdi mdi-eye' + (isHidden ? '-off' : '') + '"></i>'
-                    + '</button>'
+                html += '</div></div>';
+
+                // Right side: criticality + host count
+                html += '<div class="app-item-right">';
+                html += '<span class="app-crit" style="color:' + App.escapeHtml(critColor) + ';">'
+                    + App.escapeHtml((n.criticality || '').toUpperCase()) + '</span>';
+                if (n.deploy_count > 0) {
+                    html += '<span class="app-hosts">' + n.deploy_count + '</span>';
+                }
+                html += '</div>';
+
+                html += '<button class="topo-hide-btn" data-hide-id="' + App.escapeHtml(n.id) + '" title="' + (isHidden ? 'Show' : 'Hide') + '">'
+                    + '<i class="mdi mdi-eye' + (isHidden ? '-off' : '') + '"></i></button>'
                     + '</div>';
             });
         } else {

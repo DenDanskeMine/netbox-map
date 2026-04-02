@@ -1233,14 +1233,16 @@ class ApplicationBulkDeleteView(generic.BulkDeleteView):
 # Application Bulk Deploy
 #
 
-class ApplicationBulkDeployView(LoginRequiredMixin, View):
+class ApplicationBulkDeployView(LoginRequiredMixin, PermissionRequiredMixin, View):
     """Deploy an application to multiple devices/VMs at once."""
+    permission_required = 'netbox_map.add_applicationdeployment'
 
-    def _get_application(self, pk):
-        return Application.objects.get(pk=pk)
+    def _get_application(self, request, pk):
+        from django.shortcuts import get_object_or_404
+        return get_object_or_404(Application.objects.restrict(request.user, 'view'), pk=pk)
 
     def get(self, request, pk):
-        application = self._get_application(pk)
+        application = self._get_application(request, pk)
         form = forms.ApplicationBulkDeployForm()
         return render(request, 'netbox_map/application_bulk_deploy.html', {
             'object': application,
@@ -1267,7 +1269,7 @@ class ApplicationBulkDeployView(LoginRequiredMixin, View):
         return app
 
     def post(self, request, pk):
-        application = self._get_application(pk)
+        application = self._get_application(request, pk)
         form = forms.ApplicationBulkDeployForm(request.POST)
 
         if form.is_valid():
@@ -1658,7 +1660,7 @@ class AppTopologyDataView(LoginRequiredMixin, View):
                     if not down_primary_names and not down_failover_names:
                         continue  # all hosts up
 
-                    all_primaries_down = len(down_primary_names) == len(primaries) if primaries else False
+                    all_primaries_down = len(down_primary_names) == len(primaries) if primaries else True
                     all_failovers_down = len(down_failover_names) == len(failovers) if failovers else True
                     has_live_failover = failovers and not all_failovers_down
 
@@ -1688,18 +1690,24 @@ class AppTopologyDataView(LoginRequiredMixin, View):
                         (d.source_application_id, d.dependency_type)
                     )
 
-                # BFS from all directly-affected apps
-                queue = [
-                    pk for pk, node in app_map.items()
-                    if node.get('host_status') in ('down', 'degraded')
-                ]
-                visited = set(queue)
-                while queue:
-                    current_pk = queue.pop(0)
+                # BFS cascade with cycle safety and status escalation
+                from collections import deque
+                queue = deque()
+                for pk_seed, node_seed in app_map.items():
+                    if node_seed.get('host_status') in ('down', 'degraded'):
+                        queue.append(pk_seed)
+
+                max_iterations = len(app_map) * 3  # cycle safety
+                iterations = 0
+                while queue and iterations < max_iterations:
+                    iterations += 1
+                    current_pk = queue.popleft()
                     current_node = app_map.get(current_pk)
                     if not current_node:
                         continue
                     current_status = current_node.get('host_status', 'healthy')
+                    if current_status == 'healthy':
+                        continue
                     reason = current_node['name']
 
                     for dependent_pk, dep_type in reverse_deps.get(current_pk, []):
@@ -1708,29 +1716,30 @@ class AppTopologyDataView(LoginRequiredMixin, View):
                             continue
 
                         # Determine propagated status
-                        if current_status == 'down' and dep_type == 'hard':
-                            new_status = 'down'
-                        else:
-                            new_status = 'degraded'
+                        new_status = 'down' if (current_status == 'down' and dep_type == 'hard') else 'degraded'
 
                         existing = dep_node.get('host_status', 'healthy')
+                        escalated = False
+
                         # Only escalate, never downgrade
                         if existing == 'down':
                             pass  # already worst
                         elif new_status == 'down':
                             dep_node['host_status'] = 'down'
                             dep_node['host_down'] = True
-                        elif existing != 'degraded':
+                            escalated = True
+                        elif existing == 'healthy':
                             dep_node['host_status'] = 'degraded'
                             dep_node['host_down'] = False
+                            escalated = True
 
                         if 'host_down_reasons' not in dep_node:
                             dep_node['host_down_reasons'] = []
                         if reason not in dep_node['host_down_reasons']:
                             dep_node['host_down_reasons'].append(reason)
 
-                        if dependent_pk not in visited:
-                            visited.add(dependent_pk)
+                        # Re-enqueue if status was escalated (handles cycles correctly)
+                        if escalated:
                             queue.append(dependent_pk)
 
         # Add deployed-on edges
@@ -1747,10 +1756,19 @@ class AppTopologyDataView(LoginRequiredMixin, View):
                     'cable_type': f'{dep.get_role_display()} :{dep.port}' if dep.port else dep.get_role_display(),
                 })
 
+        # Count affected apps (no DB writes in GET — notifications handled separately)
+        down_apps = [n for n in nodes if n.get('node_type') == 'application' and n.get('host_status') == 'down']
+        degraded_apps = [n for n in nodes if n.get('node_type') == 'application' and n.get('host_status') == 'degraded']
+
         return JsonResponse({
             'nodes': nodes,
             'edges': edges,
-            'stats': {'node_count': len(nodes), 'edge_count': len(edges)},
+            'stats': {
+                'node_count': len(nodes),
+                'edge_count': len(edges),
+                'down_count': len(down_apps),
+                'degraded_count': len(degraded_apps),
+            },
         })
 
 
@@ -1793,15 +1811,35 @@ class AppTopologyDetailView(LoginRequiredMixin, View):
                 'status': dep.get_status_display(),
             })
 
-        # Deployments
-        deployments = []
-        for deploy in ApplicationDeployment.objects.filter(
+        # Deployments — batch-fetch hosts to avoid N+1
+        deploy_qs = list(ApplicationDeployment.objects.filter(
             application=app,
-        ).select_related('host_type'):
-            host_obj = deploy.host
-            host_status = 'unknown'
-            if host_obj and hasattr(host_obj, 'status'):
-                host_status = host_obj.status
+        ).select_related('host_type'))
+
+        # Group by content type, batch-fetch host objects
+        device_ct = ContentType.objects.get_for_model(Device)
+        device_deploy_ids = [d.host_id for d in deploy_qs if d.host_type_id == device_ct.pk]
+        device_map = {}
+        if device_deploy_ids:
+            device_map = Device.objects.in_bulk(device_deploy_ids)
+
+        vm_map = {}
+        try:
+            from virtualization.models import VirtualMachine
+            vm_ct = ContentType.objects.get_for_model(VirtualMachine)
+            vm_deploy_ids = [d.host_id for d in deploy_qs if d.host_type_id == vm_ct.pk]
+            if vm_deploy_ids:
+                vm_map = VirtualMachine.objects.in_bulk(vm_deploy_ids)
+        except ImportError:
+            pass
+
+        deployments = []
+        for deploy in deploy_qs:
+            if deploy.host_type_id == device_ct.pk:
+                host_obj = device_map.get(deploy.host_id)
+            else:
+                host_obj = vm_map.get(deploy.host_id)
+            host_status = host_obj.status if host_obj and hasattr(host_obj, 'status') else 'unknown'
             deployments.append({
                 'id': deploy.pk,
                 'host_name': str(host_obj) if host_obj else 'Unknown',

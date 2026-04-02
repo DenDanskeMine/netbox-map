@@ -80,8 +80,13 @@
         var svg = this.base.svg, zoom = this.base.zoom;
         var w = svg.node().clientWidth  || 900;
         var h = svg.node().clientHeight || 600;
+        // Preserve current zoom level (minimum 1x)
+        var currentTransform = d3.zoomTransform(svg.node());
+        var scale = Math.max(currentTransform.k, 1);
+        var cx = n.x + CARD_W / 2;
+        var cy = n.y + (n._h || 44) / 2;
         svg.transition().duration(350).call(zoom.transform,
-            d3.zoomIdentity.translate(w / 2 - (n.x + CARD_W / 2), h / 2 - (n.y + n._h / 2)).scale(1)
+            d3.zoomIdentity.translate(w / 2 - cx * scale, h / 2 - cy * scale).scale(scale)
         );
         this._select(n);
     };
@@ -152,13 +157,17 @@
         });
 
         // Assign Y positions per side + recompute card height
-        var portTopY = HEADER_H + PORT_PAD;
+        var SECTION_HDR_H = 12;  // space for "DEPENDS ON" / "NEEDED BY" label
+        var portTopY = HEADER_H + SECTION_HDR_H + PORT_PAD;
         this._nodes.forEach(function(n) {
-            n._portsL.forEach(function(p, i) { p._y = portTopY + i * (PORT_H + PORT_GAP) + PORT_H / 2; });
-            n._portsR.forEach(function(p, i) { p._y = portTopY + i * (PORT_H + PORT_GAP) + PORT_H / 2; });
+            var hasPorts = n._portsL.length > 0 || n._portsR.length > 0;
+            var top = hasPorts ? portTopY : HEADER_H + PORT_PAD;
+            n._portsL.forEach(function(p, i) { p._y = top + i * (PORT_H + PORT_GAP) + PORT_H / 2; });
+            n._portsR.forEach(function(p, i) { p._y = top + i * (PORT_H + PORT_GAP) + PORT_H / 2; });
             var maxPorts = Math.max(n._portsL.length, n._portsR.length);
-            var blockH = maxPorts > 0 ? PORT_PAD + maxPorts * (PORT_H + PORT_GAP) + PORT_PAD : 0;
-            n._h = Math.max(44, HEADER_H + blockH);
+            var blockH = maxPorts > 0 ? SECTION_HDR_H + PORT_PAD + maxPorts * (PORT_H + PORT_GAP) + PORT_PAD : 0;
+            var footerH = (n.deploy_count > 0) ? 20 : 4;
+            n._h = Math.max(44, HEADER_H + blockH + footerH);
             n._cardH = n._h;
         });
     };
@@ -238,9 +247,9 @@
         if (!this._arrowCache[id]) {
             this._arrowCache[id] = true;
             this._defs.append('marker').attr('id', id)
-                .attr('viewBox', '0 -4 8 8').attr('refX', 8).attr('refY', 0)
-                .attr('markerWidth', 7).attr('markerHeight', 7).attr('orient', 'auto')
-                .append('path').attr('d', 'M0,-3L8,0L0,3Z')
+                .attr('viewBox', '0 -3 5 6').attr('refX', 5).attr('refY', 0)
+                .attr('markerWidth', 5).attr('markerHeight', 5).attr('orient', 'auto')
+                .append('path').attr('d', 'M0,-2L5,0L0,2Z')
                 .attr('fill', '#' + hex);
         }
         return 'url(#' + id + ')';
@@ -252,11 +261,11 @@
         if (!this._arrowCache[id]) {
             this._arrowCache[id] = true;
             this._defs.append('marker').attr('id', id)
-                .attr('viewBox', '0 -4 8 8').attr('refX', 8).attr('refY', 0)
-                .attr('markerWidth', 7).attr('markerHeight', 7).attr('orient', 'auto')
-                .append('path').attr('d', 'M0,-3L8,0L0,3')
+                .attr('viewBox', '0 -3 5 6').attr('refX', 5).attr('refY', 0)
+                .attr('markerWidth', 5).attr('markerHeight', 5).attr('orient', 'auto')
+                .append('path').attr('d', 'M0,-2L5,0L0,2')
                 .attr('fill', 'none').attr('stroke', '#' + hex)
-                .attr('stroke-width', 1.2).attr('stroke-linejoin', 'round');
+                .attr('stroke-width', 1).attr('stroke-linejoin', 'round');
         }
         return 'url(#' + id + ')';
     };
@@ -347,37 +356,42 @@
             chOff = (d._chIdx - (d._chTotal - 1) / 2) * 8;
         }
 
-        // Find a midX that doesn't intersect any card
+        // Find a midX that doesn't intersect any card (checks vertical AND horizontal segments)
         var candidateX = (sx + tx) / 2 + chOff;
-        var minY = Math.min(sy, ty) - 4;
-        var maxY = Math.max(sy, ty) + 4;
-        var margin = 12;
-
-        // Check if any card body overlaps the vertical segment
+        var margin = 10;
         var self = this;
-        var blocked = true;
-        var attempts = 0;
-        while (blocked && attempts < 8) {
-            blocked = false;
-            self._nodes.forEach(function(n) {
-                if (n.id === srcId || n.id === tgtId) return;
-                // Does this card's X range contain candidateX?
-                if (candidateX > n.x - margin && candidateX < n.x + CARD_W + margin) {
-                    // Does the vertical segment Y range overlap the card?
-                    if (maxY > n.y - margin && minY < n.y + n._h + margin) {
-                        blocked = true;
-                    }
-                }
-            });
-            if (blocked) {
-                // Shift toward the exit side
-                if (exitRight) {
-                    candidateX = sx + 20 + attempts * 12;
-                } else {
-                    candidateX = sx - 20 - attempts * 12;
-                }
-                attempts++;
+
+        function isBlocked(mx) {
+            var minY = Math.min(sy, ty);
+            var maxY = Math.max(sy, ty);
+            for (var i = 0; i < self._nodes.length; i++) {
+                var n = self._nodes[i];
+                if (n.id === srcId || n.id === tgtId) continue;
+                var nl = n.x - margin, nr = n.x + CARD_W + margin;
+                var nt = n.y - margin, nb = n.y + n._h + margin;
+
+                // Vertical segment: x=mx, from minY to maxY
+                if (mx > nl && mx < nr && maxY > nt && minY < nb) return true;
+
+                // Horizontal segment from sx to mx at y=sy
+                var hMinX = Math.min(sx, mx), hMaxX = Math.max(sx, mx);
+                if (sy > nt && sy < nb && hMaxX > nl && hMinX < nr) return true;
+
+                // Horizontal segment from mx to tx at y=ty
+                var hMinX2 = Math.min(mx, tx), hMaxX2 = Math.max(mx, tx);
+                if (ty > nt && ty < nb && hMaxX2 > nl && hMinX2 < nr) return true;
             }
+            return false;
+        }
+
+        var attempts = 0;
+        while (isBlocked(candidateX) && attempts < 12) {
+            if (exitRight) {
+                candidateX = sx + 16 + attempts * 14;
+            } else {
+                candidateX = sx - 16 - attempts * 14;
+            }
+            attempts++;
         }
 
         return 'M' + sx + ',' + sy
@@ -407,122 +421,124 @@
 
         this._cards = cards;
 
-        // Shadow
-        cards.append('rect').attr('class', 'acard-shadow')
-            .attr('x', 1).attr('y', 1)
-            .attr('width', CARD_W).attr('height', function(d) { return d._h; })
-            .attr('rx', CARD_R);
-
-        // Background
+        // Background rect
         cards.append('rect').attr('class', 'acard-bg')
             .attr('width', CARD_W).attr('height', function(d) { return d._h; })
             .attr('rx', CARD_R);
 
-        // Left accent bar (criticality color)
-        cards.append('rect').attr('class', 'acard-accent')
-            .attr('y', CARD_R).attr('width', ACCENT_W)
-            .attr('height', function(d) { return d._h - CARD_R * 2; })
-            .attr('fill', function(d) { return d.criticality_color || d.role_color || '#6c757d'; });
-
-        // Name (single line, bold)
-        cards.append('text').attr('class', 'acard-name')
-            .attr('x', ACCENT_W + 8).attr('y', 16)
-            .each(function(d) {
-                var t = d.name || '';
-                if (t.length > 24) t = t.substring(0, 22) + '\u2026';
-                d3.select(this).text(t);
-            });
-
-        // Status indicator: down=⚠red, degraded=●orange, healthy=●green
-        cards.each(function(d) {
-            var hs = d.host_status || 'healthy';
-            if (hs === 'down') {
-                d3.select(this).append('text').attr('class', 'acard-warn')
-                    .attr('x', CARD_W - 14).attr('y', 17).text('\u26A0');
-            } else if (hs === 'degraded') {
-                d3.select(this).append('circle').attr('class', 'acard-status')
-                    .attr('cx', CARD_W - 12).attr('cy', 13).attr('r', STATUS_R)
-                    .attr('fill', '#e67e22');
-            } else {
-                d3.select(this).append('circle').attr('class', 'acard-status')
-                    .attr('cx', CARD_W - 12).attr('cy', 13).attr('r', STATUS_R)
-                    .attr('fill', App.statusColor(d.status_value));
-            }
-        });
-
-        // Subtitle: host issue reason OR group · env
-        cards.append('text')
-            .attr('class', function(d) {
-                var hs = d.host_status || 'healthy';
-                return (hs === 'down' || hs === 'degraded') ? 'acard-alert' : 'acard-sub';
-            })
-            .attr('x', ACCENT_W + 8).attr('y', 30)
-            .each(function(d) {
-                var hs = d.host_status || 'healthy';
-                var t;
-                if (hs !== 'healthy' && d.host_down_reasons) {
-                    var prefix = hs === 'degraded' ? 'degraded: ' : '';
-                    var r = d.host_down_reasons;
-                    t = prefix + (r.length === 1 ? r[0] + ' down' : r.length + ' hosts down');
-                } else {
-                    t = [d.group, d.environment].filter(Boolean).join(' \u00B7 ');
-                }
-                if (t.length > 30) t = t.substring(0, 28) + '\u2026';
-                d3.select(this).text(t);
-            });
-
-        // Separator between header and ports
-        // Separator (only if card has ports)
-        cards.filter(function(d) {
-            return d._portsL.length > 0 || d._portsR.length > 0;
-        }).append('line').attr('class', 'acard-sep')
-            .attr('x1', ACCENT_W).attr('x2', CARD_W)
-            .attr('y1', HEADER_H).attr('y2', HEADER_H);
-
-        // Port labels + dots on correct sides
+        // ── Card internals ──
         cards.each(function(d) {
             var g = d3.select(this);
+            var hs = d.host_status || 'healthy';
+            var hasPorts = d._portsL.length > 0 || d._portsR.length > 0;
 
+            // Name (bold, left-aligned)
+            var nameText = d.name || '';
+            if (nameText.length > 22) nameText = nameText.substring(0, 20) + '\u2026';
+            g.append('text').attr('class', 'acard-name')
+                .attr('x', 10).attr('y', 17).text(nameText);
+
+            // Status dot
+            var dotColor = hs === 'down' ? '#ef4444' : hs === 'degraded' ? '#f97316' : App.statusColor(d.status_value);
+            g.append('circle').attr('cx', CARD_W - 10).attr('cy', 13)
+                .attr('r', 3).attr('fill', dotColor);
+
+            // Subtitle line
+            var subText;
+            if (hs !== 'healthy' && d.host_down_reasons) {
+                var r = d.host_down_reasons;
+                subText = r.length === 1 ? r[0] + ' down' : r.length + ' hosts down';
+            } else {
+                subText = [d.group, d.environment].filter(Boolean).join(' \u00B7 ');
+            }
+            if (subText.length > 28) subText = subText.substring(0, 26) + '\u2026';
+            g.append('text')
+                .attr('class', hs !== 'healthy' ? 'acard-alert' : 'acard-sub')
+                .attr('x', 10).attr('y', 30).text(subText);
+
+            // ── Header / port separator ──
+            if (hasPorts) {
+                g.append('line').attr('class', 'acard-sep')
+                    .attr('x1', 8).attr('x2', CARD_W - 8)
+                    .attr('y1', HEADER_H).attr('y2', HEADER_H);
+            }
+
+            // ── Port rows with alternating subtle backgrounds ──
+            var allPorts = [];
+            d._portsL.forEach(function(p) { allPorts.push({ p: p, side: 'L' }); });
+            d._portsR.forEach(function(p) { allPorts.push({ p: p, side: 'R' }); });
+
+            // Alternating row backgrounds for left-side ports
+            d._portsL.forEach(function(p, i) {
+                if (i % 2 === 0) {
+                    g.append('rect').attr('class', 'aport-row-bg')
+                        .attr('x', 1).attr('y', p._y - PORT_H / 2)
+                        .attr('width', CARD_W / 2 - 1).attr('height', PORT_H);
+                }
+            });
+
+            // Alternating row backgrounds for right-side ports
+            d._portsR.forEach(function(p, i) {
+                if (i % 2 === 0) {
+                    g.append('rect').attr('class', 'aport-row-bg')
+                        .attr('x', CARD_W / 2).attr('y', p._y - PORT_H / 2)
+                        .attr('width', CARD_W / 2 - 1).attr('height', PORT_H);
+                }
+            });
+
+            // Section labels for port sides
+            if (d._portsL.length > 0) {
+                g.append('text').attr('class', 'aport-section-hdr')
+                    .attr('x', 6).attr('y', HEADER_H + 8)
+                    .text('DEPENDS ON');
+            }
+            if (d._portsR.length > 0) {
+                g.append('text').attr('class', 'aport-section-hdr')
+                    .attr('x', CARD_W - 6).attr('y', HEADER_H + 8)
+                    .attr('text-anchor', 'end')
+                    .text('NEEDED BY');
+            }
+
+            // Right-side port labels + connection dots
             d._portsR.forEach(function(p) {
                 g.append('text').attr('class', 'aport-label aport-out')
                     .attr('x', CARD_W - 6).attr('y', p._y + 3)
                     .attr('text-anchor', 'end')
                     .text(function() {
                         var t = p.name || '';
-                        return t.length > 18 ? t.substring(0, 16) + '..' : t;
+                        return t.length > 16 ? t.substring(0, 14) + '..' : t;
                     });
-                g.append('circle').attr('class', 'aport-dot')
-                    .attr('cx', CARD_W).attr('cy', p._y).attr('r', 3);
+                g.append('circle').attr('class', 'aport-tick')
+                    .attr('cx', CARD_W).attr('cy', p._y).attr('r', 2);
             });
 
+            // Left-side port labels + connection dots
             d._portsL.forEach(function(p) {
                 g.append('text').attr('class', 'aport-label aport-in')
-                    .attr('x', ACCENT_W + 6).attr('y', p._y + 3)
+                    .attr('x', 6).attr('y', p._y + 3)
                     .text(function() {
                         var t = p.name || '';
-                        return t.length > 18 ? t.substring(0, 16) + '..' : t;
+                        return t.length > 16 ? t.substring(0, 14) + '..' : t;
                     });
-                g.append('circle').attr('class', 'aport-dot')
-                    .attr('cx', 0).attr('cy', p._y).attr('r', 3);
+                g.append('circle').attr('class', 'aport-tick')
+                    .attr('cx', 0).attr('cy', p._y).attr('r', 2);
             });
 
-            // Host count — pill below card, hover shows HTML popup with host names
+            // ── Footer: host count inside the card ──
             if (d.deploy_count > 0) {
-                var label = d.deploy_count === 1 ? '1 host' : d.deploy_count + ' hosts';
-                var bw = label.length * 5.5 + 10;
-                var bx = CARD_W / 2 - bw / 2;
-                var by = d._h;
-                var badge = g.append('g').attr('class', 'acard-host-badge')
-                    .attr('data-app-id', d.app_id);
-
-                badge.append('rect').attr('class', 'host-pill')
-                    .attr('x', bx).attr('y', by)
-                    .attr('width', bw).attr('height', 13)
-                    .attr('rx', 2);
-                badge.append('text').attr('class', 'host-pill-text')
-                    .attr('x', CARD_W / 2).attr('y', by + 10)
+                var footerY = d._h - 12;
+                // Footer separator
+                g.append('line').attr('class', 'acard-sep')
+                    .attr('x1', 8).attr('x2', CARD_W - 8)
+                    .attr('y1', footerY - 4).attr('y2', footerY - 4);
+                // Host count text
+                var hostLabel = d.deploy_count === 1 ? '1 host' : d.deploy_count + ' hosts';
+                g.append('text').attr('class', 'acard-footer')
+                    .attr('x', CARD_W / 2).attr('y', footerY + 4)
                     .attr('text-anchor', 'middle')
-                    .text(label);
+                    .text(hostLabel);
+                // Store app_id for hover popup
+                g.attr('data-app-id', d.app_id);
             }
         });
     };
@@ -610,14 +626,18 @@
             })
             .on('end', function(ev, d) {
                 d3.select(this).classed('dragging', false);
+                // Reassign port sides after drag (card may have changed position relative to neighbors)
+                self._assignPortSides(edges);
+                // Rebuild card internals would be too expensive — just redraw edges
+                self._lines.attr('d', function(e) { return self._orthoPath(e); });
             })
         );
 
-        // Host badge hover → popup with host names
+        // Host footer hover → popup with host names
         this._hostCache = this._hostCache || {};
-        d3.selectAll('.acard-host-badge')
+        d3.selectAll('.acard-footer')
             .on('mouseenter', function(ev) {
-                var el = d3.select(this);
+                var el = d3.select(this.parentNode);
                 var appId = el.attr('data-app-id');
                 if (!appId) return;
                 ev.stopPropagation();
@@ -646,9 +666,20 @@
                     });
                 }
 
-                el.on('mouseleave.popup', function() {
+                // Delayed removal so user can move cursor to popup
+                var footerEl = this;
+                var removeTimer = null;
+                d3.select(footerEl).on('mouseleave.popup', function() {
+                    removeTimer = setTimeout(function() {
+                        d3.selectAll('.host-popup').remove();
+                        d3.select(footerEl).on('mouseleave.popup', null);
+                    }, 200);
+                });
+                popup.on('mouseenter', function() {
+                    if (removeTimer) clearTimeout(removeTimer);
+                }).on('mouseleave', function() {
                     d3.selectAll('.host-popup').remove();
-                    el.on('mouseleave.popup', null);
+                    d3.select(footerEl).on('mouseleave.popup', null);
                 });
             });
 
