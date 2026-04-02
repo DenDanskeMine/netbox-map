@@ -394,8 +394,20 @@
             attempts++;
         }
 
-        // Rounded corners at bends (radius 6px)
-        var r = 6;
+        // Rounded corners at bends — radius clamped to available space
+        var dyAbs = Math.abs(ty - sy);
+        var dxAbs1 = Math.abs(candidateX - sx);
+        var dxAbs2 = Math.abs(tx - candidateX);
+        var r = Math.min(6, dyAbs / 2, dxAbs1, dxAbs2);
+
+        if (r < 1 || dyAbs < 2) {
+            // Too tight for curves — use straight lines
+            return 'M' + sx + ',' + sy
+                 + ' L' + candidateX + ',' + sy
+                 + ' L' + candidateX + ',' + ty
+                 + ' L' + tx + ',' + ty;
+        }
+
         var dySign = ty > sy ? 1 : -1;
         var dxSign1 = candidateX > sx ? 1 : -1;
         var dxSign2 = tx > candidateX ? 1 : -1;
