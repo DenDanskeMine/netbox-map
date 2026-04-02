@@ -110,6 +110,7 @@ urlpatterns = (
     path('applications/<int:pk>/', views.ApplicationView.as_view(), name='application'),
     path('applications/<int:pk>/edit/', views.ApplicationEditView.as_view(), name='application_edit'),
     path('applications/<int:pk>/delete/', views.ApplicationDeleteView.as_view(), name='application_delete'),
+    path('applications/<int:pk>/bulk-deploy/', views.ApplicationBulkDeployView.as_view(), name='application_bulk_deploy'),
     path('applications/<int:pk>/changelog/', ObjectChangeLogView.as_view(), name='application_changelog', kwargs={'model': models.Application}),
 
     # ApplicationDeployment

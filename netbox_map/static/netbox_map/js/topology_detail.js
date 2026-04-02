@@ -44,56 +44,33 @@
     Detail.prototype._renderAppInfo = function(node) {
         if (!this.contentEl) return;
         var self = this;
+        var esc = App.escapeHtml;
+        var sc = App.statusColor(node.status_value);
+        var html = '';
 
-        // Count connections from edges
-        var depCount = 0;
-        this.state.edges.forEach(function(e) {
-            var s = typeof e.source === 'object' ? e.source.id : e.source;
-            var t = typeof e.target === 'object' ? e.target.id : e.target;
-            if (s === node.id || t === node.id) depCount++;
-        });
+        // Name
+        html += '<div class="topo-dp-name"><a href="' + esc(node.url) + '">' + esc(node.name) + '</a></div>';
 
-        var critColor = node.criticality_color || '#6c757d';
-        var html = '<div class="topo-detail-section">';
+        // Alert (only when impacted)
+        if (node.host_down && node.host_down_reasons) {
+            var r = node.host_down_reasons;
+            html += '<div class="topo-dp-alert">' + esc(r.join(', ')) + (r.length === 1 ? ' is down' : ' are down') + '</div>';
+        }
 
-        // App header
-        html += '<div class="topo-detail-device-header">'
-            + '<span class="topo-detail-role-dot" style="background:' + App.escapeHtml(node.category_color || '#6c757d') + ';"></span>'
-            + '<div class="topo-detail-device-info">'
-            + '<a href="' + App.escapeHtml(node.url) + '" class="topo-detail-device-name">' + App.escapeHtml(node.name) + '</a>'
-            + '<span class="topo-detail-device-type">' + App.escapeHtml(node.environment || '') + '</span>'
-            + '</div></div>';
+        // Properties table
+        html += '<table class="topo-dp-table">';
+        html += '<tr><td>Status</td><td><span class="topo-dp-dot" style="background:' + sc + ';"></span>' + esc(node.status || '') + '</td></tr>';
+        html += '<tr><td>Criticality</td><td>' + esc((node.criticality || '').charAt(0).toUpperCase() + (node.criticality || '').slice(1)) + '</td></tr>';
+        if (node.environment) html += '<tr><td>Environment</td><td>' + esc(node.environment) + '</td></tr>';
+        if (node.group) html += '<tr><td>Group</td><td>' + esc(node.group) + '</td></tr>';
+        if (node.version) html += '<tr><td>Version</td><td><code>' + esc(node.version) + '</code></td></tr>';
+        if (node.owner) html += '<tr><td>Owner</td><td>' + esc(node.owner) + '</td></tr>';
+        if (node.site) html += '<tr><td>Site</td><td>' + esc(node.site) + '</td></tr>';
+        html += '</table>';
 
-        // Quick stats
-        html += '<div class="topo-detail-stats">'
-            + '<div class="topo-detail-stat"><span class="topo-detail-stat-val" style="color:' + critColor + ';">'
-            + App.escapeHtml((node.criticality || '').toUpperCase())
-            + '</span><span class="topo-detail-stat-label">Criticality</span></div>'
-            + '<div class="topo-detail-stat"><span class="topo-detail-stat-val">' + depCount
-            + '</span><span class="topo-detail-stat-label">Dependencies</span></div>'
-            + '<div class="topo-detail-stat"><span class="topo-detail-stat-val">' + (node.deploy_count || 0)
-            + '</span><span class="topo-detail-stat-label">Hosts</span></div>'
-            + '</div>';
-
-        // Properties
-        html += '<div class="topo-detail-props">';
-        html += this._prop('Status', '<span style="color:' + App.statusColor(node.status_value) + ';">\u25CF</span> ' + App.escapeHtml(node.status || ''));
-        if (node.environment) html += this._prop('Environment', node.environment);
-        if (node.version) html += this._prop('Version', '<code>' + App.escapeHtml(node.version) + '</code>');
-        if (node.group) html += this._prop('Group', node.group);
-        if (node.owner) html += this._prop('Owner', node.owner);
-        if (node.site) html += this._prop('Site', node.site);
-        if (node.description) html += this._prop('Description', node.description);
-        html += '</div></div>';
-
-        // Actions
-        html += '<div class="topo-detail-actions">'
-            + '<a href="' + App.escapeHtml(node.url) + '" class="topo-btn" style="font-size:11px;" target="_blank"><i class="mdi mdi-open-in-new"></i> NetBox</a>'
-            + '</div>';
-
-        // Dependencies placeholder
+        // Dependencies (async)
         html += '<div id="topo-app-deps-section">'
-            + '<div class="text-center py-3"><div class="spinner-border spinner-border-sm text-primary"></div></div>'
+            + '<div class="topo-dp-loading"><div class="spinner-border spinner-border-sm"></div></div>'
             + '</div>';
 
         this.contentEl.innerHTML = html;
@@ -119,86 +96,49 @@
         var section = document.getElementById('topo-app-deps-section');
         if (!section) return;
         var self = this;
-
+        var esc = App.escapeHtml;
         var html = '';
 
-        // Upstream dependencies (what this app depends on)
+        // Helper: clickable app link row
+        function appRow(dep) {
+            var detail = '';
+            if (dep.protocol) detail += dep.protocol;
+            if (dep.port) detail += (detail ? ':' : ':') + dep.port;
+            return '<a href="#" data-goto-app="' + dep.app_id + '" class="topo-dp-row">'
+                + '<span class="topo-dp-row-name">' + esc(dep.app_name) + '</span>'
+                + (detail ? '<span class="topo-dp-row-meta">' + esc(detail) + '</span>' : '')
+                + '<span class="topo-dp-row-badge">' + esc(dep.dependency_type) + '</span>'
+                + '</a>';
+        }
+
         if (data.upstream && data.upstream.length > 0) {
-            html += '<div class="topo-detail-section">'
-                + '<div class="topo-detail-section-title">'
-                + '<span class="topo-detail-section-icon" style="background:#e67e22;"></span>'
-                + 'Depends On <span class="topo-detail-section-count">' + data.upstream.length + '</span>'
-                + '</div>';
-            data.upstream.forEach(function(dep) {
-                html += '<div class="topo-iface-row">'
-                    + '<div class="topo-iface-row-main">'
-                    + '<span class="topo-iface-dot" style="background:' + (dep.dependency_type === 'hard' ? '#e74c3c' : '#3498db') + ';"></span>'
-                    + '<a href="#" data-goto-app="' + dep.app_id + '" class="topo-iface-port-name" style="font-family:inherit;">' + App.escapeHtml(dep.app_name) + '</a>'
-                    + '<span class="topo-iface-speed-pill" style="background:rgba(255,255,255,0.06);color:#a0a8c0;font-size:9px;">'
-                    + App.escapeHtml(dep.dependency_type) + '</span>'
-                    + '</div>';
-                if (dep.protocol || dep.port) {
-                    html += '<div class="topo-iface-row-connection">'
-                        + '<i class="mdi mdi-arrow-right-thin"></i> ';
-                    if (dep.protocol) html += App.escapeHtml(dep.protocol);
-                    if (dep.port) html += ' :' + dep.port;
-                    html += '</div>';
-                }
-                html += '</div>';
-            });
-            html += '</div>';
+            html += '<div class="topo-dp-section">Depends on <span>' + data.upstream.length + '</span></div>';
+            data.upstream.forEach(function(dep) { html += appRow(dep); });
         }
-
-        // Downstream dependencies (what depends on this app)
         if (data.downstream && data.downstream.length > 0) {
-            html += '<div class="topo-detail-section">'
-                + '<div class="topo-detail-section-title">'
-                + '<span class="topo-detail-section-icon" style="background:#2ecc71;"></span>'
-                + 'Depended On By <span class="topo-detail-section-count">' + data.downstream.length + '</span>'
-                + '</div>';
-            data.downstream.forEach(function(dep) {
-                html += '<div class="topo-iface-row">'
-                    + '<div class="topo-iface-row-main">'
-                    + '<span class="topo-iface-dot" style="background:' + (dep.dependency_type === 'hard' ? '#e74c3c' : '#3498db') + ';"></span>'
-                    + '<a href="#" data-goto-app="' + dep.app_id + '" class="topo-iface-port-name" style="font-family:inherit;">' + App.escapeHtml(dep.app_name) + '</a>'
-                    + '<span class="topo-iface-speed-pill" style="background:rgba(255,255,255,0.06);color:#a0a8c0;font-size:9px;">'
-                    + App.escapeHtml(dep.dependency_type) + '</span>'
-                    + '</div></div>';
-            });
-            html += '</div>';
+            html += '<div class="topo-dp-section">Needed by <span>' + data.downstream.length + '</span></div>';
+            data.downstream.forEach(function(dep) { html += appRow(dep); });
         }
-
-        // Deployments
         if (data.deployments && data.deployments.length > 0) {
-            html += '<div class="topo-detail-section">'
-                + '<div class="topo-detail-section-title">'
-                + '<span class="topo-detail-section-icon" style="background:#9b59b6;"></span>'
-                + 'Hosts <span class="topo-detail-section-count">' + data.deployments.length + '</span>'
-                + '</div>';
+            html += '<div class="topo-dp-section">Hosts <span>' + data.deployments.length + '</span></div>';
             data.deployments.forEach(function(deploy) {
-                html += '<div class="topo-iface-row">'
-                    + '<div class="topo-iface-row-main">'
-                    + '<span class="topo-iface-dot" style="background:#9b59b6;"></span>'
-                    + '<span class="topo-iface-port-name" style="font-family:inherit;">' + App.escapeHtml(deploy.host_name) + '</span>'
-                    + '<span class="topo-iface-speed-pill" style="background:rgba(255,255,255,0.06);color:#a0a8c0;font-size:9px;">'
-                    + App.escapeHtml(deploy.role) + '</span>'
-                    + '</div></div>';
+                html += '<div class="topo-dp-row">'
+                    + '<span class="topo-dp-row-name">' + esc(deploy.host_name) + '</span>'
+                    + '<span class="topo-dp-row-badge">' + esc(deploy.role) + '</span>'
+                    + '</div>';
             });
-            html += '</div>';
         }
-
         if (!data.upstream.length && !data.downstream.length && !data.deployments.length) {
-            html = '<div class="px-3 py-3 text-muted small text-center">No dependencies or deployments</div>';
+            html = '<div class="topo-dp-empty">No dependencies</div>';
         }
 
         section.innerHTML = html;
 
-        // Wire "go to app" links
+        // Wire click-to-focus on app links
         section.querySelectorAll('[data-goto-app]').forEach(function(link) {
             link.addEventListener('click', function(e) {
                 e.preventDefault();
-                var appId = parseInt(this.getAttribute('data-goto-app'));
-                var nodeId = 'app-' + appId;
+                var nodeId = 'app-' + this.getAttribute('data-goto-app');
                 var node = self.state.nodes.find(function(n) { return n.id === nodeId; });
                 if (node) {
                     self.state.selectedNode = node;

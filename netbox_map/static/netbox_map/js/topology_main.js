@@ -43,8 +43,13 @@
             state.customHierarchy = layout._hierarchy;
         }
 
+        // Restore topology mode if saved
+        if (layout._topology_mode) {
+            state.topologyMode = layout._topology_mode;
+        }
+
         for (var nodeId in layout) {
-            if (nodeId === '_hierarchy') continue;
+            if (nodeId === '_hierarchy' || nodeId === '_topology_mode') continue;
             var data = layout[nodeId];
             if (data.hidden) state.hiddenNodes.add(nodeId);
             if (data.pinned) {
@@ -80,6 +85,9 @@
 
             layout[n.id] = entry;
         });
+        if (state.topologyMode !== 'network') {
+            layout._topology_mode = state.topologyMode;
+        }
         return layout;
     }
 
@@ -93,9 +101,9 @@
         return positions;
     }
 
-    // Wire renderer highlight from sidebar clicks
+    // Wire renderer focus from sidebar clicks — pan + zoom to node
     events.on('renderer:highlight', function(nodeId) {
-        renderer.highlightNode(nodeId);
+        renderer.focusNode(nodeId);
     });
 
     // Wire filter visibility
@@ -185,7 +193,7 @@
         });
     }
 
-    loadTopology();
+    // Initial load is deferred until after mode toggle declarations (see below)
 
     // Zoom controls
     var zoomIn = document.getElementById('topo-zoom-in');
@@ -208,6 +216,12 @@
     function switchToMode(mode) {
         state.topologyMode = mode;
         setModeActive(mode === 'apps' ? modeApps : modeNetwork);
+
+        // Switch footer legend
+        var legendNetwork = document.getElementById('legend-network');
+        var legendApps = document.getElementById('legend-apps');
+        if (legendNetwork) legendNetwork.classList.toggle('d-none', mode === 'apps');
+        if (legendApps) legendApps.classList.toggle('d-none', mode !== 'apps');
 
         // Update toolbar visibility for network-only controls
         var networkOnlyBtns = ['topo-add-devices', 'topo-edit-hierarchy', 'topo-auto-sort',
@@ -256,6 +270,17 @@
     if (modeNetwork) modeNetwork.addEventListener('click', function() { switchToMode('network'); });
     if (modeApps) modeApps.addEventListener('click', function() { switchToMode('apps'); });
 
+    // Initial load — check if saved layout restores app topology mode
+    if (state.savedLayout && state.savedLayout._topology_mode) {
+        state.topologyMode = state.savedLayout._topology_mode;
+    }
+    if (state.topologyMode === 'apps') {
+        setModeActive(modeApps);
+        loadAppTopology();
+    } else {
+        loadTopology();
+    }
+
     function loadAppTopology() {
         if (loadingEl) loadingEl.classList.remove('d-none');
         if (emptyEl) emptyEl.classList.add('d-none');
@@ -286,6 +311,9 @@
                 if (sidebarEl) sidebarEl.classList.add('hidden');
                 return;
             }
+
+            // Apply saved layout before rendering
+            applySavedLayout();
 
             renderer.render(data.nodes, data.edges);
             events.emit('data:loaded', data);
@@ -344,6 +372,7 @@
         if (deviceIds.length > 0) {
             filters.device_ids = deviceIds.join(',');
         }
+        filters.topology_mode = state.topologyMode;
 
         var payload = {
             layout_data: layoutData,
@@ -706,9 +735,8 @@
         autoSortBtn.addEventListener('click', function() {
             state.autoSortPorts = !state.autoSortPorts;
             this.classList.toggle('active', state.autoSortPorts);
-            // Re-render to apply sort change (smart sort ON or natural order OFF)
-            var pos = getCurrentPositions();
-            state.savedLayout = pos;
+            // Clear saved positions so the layout algorithm can optimize freely
+            state.savedLayout = null;
             renderer.render(state.nodes, state.edges, true);
             events.emit('data:loaded', { nodes: state.nodes, edges: state.edges });
         });

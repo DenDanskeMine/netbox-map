@@ -1230,6 +1230,104 @@ class ApplicationBulkDeleteView(generic.BulkDeleteView):
 
 
 #
+# Application Bulk Deploy
+#
+
+class ApplicationBulkDeployView(LoginRequiredMixin, View):
+    """Deploy an application to multiple devices/VMs at once."""
+
+    def _get_application(self, pk):
+        return Application.objects.get(pk=pk)
+
+    def get(self, request, pk):
+        application = self._get_application(pk)
+        form = forms.ApplicationBulkDeployForm()
+        return render(request, 'netbox_map/application_bulk_deploy.html', {
+            'object': application,
+            'form': form,
+        })
+
+    def _create_instance(self, template_app, host_name, name_format):
+        """Create a new Application instance copied from the template."""
+        name = name_format.replace('{app}', template_app.name).replace('{host}', host_name)
+        app = Application(
+            name=name,
+            status=template_app.status,
+            criticality=template_app.criticality,
+            environment=template_app.environment,
+            version=template_app.version,
+            description=template_app.description,
+            group=template_app.group,
+            tenant=template_app.tenant,
+            site=template_app.site,
+        )
+        app.save()
+        # Copy tags
+        app.tags.set(template_app.tags.all())
+        return app
+
+    def post(self, request, pk):
+        application = self._get_application(pk)
+        form = forms.ApplicationBulkDeployForm(request.POST)
+
+        if form.is_valid():
+            mode = form.cleaned_data['mode']
+            role = form.cleaned_data['role']
+            port = form.cleaned_data.get('port')
+            protocol = form.cleaned_data.get('protocol', '')
+            name_format = form.cleaned_data.get('name_format', '{app}') or '{app}'
+            created = 0
+
+            # Collect all hosts: (content_type, host_obj) pairs
+            hosts = []
+            device_ct = ContentType.objects.get_for_model(Device)
+            for device in form.cleaned_data.get('devices', []):
+                hosts.append((device_ct, device))
+
+            vms = form.cleaned_data.get('virtual_machines', [])
+            if vms:
+                from virtualization.models import VirtualMachine
+                vm_ct = ContentType.objects.get_for_model(VirtualMachine)
+                for vm in vms:
+                    hosts.append((vm_ct, vm))
+
+            if mode == 'instances':
+                # Create a SEPARATE Application per host (template/instance pattern)
+                for ct, host in hosts:
+                    host_name = host.name or str(host)
+                    app_instance = self._create_instance(application, host_name, name_format)
+                    ApplicationDeployment.objects.create(
+                        application=app_instance,
+                        host_type=ct,
+                        host_id=host.pk,
+                        role=role,
+                        port=port,
+                        protocol=protocol,
+                    )
+                    created += 1
+                messages.success(request, f'Created {created} instance(s) of "{application.name}".')
+            else:
+                # Shared mode: ONE application, multiple deployments
+                for ct, host in hosts:
+                    _, was_created = ApplicationDeployment.objects.get_or_create(
+                        application=application,
+                        host_type=ct,
+                        host_id=host.pk,
+                        defaults={'role': role, 'port': port, 'protocol': protocol},
+                    )
+                    if was_created:
+                        created += 1
+                messages.success(request, f'Deployed "{application.name}" to {created} host(s).')
+
+            return redirect(application.get_absolute_url())
+
+        return render(request, 'netbox_map/application_bulk_deploy.html', {
+            'object': application,
+            'form': form,
+        })
+
+
+#
 # ApplicationDeployment views
 #
 
@@ -1457,17 +1555,33 @@ class AppTopologyDataView(LoginRequiredMixin, View):
                 'dependency_type': dep.dependency_type,
                 'color': crit_color,
                 'cable_type': label,
-                'cable_label': f'#{dep.pk} {label}',
+                'cable_label': label or dep.dependency_type,
                 'cable_id': f'd{dep.pk}',
                 'status': dep.get_status_display(),
                 'status_value': dep.status,
             })
 
-        # Sort ports: DEPENDS ON first, then NEEDED BY, with section headers
+        # Build port list with section header rows
         for app_pk, ports in app_ports.items():
             outgoing = [p for p in ports if p['port_class'] == 'dep-outgoing']
             incoming = [p for p in ports if p['port_class'] == 'dep-incoming']
-            sorted_ports = outgoing + incoming
+            sorted_ports = []
+            if outgoing:
+                sorted_ports.append({
+                    'id': f'hdr-out-{app_pk}',
+                    'name': 'DEPENDS ON',
+                    'port_class': 'section-header',
+                    'type': '', 'speed': None, 'cabled': False,
+                })
+                sorted_ports.extend(outgoing)
+            if incoming:
+                sorted_ports.append({
+                    'id': f'hdr-in-{app_pk}',
+                    'name': 'NEEDED BY',
+                    'port_class': 'section-header',
+                    'type': '', 'speed': None, 'cabled': False,
+                })
+                sorted_ports.extend(incoming)
             if app_pk in app_map:
                 app_map[app_pk]['ports'] = sorted_ports
                 app_map[app_pk]['outgoing_count'] = len(outgoing)
@@ -1508,6 +1622,60 @@ class AppTopologyDataView(LoginRequiredMixin, View):
                     'interface_count': 0,
                 }
                 nodes.append(device_node)
+
+        # Propagate device status to apps: if a device is offline/failed/decommissioning,
+        # mark all apps deployed on it as impacted so the topology shows WHY.
+        # Then cascade through dependency chain: if app X is down and app Y depends on X,
+        # Y is also impacted.
+        DOWN_STATUSES = {'offline', 'failed', 'decommissioning'}
+        if device_ids:
+            down_devices = {}  # device_id -> device_name
+            for node in nodes:
+                if node.get('node_type') == 'device' and node.get('status_value') in DOWN_STATUSES:
+                    down_devices[node['device_id']] = node['name']
+
+            if down_devices:
+                # Step 1: Mark apps directly deployed on down devices
+                for dep in deployments:
+                    if dep.host_type_id == device_ct.pk and dep.host_id in down_devices:
+                        app_node = app_map.get(dep.application_id)
+                        if app_node:
+                            if 'host_down_reasons' not in app_node:
+                                app_node['host_down'] = True
+                                app_node['host_down_reasons'] = []
+                            app_node['host_down_reasons'].append(down_devices[dep.host_id])
+
+                # Step 2: Cascade through dependency chain (BFS)
+                # Edge convention: source DEPENDS ON target.
+                # If target is down → source is impacted.
+                # Build reverse adjacency: target_app_pk -> [source_app_pks]
+                reverse_deps = {}
+                for d in deps:
+                    reverse_deps.setdefault(d.target_application_id, []).append(d.source_application_id)
+
+                # BFS from all directly-impacted apps
+                queue = [pk for pk, node in app_map.items() if node.get('host_down')]
+                visited = set(queue)
+                while queue:
+                    current_pk = queue.pop(0)
+                    current_node = app_map.get(current_pk)
+                    if not current_node:
+                        continue
+                    # The reason to propagate: this app's name (it's down/impacted)
+                    reason = current_node['name']
+                    for dependent_pk in reverse_deps.get(current_pk, []):
+                        dep_node = app_map.get(dependent_pk)
+                        if not dep_node:
+                            continue
+                        if 'host_down_reasons' not in dep_node:
+                            dep_node['host_down'] = True
+                            dep_node['host_down_reasons'] = []
+                        # Only add reason if not already listed
+                        if reason not in dep_node['host_down_reasons']:
+                            dep_node['host_down_reasons'].append(reason)
+                        if dependent_pk not in visited:
+                            visited.add(dependent_pk)
+                            queue.append(dependent_pk)
 
         # Add deployed-on edges
         for dep in deployments:
@@ -1587,6 +1755,9 @@ class AppTopologyDetailView(LoginRequiredMixin, View):
         return JsonResponse({
             'app_name': app.name,
             'app_url': app.get_absolute_url(),
+            'site': app.site.name if app.site else '',
+            'group': app.group.name if app.group else '',
+            'environment': app.get_environment_display(),
             'upstream': upstream,
             'downstream': downstream,
             'deployments': deployments,
@@ -2251,3 +2422,81 @@ class DeviceMapLocationsView(generic.ObjectView):
             'rack_tiles': rack_tiles,
             'rack': instance.rack if instance.rack_id else None,
         }
+
+
+#
+# Device / VM Applications Tab
+#
+
+def _count_device_apps(device):
+    device_ct = ContentType.objects.get_for_model(Device)
+    return ApplicationDeployment.objects.filter(
+        host_type=device_ct, host_id=device.pk,
+    ).count()
+
+
+@register_model_view(Device, 'applications', path='applications')
+class DeviceApplicationsTabView(generic.ObjectChildrenView):
+    queryset = Device.objects.all()
+    child_model = ApplicationDeployment
+    table = tables.ApplicationDeploymentTable
+    template_name = 'netbox_map/device_applications_tab.html'
+    tab = ViewTab(
+        label=_('Applications'),
+        badge=lambda obj: _count_device_apps(obj),
+        permission='netbox_map.view_applicationdeployment',
+        hide_if_empty=True,
+    )
+
+    def get_children(self, request, parent):
+        device_ct = ContentType.objects.get_for_model(Device)
+        return ApplicationDeployment.objects.filter(
+            host_type=device_ct, host_id=parent.pk,
+        ).select_related('application')
+
+    def get_extra_context(self, request, instance):
+        from django.urls import reverse
+        device_ct = ContentType.objects.get_for_model(Device)
+        add_url = reverse('plugins:netbox_map:applicationdeployment_add')
+        add_url += f'?host_type={device_ct.pk}&device={instance.pk}'
+        return {'add_deployment_url': add_url}
+
+
+def _count_vm_apps(vm):
+    from virtualization.models import VirtualMachine
+    vm_ct = ContentType.objects.get_for_model(VirtualMachine)
+    return ApplicationDeployment.objects.filter(
+        host_type=vm_ct, host_id=vm.pk,
+    ).count()
+
+
+try:
+    from virtualization.models import VirtualMachine
+
+    @register_model_view(VirtualMachine, 'applications', path='applications')
+    class VMApplicationsTabView(generic.ObjectChildrenView):
+        queryset = VirtualMachine.objects.all()
+        child_model = ApplicationDeployment
+        table = tables.ApplicationDeploymentTable
+        template_name = 'netbox_map/device_applications_tab.html'
+        tab = ViewTab(
+            label=_('Applications'),
+            badge=lambda obj: _count_vm_apps(obj),
+            permission='netbox_map.view_applicationdeployment',
+            hide_if_empty=True,
+        )
+
+        def get_children(self, request, parent):
+            vm_ct = ContentType.objects.get_for_model(VirtualMachine)
+            return ApplicationDeployment.objects.filter(
+                host_type=vm_ct, host_id=parent.pk,
+            ).select_related('application')
+
+        def get_extra_context(self, request, instance):
+            from django.urls import reverse
+            vm_ct = ContentType.objects.get_for_model(VirtualMachine)
+            add_url = reverse('plugins:netbox_map:applicationdeployment_add')
+            add_url += f'?host_type={vm_ct.pk}&virtual_machine={instance.pk}'
+            return {'add_deployment_url': add_url}
+except ImportError:
+    pass

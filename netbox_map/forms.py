@@ -1453,6 +1453,7 @@ class ApplicationDeploymentForm(NetBoxModelForm):
     application = DynamicModelChoiceField(
         label=_('Application'),
         queryset=Application.objects.all(),
+        quick_add=True,
     )
     host_type = ContentTypeChoiceField(
         label=_('Host Type'),
@@ -1552,6 +1553,61 @@ class ApplicationDeploymentFilterForm(NetBoxModelFilterSetForm):
     fieldsets = (
         FieldSet('application_id', 'role'),
     )
+
+
+class ApplicationBulkDeployForm(forms.Form):
+    """Deploy an application to multiple devices at once."""
+
+    DEPLOY_MODE_CHOICES = [
+        ('instances', _('Separate instances (one app per host)')),
+        ('shared', _('Shared (one app, multiple hosts)')),
+    ]
+
+    mode = forms.ChoiceField(
+        label=_('Deploy Mode'),
+        choices=DEPLOY_MODE_CHOICES,
+        initial='instances',
+        help_text=_('Separate: creates a copy of this app for each host — independent status per host. '
+                    'Shared: links this single app to all selected hosts.'),
+    )
+    devices = DynamicModelMultipleChoiceField(
+        label=_('Devices'),
+        queryset=Device.objects.all(),
+        required=False,
+    )
+    role = forms.ChoiceField(
+        label=_('Role'),
+        choices=DeploymentRoleChoices,
+        initial='primary',
+    )
+    port = forms.IntegerField(
+        label=_('Port'),
+        required=False,
+    )
+    protocol = forms.CharField(
+        label=_('Protocol'),
+        max_length=50,
+        required=False,
+    )
+    name_format = forms.CharField(
+        label=_('Instance Name Format'),
+        initial='{app}',
+        required=False,
+        help_text=_('Name for each instance. Use {app} for app name, {host} for hostname. '
+                    'Example: "{app} ({host})" → "Redis (srv-db-01)". Leave as "{app}" to keep the original name.'),
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        try:
+            from virtualization.models import VirtualMachine
+            self.fields['virtual_machines'] = DynamicModelMultipleChoiceField(
+                label=_('Virtual Machines'),
+                queryset=VirtualMachine.objects.all(),
+                required=False,
+            )
+        except ImportError:
+            pass
 
 
 #

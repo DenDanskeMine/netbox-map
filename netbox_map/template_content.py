@@ -61,16 +61,24 @@ class DeviceApplicationPanel(PluginTemplateExtension):
         device = self.context['object']
         device_ct = ContentType.objects.get_for_model(device)
         from .models import ApplicationDeployment
-        deployments = (
+        from django.urls import reverse
+        deployments = list(
             ApplicationDeployment.objects
             .filter(host_type=device_ct, host_id=device.pk)
             .select_related('application')[:5]
         )
-        if not deployments:
-            return ''
+        total = ApplicationDeployment.objects.filter(
+            host_type=device_ct, host_id=device.pk,
+        ).count()
+        add_url = reverse('plugins:netbox_map:applicationdeployment_add')
+        add_url += f'?host_type={device_ct.pk}&device={device.pk}'
         return self.render(
             'netbox_map/inc/device_applications_panel.html',
-            extra_context={'deployments': deployments}
+            extra_context={
+                'deployments': deployments,
+                'total_count': total,
+                'add_url': add_url,
+            }
         )
 
 
@@ -81,16 +89,24 @@ class VMApplicationPanel(PluginTemplateExtension):
         vm = self.context['object']
         vm_ct = ContentType.objects.get_for_model(vm)
         from .models import ApplicationDeployment
-        deployments = (
+        from django.urls import reverse
+        deployments = list(
             ApplicationDeployment.objects
             .filter(host_type=vm_ct, host_id=vm.pk)
             .select_related('application')[:5]
         )
-        if not deployments:
-            return ''
+        total = ApplicationDeployment.objects.filter(
+            host_type=vm_ct, host_id=vm.pk,
+        ).count()
+        add_url = reverse('plugins:netbox_map:applicationdeployment_add')
+        add_url += f'?host_type={vm_ct.pk}&virtual_machine={vm.pk}'
         return self.render(
             'netbox_map/inc/device_applications_panel.html',
-            extra_context={'deployments': deployments}
+            extra_context={
+                'deployments': deployments,
+                'total_count': total,
+                'add_url': add_url,
+            }
         )
 
 

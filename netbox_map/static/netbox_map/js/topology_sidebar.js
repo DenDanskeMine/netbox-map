@@ -300,7 +300,9 @@
     Sidebar.prototype._highlightItem = function(nodeId) {
         if (!this.deviceListEl) return;
         this.deviceListEl.querySelectorAll('.topo-device-item').forEach(function(el) {
-            el.classList.toggle('selected', el.getAttribute('data-node-id') === nodeId);
+            var match = el.getAttribute('data-node-id') === nodeId;
+            el.classList.toggle('selected', match);
+            if (match) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         });
     };
 
