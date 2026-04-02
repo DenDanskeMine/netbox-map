@@ -119,6 +119,20 @@ menu = PluginMenu(
                 )
             ),
             PluginMenuItem(
+                link='plugins:netbox_map:applicationtemplate_list',
+                link_text=_('Templates'),
+                permissions=['netbox_map.view_applicationtemplate'],
+                buttons=(
+                    PluginMenuButton(
+                        link='plugins:netbox_map:applicationtemplate_add',
+                        title=_('Add'),
+                        icon_class='mdi mdi-plus-thick',
+                        color=ButtonColorChoices.GREEN,
+                        permissions=['netbox_map.add_applicationtemplate'],
+                    ),
+                )
+            ),
+            PluginMenuItem(
                 link='plugins:netbox_map:applicationdeployment_list',
                 link_text=_('Deployments'),
                 permissions=['netbox_map.view_applicationdeployment'],

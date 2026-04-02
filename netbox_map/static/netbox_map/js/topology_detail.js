@@ -57,10 +57,17 @@
         html += '<a href="' + esc(node.url) + '" class="adp-name" target="_blank">' + esc(node.name) + '</a>';
         html += '</div>';
 
-        // Tags row: env, group, version
+        // Tags row: env, group (with color), version
+        var groupColor = node.category_color || node.role_color || '';
         html += '<div class="adp-tags">';
         if (node.environment) html += '<span class="adp-tag">' + esc(node.environment) + '</span>';
-        if (node.group) html += '<span class="adp-tag">' + esc(node.group) + '</span>';
+        if (node.group) {
+            if (groupColor) {
+                html += '<span class="adp-tag" style="border-color:' + esc(groupColor) + '44;color:' + esc(groupColor) + ';">' + esc(node.group) + '</span>';
+            } else {
+                html += '<span class="adp-tag">' + esc(node.group) + '</span>';
+            }
+        }
         if (node.version) html += '<span class="adp-tag adp-tag-code">v' + esc(node.version) + '</span>';
         html += '</div>';
 

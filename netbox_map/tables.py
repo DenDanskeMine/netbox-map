@@ -5,7 +5,7 @@ from django.utils.translation import gettext_lazy as _
 from netbox.tables import NetBoxTable, columns
 from .models import (
     FloorPlanTile, FloorPlan, CustomMarkerType, MapMarker, CablePath, TopologySavedView,
-    ApplicationGroup, Application, ApplicationDeployment, ApplicationDependency,
+    ApplicationGroup, ApplicationTemplate, Application, ApplicationDeployment, ApplicationDependency,
 )
 
 
@@ -346,6 +346,18 @@ class ApplicationGroupTable(NetBoxTable):
 
     def value_color(self, value):
         return value
+
+
+class ApplicationTemplateTable(NetBoxTable):
+    name = tables.Column(linkify=True)
+    group = tables.Column(linkify=True)
+    default_port = tables.Column()
+    default_protocol = tables.Column()
+
+    class Meta(NetBoxTable.Meta):
+        model = ApplicationTemplate
+        fields = ('pk', 'name', 'group', 'default_status', 'default_criticality', 'default_environment', 'default_port', 'default_protocol', 'default_role', 'name_format')
+        default_columns = ('pk', 'name', 'group', 'default_criticality', 'default_port', 'default_role')
 
 
 class ApplicationTable(NetBoxTable):

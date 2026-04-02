@@ -9,7 +9,7 @@ from netbox.filtersets import NetBoxModelFilterSet
 from dcim.choices import CableTypeChoices
 from .models import (
     FloorPlan, FloorPlanTile, CustomMarkerType, MapMarker, TilePortAssignment, CablePath, TopologySavedView,
-    ApplicationGroup, Application, ApplicationDeployment, ApplicationDependency,
+    ApplicationGroup, ApplicationTemplate, Application, ApplicationDeployment, ApplicationDependency,
 )
 from .choices import (
     FloorPlanTileStatusChoices, CablePathStatusChoices, get_all_tile_type_choices,
@@ -178,6 +178,17 @@ class ApplicationGroupFilterSet(NetBoxModelFilterSet):
     class Meta:
         model = ApplicationGroup
         fields = ['id', 'name', 'slug']
+
+    def search(self, queryset, name, value):
+        return queryset.filter(name__icontains=value)
+
+
+class ApplicationTemplateFilterSet(NetBoxModelFilterSet):
+    group_id = django_filters.ModelMultipleChoiceFilter(queryset=ApplicationGroup.objects.all())
+
+    class Meta:
+        model = ApplicationTemplate
+        fields = ['id', 'name', 'default_status', 'default_criticality', 'default_environment', 'group_id']
 
     def search(self, queryset, name, value):
         return queryset.filter(name__icontains=value)

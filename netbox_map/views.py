@@ -20,7 +20,7 @@ from . import filtersets, forms, tables
 from .choices import get_all_type_configs
 from .models import (
     FloorPlan, FloorPlanTile, CustomMarkerType, LocationCoordinates, MapMarker, MapSettings, TilePortAssignment, CablePath, TopologySavedView,
-    ApplicationGroup, Application, ApplicationDeployment, ApplicationDependency,
+    ApplicationGroup, ApplicationTemplate, Application, ApplicationDeployment, ApplicationDependency,
 )
 
 
@@ -1182,6 +1182,39 @@ class ApplicationGroupBulkDeleteView(generic.BulkDeleteView):
     queryset = ApplicationGroup.objects.all()
     filterset = filtersets.ApplicationGroupFilterSet
     table = tables.ApplicationGroupTable
+
+
+#
+# ApplicationTemplate views
+#
+
+class ApplicationTemplateListView(generic.ObjectListView):
+    queryset = ApplicationTemplate.objects.select_related('group')
+    filterset = filtersets.ApplicationTemplateFilterSet
+    filterset_form = forms.ApplicationTemplateFilterForm
+    table = tables.ApplicationTemplateTable
+
+
+@register_model_view(ApplicationTemplate)
+class ApplicationTemplateView(generic.ObjectView):
+    queryset = ApplicationTemplate.objects.select_related('group')
+
+
+@register_model_view(ApplicationTemplate, 'edit')
+class ApplicationTemplateEditView(generic.ObjectEditView):
+    queryset = ApplicationTemplate.objects.all()
+    form = forms.ApplicationTemplateForm
+
+
+@register_model_view(ApplicationTemplate, 'delete')
+class ApplicationTemplateDeleteView(generic.ObjectDeleteView):
+    queryset = ApplicationTemplate.objects.all()
+
+
+class ApplicationTemplateBulkDeleteView(generic.BulkDeleteView):
+    queryset = ApplicationTemplate.objects.all()
+    filterset = filtersets.ApplicationTemplateFilterSet
+    table = tables.ApplicationTemplateTable
 
 
 #

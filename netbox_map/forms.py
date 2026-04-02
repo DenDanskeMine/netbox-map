@@ -17,7 +17,7 @@ from utilities.forms.fields import (
 from utilities.forms.rendering import FieldSet
 from .models import (
     FloorPlan, FloorPlanTile, CustomMarkerType, MapMarker, MapSettings, CablePath, TopologySavedView, ASSIGNABLE_MODELS,
-    ApplicationGroup, Application, ApplicationDeployment, ApplicationDependency,
+    ApplicationGroup, ApplicationTemplate, Application, ApplicationDeployment, ApplicationDependency,
 )
 from dcim.choices import CableTypeChoices, SiteStatusChoices
 from .choices import (
@@ -1271,6 +1271,34 @@ class ApplicationGroupFilterForm(NetBoxModelFilterSetForm):
 
 
 #
+# ApplicationTemplate forms
+#
+
+class ApplicationTemplateForm(NetBoxModelForm):
+    slug = SlugField()
+    group = DynamicModelChoiceField(queryset=ApplicationGroup.objects.all(), required=False)
+
+    fieldsets = (
+        FieldSet('name', 'slug', 'description', 'group', 'tags', name=_('Template')),
+        FieldSet('default_status', 'default_criticality', 'default_environment', 'default_version', name=_('Application Defaults')),
+        FieldSet('default_role', 'default_port', 'default_protocol', name=_('Deployment Defaults')),
+        FieldSet('name_format', name=_('Instance Naming')),
+    )
+
+    class Meta:
+        model = ApplicationTemplate
+        fields = ['name', 'slug', 'description', 'group', 'default_status', 'default_criticality', 'default_environment', 'default_version', 'default_role', 'default_port', 'default_protocol', 'name_format', 'tags']
+
+
+class ApplicationTemplateFilterForm(NetBoxModelFilterSetForm):
+    model = ApplicationTemplate
+    group_id = DynamicModelChoiceField(queryset=ApplicationGroup.objects.all(), required=False, label=_('Group'))
+    default_criticality = forms.MultipleChoiceField(choices=ApplicationCriticalityChoices, required=False, label=_('Criticality'))
+
+    fieldsets = (FieldSet('group_id', 'default_criticality'),)
+
+
+#
 # Application forms
 #
 
@@ -1450,9 +1478,16 @@ def get_host_content_types():
 
 
 class ApplicationDeploymentForm(NetBoxModelForm):
+    template = DynamicModelChoiceField(
+        label=_('From Template'),
+        queryset=ApplicationTemplate.objects.all(),
+        required=False,
+        help_text=_('Select a template to auto-create an application. Leave empty to use an existing application.'),
+    )
     application = DynamicModelChoiceField(
         label=_('Application'),
         queryset=Application.objects.all(),
+        required=False,
         quick_add=True,
     )
     host_type = ContentTypeChoiceField(
@@ -1478,7 +1513,7 @@ class ApplicationDeploymentForm(NetBoxModelForm):
 
     fieldsets = (
         FieldSet(
-            'application', 'role', 'port', 'protocol', 'description', 'tags',
+            'template', 'application', 'role', 'port', 'protocol', 'description', 'tags',
             name=_('Deployment')
         ),
         FieldSet(
@@ -1515,6 +1550,15 @@ class ApplicationDeploymentForm(NetBoxModelForm):
 
     def clean(self):
         super().clean()
+
+        # Template logic: if template is provided, application is not required
+        template = self.cleaned_data.get('template')
+        if template and not self.cleaned_data.get('application'):
+            # Will create app from template in save()
+            pass
+        elif not template and not self.cleaned_data.get('application'):
+            raise forms.ValidationError({'application': 'Select an application or a template.'})
+
         host_type = self.cleaned_data.get('host_type')
         if host_type:
             model_name = host_type.model
@@ -1534,6 +1578,39 @@ class ApplicationDeploymentForm(NetBoxModelForm):
     def save(self, *args, **kwargs):
         self.instance.host_type = self.cleaned_data.get('host_type')
         self.instance.host_id = self.cleaned_data.get('host_id')
+
+        # If a template was selected, create an Application from it
+        template = self.cleaned_data.get('template')
+        if template and not self.instance.application_id:
+            # Get host name for the name format
+            host_obj = None
+            if self.cleaned_data.get('device'):
+                host_obj = self.cleaned_data['device']
+            elif self.cleaned_data.get('virtual_machine'):
+                host_obj = self.cleaned_data['virtual_machine']
+
+            host_name = str(host_obj) if host_obj else 'unknown'
+            app_name = template.name_format.replace('{app}', template.name).replace('{host}', host_name)
+
+            app = Application.objects.create(
+                name=app_name,
+                status=template.default_status,
+                criticality=template.default_criticality,
+                environment=template.default_environment,
+                version=template.default_version,
+                group=template.group,
+                description=template.description,
+            )
+            self.instance.application = app
+
+            # Pre-fill deployment fields from template if not set by user
+            if not self.instance.port and template.default_port:
+                self.instance.port = template.default_port
+            if not self.instance.protocol and template.default_protocol:
+                self.instance.protocol = template.default_protocol
+            if not self.cleaned_data.get('role') or self.cleaned_data['role'] == 'primary':
+                self.instance.role = template.default_role
+
         return super().save(*args, **kwargs)
 
 

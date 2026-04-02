@@ -446,6 +446,20 @@
             .attr('width', CARD_W).attr('height', function(d) { return d._h; })
             .attr('rx', CARD_R);
 
+        // Left accent bar — group color, clipped inside rounded rect
+        cards.each(function(d, i) {
+            var gc = d.category_color || d.role_color || '';
+            if (!gc) return;
+            var clipId = 'aclip-' + d.id.replace(/[^a-z0-9]/gi, '');
+            d3.select(this).append('clipPath').attr('id', clipId)
+                .append('rect').attr('width', CARD_W).attr('height', d._h)
+                .attr('rx', CARD_R).attr('ry', CARD_R);
+            d3.select(this).append('rect')
+                .attr('width', 3).attr('height', d._h)
+                .attr('fill', gc).attr('opacity', 0.5)
+                .attr('clip-path', 'url(#' + clipId + ')');
+        });
+
         // ── Card internals ──
         cards.each(function(d) {
             var g = d3.select(this);
@@ -552,13 +566,12 @@
             });
             allPortYs.sort(function(a, b) { return a - b; });
 
-            // Full-width alternating row backgrounds — aligned to actual port Y
+            // Full-width row backgrounds — aligned to actual port Y
             allPortYs.forEach(function(py, i) {
-                if (i % 2 === 0) {
-                    g.append('rect').attr('class', 'aport-row-bg')
-                        .attr('x', 1).attr('y', py - PORT_H / 2)
-                        .attr('width', CARD_W - 2).attr('height', PORT_H);
-                }
+                g.append('rect')
+                    .attr('class', i % 2 === 0 ? 'aport-row-even' : 'aport-row-odd')
+                    .attr('x', 1).attr('y', py - PORT_H / 2)
+                    .attr('width', CARD_W - 2).attr('height', PORT_H);
             });
 
             // Center divider between left/right columns

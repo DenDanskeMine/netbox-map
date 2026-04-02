@@ -1,0 +1,34 @@
+{% extends 'generic/object.html' %}
+{% load helpers %}
+{% load i18n %}
+
+{% block content %}
+<div class="row mb-3">
+  <div class="col-md-6">
+    <div class="card">
+      <h5 class="card-header">{% trans "Template" %}</h5>
+      <table class="table table-hover attr-table">
+        <tr><th>{% trans "Name" %}</th><td>{{ object.name }}</td></tr>
+        <tr><th>{% trans "Group" %}</th><td>{% if object.group %}<a href="{{ object.group.get_absolute_url }}">{{ object.group }}</a>{% else %}&mdash;{% endif %}</td></tr>
+        <tr><th>{% trans "Description" %}</th><td>{{ object.description|placeholder }}</td></tr>
+        <tr><th>{% trans "Name Format" %}</th><td><code>{{ object.name_format }}</code></td></tr>
+      </table>
+    </div>
+  </div>
+  <div class="col-md-6">
+    <div class="card">
+      <h5 class="card-header">{% trans "Defaults" %}</h5>
+      <table class="table table-hover attr-table">
+        <tr><th>{% trans "Status" %}</th><td>{{ object.get_default_status_display }}</td></tr>
+        <tr><th>{% trans "Criticality" %}</th><td>{{ object.get_default_criticality_display }}</td></tr>
+        <tr><th>{% trans "Environment" %}</th><td>{{ object.get_default_environment_display }}</td></tr>
+        <tr><th>{% trans "Version" %}</th><td>{{ object.default_version|placeholder }}</td></tr>
+        <tr><th>{% trans "Role" %}</th><td>{{ object.get_default_role_display }}</td></tr>
+        <tr><th>{% trans "Port" %}</th><td>{{ object.default_port|placeholder }}</td></tr>
+        <tr><th>{% trans "Protocol" %}</th><td>{{ object.default_protocol|placeholder }}</td></tr>
+      </table>
+    </div>
+    {% include 'inc/panels/tags.html' %}
+  </div>
+</div>
+{% endblock %}

@@ -101,6 +101,15 @@ urlpatterns = (
     path('application-groups/<int:pk>/delete/', views.ApplicationGroupDeleteView.as_view(), name='applicationgroup_delete'),
     path('application-groups/<int:pk>/changelog/', ObjectChangeLogView.as_view(), name='applicationgroup_changelog', kwargs={'model': models.ApplicationGroup}),
 
+    # ApplicationTemplate
+    path('application-templates/', views.ApplicationTemplateListView.as_view(), name='applicationtemplate_list'),
+    path('application-templates/add/', views.ApplicationTemplateEditView.as_view(), name='applicationtemplate_add'),
+    path('application-templates/delete/', views.ApplicationTemplateBulkDeleteView.as_view(), name='applicationtemplate_bulk_delete'),
+    path('application-templates/<int:pk>/', views.ApplicationTemplateView.as_view(), name='applicationtemplate'),
+    path('application-templates/<int:pk>/edit/', views.ApplicationTemplateEditView.as_view(), name='applicationtemplate_edit'),
+    path('application-templates/<int:pk>/delete/', views.ApplicationTemplateDeleteView.as_view(), name='applicationtemplate_delete'),
+    path('application-templates/<int:pk>/changelog/', ObjectChangeLogView.as_view(), name='applicationtemplate_changelog', kwargs={'model': models.ApplicationTemplate}),
+
     # Application
     path('applications/', views.ApplicationListView.as_view(), name='application_list'),
     path('applications/add/', views.ApplicationEditView.as_view(), name='application_add'),

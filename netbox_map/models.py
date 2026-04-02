@@ -803,6 +803,51 @@ class ApplicationGroup(NetBoxModel):
         return reverse('plugins:netbox_map:applicationgroup', args=[self.pk])
 
 
+class ApplicationTemplate(NetBoxModel):
+    """Blueprint for creating Application instances when deployed to a host."""
+    name = models.CharField(max_length=200)
+    slug = models.SlugField(max_length=200, unique=True)
+    description = models.TextField(blank=True)
+    default_status = models.CharField(
+        max_length=50, choices=ApplicationStatusChoices,
+        default=ApplicationStatusChoices.STATUS_ACTIVE,
+    )
+    default_criticality = models.CharField(
+        max_length=50, choices=ApplicationCriticalityChoices,
+        default=ApplicationCriticalityChoices.CRITICALITY_MEDIUM,
+    )
+    default_environment = models.CharField(
+        max_length=50, choices=ApplicationEnvironmentChoices,
+        default=ApplicationEnvironmentChoices.ENV_PRODUCTION,
+    )
+    default_version = models.CharField(max_length=100, blank=True)
+    default_port = models.IntegerField(null=True, blank=True)
+    default_protocol = models.CharField(max_length=50, blank=True)
+    default_role = models.CharField(
+        max_length=50, choices=DeploymentRoleChoices,
+        default=DeploymentRoleChoices.ROLE_PRIMARY,
+    )
+    group = models.ForeignKey(
+        'ApplicationGroup', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='templates',
+    )
+    name_format = models.CharField(
+        max_length=200, default='{app}',
+        help_text=_('Use {app} for template name, {host} for hostname'),
+    )
+
+    class Meta:
+        ordering = ['name']
+        verbose_name = _('application template')
+        verbose_name_plural = _('application templates')
+
+    def __str__(self):
+        return self.name
+
+    def get_absolute_url(self):
+        return reverse('plugins:netbox_map:applicationtemplate', args=[self.pk])
+
+
 class Application(NetBoxModel):
     """An application or service deployed in the organization."""
     name = models.CharField(max_length=200)

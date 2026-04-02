@@ -1529,8 +1529,9 @@ span.topo-iface-dot.empty {
     font-size: 9px;
     padding: 1px 7px;
     border-radius: 3px;
-    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
     color: #6a7088;
+    background: none;
 }
 .adp-tag-code {
     font-family: monospace;
@@ -1824,7 +1825,8 @@ span.topo-iface-dot.empty {
 .acard .acard-sep { stroke: rgba(255,255,255,0.06); stroke-width: 0.5; }
 .acard .acard-footer { font-size: 9px; fill: #484f58; cursor: default; }
 .acard:hover .acard-footer { fill: #8b949e; }
-.aport-row-bg { fill: rgba(255,255,255,0.03); }
+.aport-row-even { fill: rgba(255,255,255,0.04); }
+.aport-row-odd  { fill: rgba(255,255,255,0.015); }
 .acard-col-div { stroke: rgba(255,255,255,0.05); stroke-width: 0.5; }
 
 /* Port section headers */
