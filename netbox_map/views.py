@@ -1623,11 +1623,12 @@ class AppTopologyDataView(LoginRequiredMixin, View):
                 }
                 nodes.append(device_node)
 
-        # Propagate device status to apps: if a device is offline/failed/decommissioning,
-        # mark all apps deployed on it as impacted so the topology shows WHY.
-        # Then cascade through dependency chain: if app X is down and app Y depends on X,
-        # Y is also impacted.
+        # ── Role-aware status propagation ──
+        # Statuses: 'down' (all hosts dead), 'degraded' (primary down but standby exists),
+        #           'healthy' (all hosts up)
         DOWN_STATUSES = {'offline', 'failed', 'decommissioning'}
+        FAILOVER_ROLES = {'standby', 'replica'}
+
         if device_ids:
             down_devices = {}  # device_id -> device_name
             for node in nodes:
@@ -1635,44 +1636,99 @@ class AppTopologyDataView(LoginRequiredMixin, View):
                     down_devices[node['device_id']] = node['name']
 
             if down_devices:
-                # Step 1: Mark apps directly deployed on down devices
+                # Step 1: Classify each app's health based on host roles
+                # Build per-app deployment map: app_pk -> [(device_id, role)]
+                app_hosts = {}
                 for dep in deployments:
-                    if dep.host_type_id == device_ct.pk and dep.host_id in down_devices:
-                        app_node = app_map.get(dep.application_id)
-                        if app_node:
-                            if 'host_down_reasons' not in app_node:
-                                app_node['host_down'] = True
-                                app_node['host_down_reasons'] = []
-                            app_node['host_down_reasons'].append(down_devices[dep.host_id])
+                    if dep.host_type_id == device_ct.pk:
+                        app_hosts.setdefault(dep.application_id, []).append(
+                            (dep.host_id, dep.role)
+                        )
+
+                for app_pk, host_list in app_hosts.items():
+                    app_node = app_map.get(app_pk)
+                    if not app_node:
+                        continue
+
+                    primaries = [(did, r) for did, r in host_list if r not in FAILOVER_ROLES]
+                    failovers = [(did, r) for did, r in host_list if r in FAILOVER_ROLES]
+                    down_primary_names = [down_devices[did] for did, r in primaries if did in down_devices]
+                    down_failover_names = [down_devices[did] for did, r in failovers if did in down_devices]
+
+                    if not down_primary_names and not down_failover_names:
+                        continue  # all hosts up
+
+                    all_primaries_down = len(down_primary_names) == len(primaries) if primaries else False
+                    all_failovers_down = len(down_failover_names) == len(failovers) if failovers else True
+                    has_live_failover = failovers and not all_failovers_down
+
+                    reasons = down_primary_names + down_failover_names
+
+                    if all_primaries_down and all_failovers_down:
+                        app_node['host_status'] = 'down'
+                        app_node['host_down'] = True
+                    elif all_primaries_down and has_live_failover:
+                        app_node['host_status'] = 'degraded'
+                        app_node['host_down'] = False
+                    elif down_primary_names:
+                        app_node['host_status'] = 'degraded'
+                        app_node['host_down'] = False
+                    else:
+                        app_node['host_status'] = 'degraded'
+                        app_node['host_down'] = False
+
+                    app_node['host_down_reasons'] = reasons
 
                 # Step 2: Cascade through dependency chain (BFS)
-                # Edge convention: source DEPENDS ON target.
-                # If target is down → source is impacted.
-                # Build reverse adjacency: target_app_pk -> [source_app_pks]
+                # Edge convention: source DEPENDS ON target
+                # Build reverse adjacency with dep type: target_pk -> [(source_pk, dep_type)]
                 reverse_deps = {}
                 for d in deps:
-                    reverse_deps.setdefault(d.target_application_id, []).append(d.source_application_id)
+                    reverse_deps.setdefault(d.target_application_id, []).append(
+                        (d.source_application_id, d.dependency_type)
+                    )
 
-                # BFS from all directly-impacted apps
-                queue = [pk for pk, node in app_map.items() if node.get('host_down')]
+                # BFS from all directly-affected apps
+                queue = [
+                    pk for pk, node in app_map.items()
+                    if node.get('host_status') in ('down', 'degraded')
+                ]
                 visited = set(queue)
                 while queue:
                     current_pk = queue.pop(0)
                     current_node = app_map.get(current_pk)
                     if not current_node:
                         continue
-                    # The reason to propagate: this app's name (it's down/impacted)
+                    current_status = current_node.get('host_status', 'healthy')
                     reason = current_node['name']
-                    for dependent_pk in reverse_deps.get(current_pk, []):
+
+                    for dependent_pk, dep_type in reverse_deps.get(current_pk, []):
                         dep_node = app_map.get(dependent_pk)
                         if not dep_node:
                             continue
-                        if 'host_down_reasons' not in dep_node:
+
+                        # Determine propagated status
+                        if current_status == 'down' and dep_type == 'hard':
+                            new_status = 'down'
+                        else:
+                            new_status = 'degraded'
+
+                        existing = dep_node.get('host_status', 'healthy')
+                        # Only escalate, never downgrade
+                        if existing == 'down':
+                            pass  # already worst
+                        elif new_status == 'down':
+                            dep_node['host_status'] = 'down'
                             dep_node['host_down'] = True
+                        elif existing != 'degraded':
+                            dep_node['host_status'] = 'degraded'
+                            dep_node['host_down'] = False
+
+                        if 'host_down_reasons' not in dep_node:
                             dep_node['host_down_reasons'] = []
-                        # Only add reason if not already listed
                         if reason not in dep_node['host_down_reasons']:
                             dep_node['host_down_reasons'].append(reason)
+
                         if dependent_pk not in visited:
                             visited.add(dependent_pk)
                             queue.append(dependent_pk)
@@ -1743,13 +1799,18 @@ class AppTopologyDetailView(LoginRequiredMixin, View):
             application=app,
         ).select_related('host_type'):
             host_obj = deploy.host
+            host_status = 'unknown'
+            if host_obj and hasattr(host_obj, 'status'):
+                host_status = host_obj.status
             deployments.append({
                 'id': deploy.pk,
                 'host_name': str(host_obj) if host_obj else 'Unknown',
                 'host_type': deploy.host_type.model if deploy.host_type else '',
                 'role': deploy.get_role_display(),
+                'role_value': deploy.role,
                 'port': deploy.port,
                 'protocol': deploy.protocol,
+                'host_status': host_status,
             })
 
         return JsonResponse({

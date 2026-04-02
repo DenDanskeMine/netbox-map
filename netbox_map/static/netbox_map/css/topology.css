@@ -1580,3 +1580,198 @@ a.topo-dp-row:hover .topo-dp-row-name {
     text-align: center;
     padding: 20px 0;
 }
+
+/* ══════════════════════════════════════════════
+   Application Topology v3 — orthogonal routing
+   ══════════════════════════════════════════════ */
+
+/* Cards */
+.acard { cursor: pointer; }
+.acard .acard-shadow { fill: rgba(0,0,0,0.08); }
+.acard .acard-bg {
+    fill: #171d2e;
+    stroke: rgba(255,255,255,0.05);
+    stroke-width: 1;
+    transition: stroke 0.1s, stroke-width 0.1s;
+}
+.acard:hover .acard-bg { stroke: rgba(255,255,255,0.15); }
+.acard.selected .acard-bg { stroke: #5a8dee; stroke-width: 1.5; }
+.acard.dragging { opacity: 0.6; }
+.acard.acard-dim { opacity: 0.15; }
+.acard .acard-name { font-size: 11.5px; font-weight: 600; fill: #d0d4e4; }
+.acard .acard-sub { font-size: 8px; fill: #3e4458; }
+.acard .acard-alert { font-size: 8px; font-weight: 600; fill: #e67e22; }
+.acard .acard-warn { font-size: 11px; fill: #e74c3c; }
+.acard .acard-status { transition: fill 0.15s; }
+.acard .acard-sep { stroke: rgba(255,255,255,0.04); stroke-width: 1; }
+
+/* Port labels + dots on card edges */
+.aport-label {
+    font-size: 8.5px;
+    fill: #3a4058;
+    transition: fill 0.1s;
+}
+.acard:hover .aport-label { fill: #6a7498; }
+.aport-dot {
+    fill: #2a3248;
+    stroke: rgba(255,255,255,0.08);
+    stroke-width: 1;
+    transition: fill 0.1s;
+}
+.acard:hover .aport-dot { fill: #3a4a68; }
+
+/* Edges — orthogonal */
+.aedge {
+    fill: none;
+    pointer-events: stroke;
+    stroke-linejoin: round;
+    transition: stroke-opacity 0.1s, stroke-width 0.1s;
+}
+.aedge-hard { stroke-width: 1.8; stroke-opacity: 0.5; }
+.aedge-soft { stroke-width: 1.5; stroke-opacity: 0.4; stroke-dasharray: 6,3; }
+.aedge-dim  { stroke-opacity: 0.04 !important; }
+.aedge-hi   { stroke-opacity: 1 !important; stroke-width: 2.5 !important; }
+
+/* Host count badge */
+.acard-host-badge rect {
+    fill: rgba(255,255,255,0.04);
+    stroke: rgba(255,255,255,0.06);
+    stroke-width: 0.5;
+}
+.acard-host-badge text {
+    font-size: 8px;
+    fill: #4a5068;
+    font-weight: 600;
+}
+.acard:hover .acard-host-badge rect {
+    fill: rgba(255,255,255,0.08);
+}
+.acard:hover .acard-host-badge text {
+    fill: #7a8098;
+}
+
+/* Simulation states */
+.acard.failure-source .acard-bg {
+    stroke: #e74c3c !important;
+    stroke-width: 2.5 !important;
+    filter: drop-shadow(0 0 6px rgba(231,76,60,0.5));
+}
+.acard.failure-impacted .acard-bg {
+    stroke: #e67e22 !important;
+    stroke-width: 2 !important;
+    filter: drop-shadow(0 0 5px rgba(230,126,34,0.4));
+}
+.acard.failure-degraded .acard-bg {
+    stroke: #f39c12 !important;
+    stroke-width: 1.5 !important;
+    filter: drop-shadow(0 0 4px rgba(243,156,18,0.3));
+}
+
+/* Simulation summary panel */
+.sim-impact-summary {
+    position: fixed;
+    bottom: 52px;
+    left: 16px;
+    background: #1a1e2e;
+    border: 1px solid rgba(231,76,60,0.3);
+    border-radius: 6px;
+    padding: 10px 16px;
+    z-index: 200;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+    min-width: 200px;
+}
+.sim-impact-summary .sim-title {
+    font-size: 12px;
+    font-weight: 700;
+    color: #e74c3c;
+    margin-bottom: 4px;
+}
+.sim-impact-summary .sim-body {
+    font-size: 11px;
+    color: #b0b8d0;
+}
+.sim-impact-summary .sim-detail {
+    font-size: 10px;
+    color: #5a6478;
+    margin-top: 3px;
+}
+
+/* Clear simulation button */
+.sim-clear-btn {
+    position: fixed;
+    bottom: 52px;
+    right: 340px;
+    z-index: 200;
+    background: #e74c3c;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    padding: 6px 14px;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(231,76,60,0.4);
+}
+.sim-clear-btn:hover {
+    background: #c0392b;
+}
+
+/* Host hover popup */
+.host-popup {
+    position: fixed;
+    z-index: 9999;
+    background: #1a1e2e;
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 6px;
+    padding: 6px 0;
+    min-width: 160px;
+    max-width: 240px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+    font-family: inherit;
+}
+.host-popup-title {
+    padding: 2px 12px 4px;
+    font-size: 9px;
+    font-weight: 600;
+    color: #505868;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+.host-popup-row {
+    display: flex;
+    align-items: center;
+    padding: 4px 12px;
+    text-decoration: none;
+    gap: 8px;
+    transition: background 0.1s;
+}
+.host-popup-row:hover {
+    background: rgba(255,255,255,0.05);
+}
+.host-popup-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+.host-popup-name {
+    flex: 1;
+    font-size: 11px;
+    color: #b0b8d0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.host-popup-row:hover .host-popup-name {
+    color: #d0d8f0;
+}
+.host-popup-role {
+    font-size: 9px;
+    color: #3e4458;
+}
+.host-popup-loading, .host-popup-empty {
+    padding: 8px 12px;
+    font-size: 10px;
+    color: #505868;
+    text-align: center;
+}

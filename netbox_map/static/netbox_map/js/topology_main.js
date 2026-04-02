@@ -15,6 +15,8 @@
     var renderer = new App.Renderer(state, events);
     renderer.init();
 
+    var appRenderer = App.AppRenderer ? new App.AppRenderer(state, events, renderer) : null;
+
     // Expose events for inline handlers
     App._events = events;
 
@@ -69,7 +71,7 @@
     function collectLayout() {
         var layout = {};
         // Use renderer's positioned data (has actual x,y from layout + drag)
-        var renderedNodes = renderer._stencilNodeData || state.nodes;
+        var renderedNodes = (appRenderer && appRenderer._nodeData) || renderer._stencilNodeData || state.nodes;
         renderedNodes.forEach(function(n) {
             var entry = { x: n.x || 0, y: n.y || 0 };
             if (state.hiddenNodes.has(n.id)) entry.hidden = true;
@@ -94,7 +96,7 @@
     // Get current positions from renderer for preserving across re-renders
     function getCurrentPositions() {
         var positions = {};
-        var renderedNodes = renderer._stencilNodeData || [];
+        var renderedNodes = (appRenderer && appRenderer._nodeData) || renderer._stencilNodeData || [];
         renderedNodes.forEach(function(n) {
             if (n.x !== undefined) positions[n.id] = { x: n.x, y: n.y };
         });
@@ -103,7 +105,11 @@
 
     // Wire renderer focus from sidebar clicks — pan + zoom to node
     events.on('renderer:highlight', function(nodeId) {
-        renderer.focusNode(nodeId);
+        if (state.topologyMode !== 'network' && appRenderer) {
+            appRenderer.focusNode(nodeId);
+        } else {
+            renderer.focusNode(nodeId);
+        }
     });
 
     // Wire filter visibility
@@ -315,7 +321,11 @@
             // Apply saved layout before rendering
             applySavedLayout();
 
-            renderer.render(data.nodes, data.edges);
+            if (appRenderer) {
+                appRenderer.render(data.nodes, data.edges);
+            } else {
+                renderer.render(data.nodes, data.edges);
+            }
             events.emit('data:loaded', data);
 
             if (sidebarEl) sidebarEl.classList.remove('hidden');

@@ -122,10 +122,11 @@
         if (data.deployments && data.deployments.length > 0) {
             html += '<div class="topo-dp-section">Hosts <span>' + data.deployments.length + '</span></div>';
             data.deployments.forEach(function(deploy) {
-                html += '<div class="topo-dp-row">'
+                var hostUrl = '/dcim/devices/?q=' + encodeURIComponent(deploy.host_name);
+                html += '<a class="topo-dp-row" href="' + esc(hostUrl) + '" target="_blank">'
                     + '<span class="topo-dp-row-name">' + esc(deploy.host_name) + '</span>'
                     + '<span class="topo-dp-row-badge">' + esc(deploy.role) + '</span>'
-                    + '</div>';
+                    + '</a>';
             });
         }
         if (!data.upstream.length && !data.downstream.length && !data.deployments.length) {
