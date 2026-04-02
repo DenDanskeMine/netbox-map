@@ -70,15 +70,27 @@
 
         html += '</div>'; // end header
 
-        // ── Alert banner ──
+        // ── Status explanation ──
         if (hs === 'down' || hs === 'degraded') {
-            var r = node.host_down_reasons || [];
+            var hostReasons = node.host_down_reasons || [];
+            var depReasons = node.dep_down_reasons || [];
             var alertClass = hs === 'down' ? 'adp-alert-down' : 'adp-alert-degraded';
             var label = hs === 'down' ? 'Down' : 'Degraded';
-            html += '<div class="adp-alert ' + alertClass + '">'
-                + '<span class="adp-alert-label">' + label + '</span>'
-                + '<span class="adp-alert-reason">' + esc(r.join(', ')) + '</span>'
-                + '</div>';
+
+            html += '<div class="adp-alert ' + alertClass + '">';
+            html += '<span class="adp-alert-label">' + label + '</span>';
+
+            // Show each cause separately
+            if (hostReasons.length > 0) {
+                var hostMsg = 'Host' + (hostReasons.length > 1 ? 's' : '') + ' offline: <strong>' + esc(hostReasons.join(', ')) + '</strong>';
+                if (hs === 'degraded') hostMsg += ' — running on standby';
+                html += '<div class="adp-alert-detail">' + hostMsg + '</div>';
+            }
+            if (depReasons.length > 0) {
+                html += '<div class="adp-alert-detail">Dependenc' + (depReasons.length > 1 ? 'ies' : 'y') + ' down: <strong>' + esc(depReasons.join(', ')) + '</strong></div>';
+            }
+
+            html += '</div>';
         }
 
         // ── Quick info (owner, site) — only if present ──

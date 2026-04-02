@@ -1566,8 +1566,14 @@ span.topo-iface-dot.empty {
 }
 .adp-alert-down .adp-alert-label { color: #e74c3c; }
 .adp-alert-degraded .adp-alert-label { color: #e67e22; }
-.adp-alert-reason {
-    color: #8890a8;
+.adp-alert-detail {
+    font-size: 10px;
+    color: #8b949e;
+    line-height: 1.4;
+    margin-top: 2px;
+}
+.adp-alert-detail strong {
+    color: #c9d1d9;
 }
 
 /* Quick info */
@@ -1803,12 +1809,23 @@ span.topo-iface-dot.empty {
 .acard.dragging { opacity: 0.5; }
 .acard.acard-dim { opacity: 0.1; }
 .acard .acard-name { font-size: 13px; font-weight: 600; fill: #c9d1d9; }
-.acard .acard-sub { font-size: 10px; fill: #8b949e; }                /* P2-12: WCAG AA fix */
-.acard .acard-alert { font-size: 10px; font-weight: 500; fill: #f85149; }
+.acard .acard-sub { font-size: 9px; fill: #8b949e; }
+.acard .acard-reason { font-size: 8px; fill: #f8514988; }
+
+/* Status pills */
+.acard-pill { stroke: none; }
+.acard-pill-ok { fill: rgba(46,160,67,0.1); }
+.acard-pill-down { fill: rgba(248,81,73,0.15); }
+.acard-pill-degraded { fill: rgba(210,153,34,0.12); }
+.acard-pill-text { font-size: 8px; font-weight: 600; letter-spacing: 0.3px; }
+.acard-pill-ok-text { fill: #3fb950; }
+.acard-pill-down-text { fill: #f85149; }
+.acard-pill-degraded-text { fill: #d29922; }
 .acard .acard-sep { stroke: rgba(255,255,255,0.06); stroke-width: 0.5; }
 .acard .acard-footer { font-size: 9px; fill: #484f58; cursor: default; }
 .acard:hover .acard-footer { fill: #8b949e; }
-.aport-row-bg { fill: rgba(255,255,255,0.04); }                      /* P2-15: visible now */
+.aport-row-bg { fill: rgba(255,255,255,0.03); }
+.acard-col-div { stroke: rgba(255,255,255,0.05); stroke-width: 0.5; }
 
 /* Port section headers */
 .aport-section-hdr {

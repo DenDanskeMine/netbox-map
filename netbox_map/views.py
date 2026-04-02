@@ -1722,21 +1722,22 @@ class AppTopologyDataView(LoginRequiredMixin, View):
                         escalated = False
 
                         # Only escalate, never downgrade
+                        # IMPORTANT: host_down stays unchanged — it tracks OWN host state only
+                        # dep_down_reasons tracks cascaded dependency failures separately
                         if existing == 'down':
                             pass  # already worst
                         elif new_status == 'down':
                             dep_node['host_status'] = 'down'
-                            dep_node['host_down'] = True
                             escalated = True
                         elif existing == 'healthy':
                             dep_node['host_status'] = 'degraded'
-                            dep_node['host_down'] = False
                             escalated = True
 
-                        if 'host_down_reasons' not in dep_node:
-                            dep_node['host_down_reasons'] = []
-                        if reason not in dep_node['host_down_reasons']:
-                            dep_node['host_down_reasons'].append(reason)
+                        # Track dependency reasons separately from host reasons
+                        if 'dep_down_reasons' not in dep_node:
+                            dep_node['dep_down_reasons'] = []
+                        if reason not in dep_node['dep_down_reasons']:
+                            dep_node['dep_down_reasons'].append(reason)
 
                         # Re-enqueue if status was escalated (handles cycles correctly)
                         if escalated:

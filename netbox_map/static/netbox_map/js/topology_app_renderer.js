@@ -7,7 +7,7 @@
     /* ── Constants ── */
     var CARD_W    = 220;
     var CARD_R    = 5;
-    var HEADER_H  = 36;     // name + subtitle area
+    var HEADER_H  = 40;     // name + subtitle + pill area
     var PORT_H    = 16;     // height per port row
     var PORT_GAP  = 1;
     var PORT_PAD  = 4;      // padding above/below port block
@@ -452,30 +452,74 @@
             var hs = d.host_status || 'healthy';
             var hasPorts = d._portsL.length > 0 || d._portsR.length > 0;
 
-            // Name (bold, left-aligned)
+            // Row 1 (y=16): Name + status pill
             var nameText = d.name || '';
-            if (nameText.length > 26) nameText = nameText.substring(0, 24) + '\u2026';
+            var maxNameLen = (hs !== 'healthy') ? 18 : 24;  // shorter when pill present
+            if (nameText.length > maxNameLen) nameText = nameText.substring(0, maxNameLen - 2) + '\u2026';
             g.append('text').attr('class', 'acard-name')
-                .attr('x', 10).attr('y', 17).text(nameText);
+                .attr('x', 10).attr('y', 16).text(nameText);
 
-            // Status dot
-            var dotColor = hs === 'down' ? '#ef4444' : hs === 'degraded' ? '#f97316' : App.statusColor(d.status_value);
-            g.append('circle').attr('cx', CARD_W - 10).attr('cy', 13)
-                .attr('r', 4).attr('fill', dotColor)
-                .attr('stroke', dotColor).attr('stroke-width', 1).attr('stroke-opacity', 0.3);
-
-            // Subtitle line
-            var subText;
-            if (hs !== 'healthy' && d.host_down_reasons) {
-                var r = d.host_down_reasons;
-                subText = r.length === 1 ? r[0] + ' down' : r.length + ' hosts down';
+            // Status pill — right side of row 1
+            var statusLabel, statusClass;
+            if (hs === 'down') {
+                statusLabel = 'DOWN';
+                statusClass = 'acard-pill-down';
+            } else if (hs === 'degraded') {
+                statusLabel = 'DEGRADED';
+                statusClass = 'acard-pill-degraded';
             } else {
-                subText = [d.group, d.environment].filter(Boolean).join(' \u00B7 ');
+                statusLabel = '';  // no pill for healthy — clean
+                statusClass = '';
             }
+            if (statusLabel) {
+                var pillW = statusLabel.length * 5.5 + 10;
+                var pillX = CARD_W - pillW - 8;
+
+                // Build tooltip explaining WHY this status
+                var tooltip = statusLabel;
+                var hostReasons = d.host_down_reasons || [];
+                var depReasons = d.dep_down_reasons || [];
+                var parts = [];
+                if (hostReasons.length > 0) parts.push('Host offline: ' + hostReasons.join(', '));
+                if (depReasons.length > 0) parts.push('Dependency down: ' + depReasons.join(', '));
+                if (parts.length > 0) tooltip = parts.join('. ');
+
+                var pillGroup = g.append('g').attr('class', 'acard-pill-group');
+                pillGroup.append('rect').attr('class', 'acard-pill ' + statusClass)
+                    .attr('x', pillX).attr('y', 5)
+                    .attr('width', pillW).attr('height', 14)
+                    .attr('rx', 3);
+                pillGroup.append('text').attr('class', 'acard-pill-text ' + statusClass + '-text')
+                    .attr('x', pillX + pillW / 2).attr('y', 15)
+                    .attr('text-anchor', 'middle')
+                    .text(statusLabel);
+                pillGroup.append('title').text(tooltip);
+            }
+
+            // Row 2 (y=30): group · env
+            var subText = [d.group, d.environment].filter(Boolean).join(' \u00B7 ');
             if (subText.length > 28) subText = subText.substring(0, 26) + '\u2026';
-            g.append('text')
-                .attr('class', hs !== 'healthy' ? 'acard-alert' : 'acard-sub')
+            g.append('text').attr('class', 'acard-sub')
                 .attr('x', 10).attr('y', 30).text(subText);
+
+            // Row 2 (right): short reason
+            if (hs !== 'healthy') {
+                var hostR = d.host_down_reasons || [];
+                var depR = d.dep_down_reasons || [];
+                var reasonText = '';
+                if (hostR.length > 0) {
+                    reasonText = hostR.length === 1 ? hostR[0] : hostR.length + ' hosts';
+                } else if (depR.length > 0) {
+                    reasonText = depR.length === 1 ? depR[0] : depR.length + ' deps';
+                }
+                if (reasonText) {
+                    if (reasonText.length > 14) reasonText = reasonText.substring(0, 12) + '..';
+                    g.append('text').attr('class', 'acard-reason')
+                        .attr('x', CARD_W - 8).attr('y', 30)
+                        .attr('text-anchor', 'end')
+                        .text(reasonText);
+                }
+            }
 
             // ── Header / port separator ──
             if (hasPorts) {
@@ -484,78 +528,83 @@
                     .attr('y1', HEADER_H).attr('y2', HEADER_H);
             }
 
-            // ── Port rows with alternating subtle backgrounds ──
-            var allPorts = [];
-            d._portsL.forEach(function(p) { allPorts.push({ p: p, side: 'L' }); });
-            d._portsR.forEach(function(p) { allPorts.push({ p: p, side: 'R' }); });
+            // ── Port table ──
 
-            // Alternating row backgrounds for left-side ports
-            d._portsL.forEach(function(p, i) {
-                if (i % 2 === 0) {
-                    g.append('rect').attr('class', 'aport-row-bg')
-                        .attr('x', 1).attr('y', p._y - PORT_H / 2)
-                        .attr('width', CARD_W / 2 - 1).attr('height', PORT_H);
-                }
-            });
-
-            // Alternating row backgrounds for right-side ports
-            d._portsR.forEach(function(p, i) {
-                if (i % 2 === 0) {
-                    g.append('rect').attr('class', 'aport-row-bg')
-                        .attr('x', CARD_W / 2).attr('y', p._y - PORT_H / 2)
-                        .attr('width', CARD_W / 2 - 1).attr('height', PORT_H);
-                }
-            });
-
-            // Section labels for port sides
+            // Section headers
             if (d._portsL.length > 0) {
                 g.append('text').attr('class', 'aport-section-hdr')
-                    .attr('x', 6).attr('y', HEADER_H + 8)
+                    .attr('x', 8).attr('y', HEADER_H + 10)
                     .text('DEPENDS ON');
             }
             if (d._portsR.length > 0) {
                 g.append('text').attr('class', 'aport-section-hdr')
-                    .attr('x', CARD_W - 6).attr('y', HEADER_H + 8)
+                    .attr('x', CARD_W - 8).attr('y', HEADER_H + 10)
                     .attr('text-anchor', 'end')
                     .text('NEEDED BY');
             }
 
-            // Right-side port labels + connection dots
+            // Collect all port Y positions from both sides to draw aligned rows
+            var allPortYs = [];
+            d._portsL.forEach(function(p) { allPortYs.push(p._y); });
             d._portsR.forEach(function(p) {
-                g.append('text').attr('class', 'aport-label aport-out')
-                    .attr('x', CARD_W - 6).attr('y', p._y + 3)
-                    .attr('text-anchor', 'end')
-                    .text(function() {
-                        var t = p.name || '';
-                        return t.length > 20 ? t.substring(0, 18) + '..' : t;
-                    });
-                g.append('circle').attr('class', 'aport-tick')
-                    .attr('cx', CARD_W).attr('cy', p._y).attr('r', 2);
+                // Only add if not already at this Y (avoid duplicates when both sides have same row count)
+                if (allPortYs.indexOf(p._y) === -1) allPortYs.push(p._y);
+            });
+            allPortYs.sort(function(a, b) { return a - b; });
+
+            // Full-width alternating row backgrounds — aligned to actual port Y
+            allPortYs.forEach(function(py, i) {
+                if (i % 2 === 0) {
+                    g.append('rect').attr('class', 'aport-row-bg')
+                        .attr('x', 1).attr('y', py - PORT_H / 2)
+                        .attr('width', CARD_W - 2).attr('height', PORT_H);
+                }
             });
 
-            // Left-side port labels + connection dots
+            // Center divider between left/right columns
+            if (d._portsL.length > 0 && d._portsR.length > 0 && allPortYs.length > 0) {
+                g.append('line').attr('class', 'acard-col-div')
+                    .attr('x1', CARD_W / 2).attr('x2', CARD_W / 2)
+                    .attr('y1', allPortYs[0] - PORT_H / 2)
+                    .attr('y2', allPortYs[allPortYs.length - 1] + PORT_H / 2);
+            }
+
+            // Left-side ports (DEPENDS ON)
             d._portsL.forEach(function(p) {
                 g.append('text').attr('class', 'aport-label aport-in')
-                    .attr('x', 6).attr('y', p._y + 3)
+                    .attr('x', 8).attr('y', p._y + 3)
                     .text(function() {
                         var t = p.name || '';
-                        return t.length > 20 ? t.substring(0, 18) + '..' : t;
+                        return t.length > 12 ? t.substring(0, 10) + '..' : t;
                     });
                 g.append('circle').attr('class', 'aport-tick')
                     .attr('cx', 0).attr('cy', p._y).attr('r', 2);
             });
 
+            // Right-side ports (NEEDED BY)
+            d._portsR.forEach(function(p) {
+                g.append('text').attr('class', 'aport-label aport-out')
+                    .attr('x', CARD_W - 8).attr('y', p._y + 3)
+                    .attr('text-anchor', 'end')
+                    .text(function() {
+                        var t = p.name || '';
+                        return t.length > 12 ? t.substring(0, 10) + '..' : t;
+                    });
+                g.append('circle').attr('class', 'aport-tick')
+                    .attr('cx', CARD_W).attr('cy', p._y).attr('r', 2);
+            });
+
             // ── Footer: host count inside the card ──
             if (d.deploy_count > 0) {
-                var footerY = d._h - 12;
+                var sepY = d._h - 20;
                 // Footer separator
                 g.append('line').attr('class', 'acard-sep')
                     .attr('x1', 8).attr('x2', CARD_W - 8)
-                    .attr('y1', footerY - 4).attr('y2', footerY - 4);
-                // Host count text
+                    .attr('y1', sepY).attr('y2', sepY);
+                // Host count text — centered in the 20px footer area
                 var hostLabel = d.deploy_count === 1 ? '1 host' : d.deploy_count + ' hosts';
                 g.append('text').attr('class', 'acard-footer')
-                    .attr('x', CARD_W / 2).attr('y', footerY + 4)
+                    .attr('x', CARD_W / 2).attr('y', d._h - 7)
                     .attr('text-anchor', 'middle')
                     .text(hostLabel);
                 // Store app_id for hover popup
