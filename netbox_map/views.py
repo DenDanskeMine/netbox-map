@@ -1217,6 +1217,73 @@ class ApplicationTemplateBulkDeleteView(generic.BulkDeleteView):
     table = tables.ApplicationTemplateTable
 
 
+class ApplicationTemplateDeployView(LoginRequiredMixin, PermissionRequiredMixin, View):
+    """Deploy a template to multiple hosts — creates an Application per host."""
+    permission_required = 'netbox_map.add_applicationdeployment'
+
+    def _get_template(self, request, pk):
+        from django.shortcuts import get_object_or_404
+        return get_object_or_404(ApplicationTemplate, pk=pk)
+
+    def get(self, request, pk):
+        template = self._get_template(request, pk)
+        form = forms.ApplicationTemplateDeployForm()
+        return render(request, 'netbox_map/applicationtemplate_deploy.html', {
+            'object': template,
+            'form': form,
+        })
+
+    def post(self, request, pk):
+        template = self._get_template(request, pk)
+        form = forms.ApplicationTemplateDeployForm(request.POST)
+
+        if form.is_valid():
+            created = 0
+            device_ct = ContentType.objects.get_for_model(Device)
+
+            hosts = []
+            for device in form.cleaned_data.get('devices', []):
+                hosts.append((device_ct, device))
+
+            vms = form.cleaned_data.get('virtual_machines', [])
+            if vms:
+                from virtualization.models import VirtualMachine
+                vm_ct = ContentType.objects.get_for_model(VirtualMachine)
+                for vm in vms:
+                    hosts.append((vm_ct, vm))
+
+            for ct, host in hosts:
+                host_name = host.name or str(host)
+                app_name = template.name_format.replace('{app}', template.name).replace('{host}', host_name)
+
+                app = Application.objects.create(
+                    name=app_name,
+                    status=template.default_status,
+                    criticality=template.default_criticality,
+                    environment=template.default_environment,
+                    version=template.default_version,
+                    group=template.group,
+                    description=template.description,
+                )
+                ApplicationDeployment.objects.create(
+                    application=app,
+                    host_type=ct,
+                    host_id=host.pk,
+                    role=template.default_role,
+                    port=template.default_port,
+                    protocol=template.default_protocol or '',
+                )
+                created += 1
+
+            messages.success(request, f'Deployed "{template.name}" to {created} host(s).')
+            return redirect(template.get_absolute_url())
+
+        return render(request, 'netbox_map/applicationtemplate_deploy.html', {
+            'object': template,
+            'form': form,
+        })
+
+
 #
 # Application views
 #

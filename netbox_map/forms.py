@@ -1298,6 +1298,27 @@ class ApplicationTemplateFilterForm(NetBoxModelFilterSetForm):
     fieldsets = (FieldSet('group_id', 'default_criticality'),)
 
 
+class ApplicationTemplateDeployForm(forms.Form):
+    """Deploy a template to multiple hosts — creates an Application per host."""
+    devices = DynamicModelMultipleChoiceField(
+        label=_('Devices'),
+        queryset=Device.objects.all(),
+        required=False,
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        try:
+            from virtualization.models import VirtualMachine
+            self.fields['virtual_machines'] = DynamicModelMultipleChoiceField(
+                label=_('Virtual Machines'),
+                queryset=VirtualMachine.objects.all(),
+                required=False,
+            )
+        except ImportError:
+            pass
+
+
 #
 # Application forms
 #

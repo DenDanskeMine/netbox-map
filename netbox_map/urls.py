@@ -108,6 +108,7 @@ urlpatterns = (
     path('application-templates/<int:pk>/', views.ApplicationTemplateView.as_view(), name='applicationtemplate'),
     path('application-templates/<int:pk>/edit/', views.ApplicationTemplateEditView.as_view(), name='applicationtemplate_edit'),
     path('application-templates/<int:pk>/delete/', views.ApplicationTemplateDeleteView.as_view(), name='applicationtemplate_delete'),
+    path('application-templates/<int:pk>/deploy/', views.ApplicationTemplateDeployView.as_view(), name='applicationtemplate_deploy'),
     path('application-templates/<int:pk>/changelog/', ObjectChangeLogView.as_view(), name='applicationtemplate_changelog', kwargs={'model': models.ApplicationTemplate}),
 
     # Application

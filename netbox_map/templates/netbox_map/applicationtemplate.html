@@ -14,6 +14,19 @@
         <tr><th>{% trans "Name Format" %}</th><td><code>{{ object.name_format }}</code></td></tr>
       </table>
     </div>
+    <div class="card">
+      <h5 class="card-header d-flex justify-content-between align-items-center">
+        {% trans "Deploy" %}
+        <a href="{% url 'plugins:netbox_map:applicationtemplate_deploy' pk=object.pk %}" class="btn btn-sm btn-primary">
+          <i class="mdi mdi-rocket-launch"></i> {% trans "Deploy to Hosts" %}
+        </a>
+      </h5>
+      <div class="card-body">
+        <p class="text-muted small mb-0">
+          {% trans "Deploy this template to one or more devices. A new application instance will be created for each host using the template defaults." %}
+        </p>
+      </div>
+    </div>
   </div>
   <div class="col-md-6">
     <div class="card">
