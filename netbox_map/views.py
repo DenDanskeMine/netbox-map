@@ -1199,6 +1199,21 @@ class ApplicationTemplateListView(generic.ObjectListView):
 class ApplicationTemplateView(generic.ObjectView):
     queryset = ApplicationTemplate.objects.select_related('group')
 
+    def get_extra_context(self, request, instance):
+        # Find deployments of apps that match this template's name pattern
+        # Apps created from template have names like "TemplateName (hostname)"
+        from django.db.models import Q
+        matching_apps = Application.objects.filter(
+            Q(name=instance.name) | Q(name__startswith=instance.name + ' (')
+        )
+        if instance.group:
+            matching_apps = matching_apps.filter(group=instance.group)
+        app_ids = list(matching_apps.values_list('pk', flat=True))
+        deployments = ApplicationDeployment.objects.filter(
+            application_id__in=app_ids
+        ).select_related('application', 'host_type')[:20]
+        return {'deployments': deployments}
+
 
 @register_model_view(ApplicationTemplate, 'edit')
 class ApplicationTemplateEditView(generic.ObjectEditView):
