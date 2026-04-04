@@ -90,9 +90,15 @@
         var modeKey = '_pos_' + state.topologyMode;
         var modePositions = {};
 
-        var renderedNodes = (state.topologyMode !== 'network' && appRenderer && appRenderer._nodes)
-            ? appRenderer._nodes
-            : (renderer._stencilNodeData || state.nodes);
+        var renderedNodes;
+        if (state.topologyMode === 'mixed') {
+            // Mixed mode: combine device positions (from network renderer) + app positions
+            renderedNodes = (renderer._stencilNodeData || []).concat(appRenderer && appRenderer._nodes ? appRenderer._nodes : []);
+        } else if (state.topologyMode !== 'network' && appRenderer && appRenderer._nodes) {
+            renderedNodes = appRenderer._nodes;
+        } else {
+            renderedNodes = renderer._stencilNodeData || state.nodes;
+        }
 
         renderedNodes.forEach(function(n) {
             var entry = { x: n.x || 0, y: n.y || 0 };
