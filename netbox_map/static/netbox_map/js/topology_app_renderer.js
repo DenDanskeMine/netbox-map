@@ -301,101 +301,63 @@
         });
     };
 
-    /* Layout for overlay mode — place apps below their host device, no dagre */
+    /* Layout for overlay mode — dagre for apps, offset to right of devices */
     AppRenderer.prototype._layoutOverlay = function(appNodes, edges, deviceNodes) {
         var self = this;
         var saved = this.state.savedLayout || {};
 
-        // Build map: app_id → host device id (from deployed_on edges)
-        var appToHostId = {};
-        edges.forEach(function(e) {
-            if (e.edge_type !== 'deployed_on') return;
-            var src = typeof e.source === 'object' ? e.source.id : e.source;
-            var tgt = typeof e.target === 'object' ? e.target.id : e.target;
-            if (self._byId[tgt] && self._byId[tgt].node_type !== 'application') {
-                appToHostId[src] = tgt;
+        if (appNodes.length === 0) return;
+
+        // Find rightmost device edge to position apps to the right
+        var maxDeviceX = 0;
+        (deviceNodes || []).forEach(function(n) {
+            if (n.x !== undefined) {
+                maxDeviceX = Math.max(maxDeviceX, n.x + 200 + 80);
             }
         });
+        if (maxDeviceX === 0) maxDeviceX = 100;
 
-        // Group apps by host
-        var hostGroups = {};
-        var unhosted = [];
+        // Use dagre for app layout — same as app-only mode
+        // This gives proper left-to-right dependency flow
+        var g = new dagre.graphlib.Graph();
+        g.setGraph({
+            rankdir: 'LR',
+            ranksep: 100,
+            nodesep: 25,
+            marginx: 0,
+            marginy: 40,
+            ranker: 'network-simplex'
+        });
+        g.setDefaultEdgeLabel(function() { return {}; });
+
         appNodes.forEach(function(n) {
-            var hostId = appToHostId[n.id];
-            var host = hostId ? self._byId[hostId] : null;
-            if (host && host.x !== undefined) {
-                if (!hostGroups[hostId]) hostGroups[hostId] = [];
-                hostGroups[hostId].push(n);
+            g.setNode(n.id, { width: CARD_W, height: n._h });
+        });
+
+        // Only dependency edges for layout (deployed_on handled by edges only)
+        edges.forEach(function(e) {
+            if (e.edge_type !== 'dependency') return;
+            var s = typeof e.source === 'object' ? e.source.id : e.source;
+            var t = typeof e.target === 'object' ? e.target.id : e.target;
+            if (g.hasNode(s) && g.hasNode(t)) g.setEdge(t, s);
+        });
+
+        dagre.layout(g);
+
+        // Apply dagre positions, offset to the right of all devices
+        appNodes.forEach(function(n) {
+            var key = String(n.id);
+            if (saved[key] && saved[key].x !== undefined) {
+                n.x = saved[key].x;
+                n.y = saved[key].y;
             } else {
-                unhosted.push(n);
+                var dn = g.node(n.id);
+                if (dn) {
+                    n.x = dn.x - CARD_W / 2 + maxDeviceX;
+                    n.y = dn.y - n._h / 2;
+                }
             }
         });
-
-        // Place each app group BELOW its host device
-        // This preserves the user's horizontal device layout
-        var NET_CARD_W = 200;   // network renderer card width
-        var NET_HEADER_H = 38;  // network renderer header height
-        var NET_PORT_H = 24;    // network renderer port height
-        var NET_PORT_GAP = 3;
-        var NET_CARD_PAD = 10;
-        var GAP = 20;
-
-        Object.keys(hostGroups).forEach(function(hostId) {
-            var host = self._byId[hostId];
-            var apps = hostGroups[hostId];
-
-            // Compute actual device card height from ports (network renderer formula)
-            var portCount = (host.ports || []).length;
-            var hostH = NET_HEADER_H + portCount * (NET_PORT_H + NET_PORT_GAP) + NET_CARD_PAD;
-            if (portCount === 0) hostH = NET_HEADER_H + NET_CARD_PAD;
-
-            var hostBottom = host.y + hostH + GAP;
-            var hostCenterX = host.x + (NET_CARD_W - CARD_W) / 2;
-
-            apps.forEach(function(a, i) {
-                var key = String(a.id);
-                if (saved[key] && saved[key].x !== undefined) {
-                    a.x = saved[key].x;
-                    a.y = saved[key].y;
-                } else {
-                    a.x = hostCenterX;
-                    a.y = hostBottom;
-                    hostBottom += a._h + 8;
-                }
-            });
-        });
-
-        // Unhosted apps: place at the bottom right of the canvas
-        if (unhosted.length > 0) {
-            var maxX = 0, maxY = 0;
-            (deviceNodes || []).forEach(function(n) {
-                if (n.x !== undefined) {
-                    var pc = (n.ports || []).length;
-                    var dh = NET_HEADER_H + pc * (NET_PORT_H + NET_PORT_GAP) + NET_CARD_PAD;
-                    maxX = Math.max(maxX, n.x + NET_CARD_W);
-                    maxY = Math.max(maxY, n.y + dh);
-                }
-            });
-            appNodes.forEach(function(n) {
-                if (n.x !== undefined) {
-                    maxY = Math.max(maxY, n.y + n._h);
-                }
-            });
-
-            var curX = maxX + 100;
-            var curY = 40;
-            unhosted.forEach(function(a) {
-                var key = String(a.id);
-                if (saved[key] && saved[key].x !== undefined) {
-                    a.x = saved[key].x;
-                    a.y = saved[key].y;
-                } else {
-                    a.x = curX;
-                    a.y = curY;
-                    curY += a._h + 10;
-                }
-            });
-        }
     };
 
     /* ══════════════════════════════════════════
