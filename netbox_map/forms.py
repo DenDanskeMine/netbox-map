@@ -3,7 +3,7 @@ from django.contrib.contenttypes.models import ContentType
 from django.utils.translation import gettext_lazy as _
 
 from dcim.models import Site, Location, Rack, Device, DeviceRole, PowerPanel, PowerFeed, RearPort, FrontPort, Region, SiteGroup
-from ipam.models import IPAddress
+from ipam.models import IPAddress, Service
 from tenancy.models import Tenant
 from netbox.forms import NetBoxModelForm, NetBoxModelFilterSetForm, NetBoxModelBulkEditForm, NetBoxModelImportForm
 from utilities.forms.fields import (
@@ -1547,10 +1547,16 @@ class ApplicationDeploymentForm(NetBoxModelForm):
         queryset=IPAddress.objects.all(),
         required=False,
     )
+    service = DynamicModelChoiceField(
+        label=_('Service'),
+        queryset=Service.objects.all(),
+        required=False,
+        help_text=_('Link to an existing NetBox application service'),
+    )
 
     fieldsets = (
         FieldSet(
-            'template', 'application', 'role', 'port', 'protocol', 'ip_address', 'description', 'tags',
+            'template', 'application', 'role', 'port', 'protocol', 'ip_address', 'service', 'description', 'tags',
             name=_('Deployment')
         ),
         FieldSet(
@@ -1563,7 +1569,7 @@ class ApplicationDeploymentForm(NetBoxModelForm):
         model = ApplicationDeployment
         fields = [
             'application', 'host_type', 'host_id', 'role',
-            'port', 'protocol', 'ip_address', 'description', 'tags',
+            'port', 'protocol', 'ip_address', 'service', 'description', 'tags',
         ]
 
     def __init__(self, *args, **kwargs):

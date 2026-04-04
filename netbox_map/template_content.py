@@ -135,4 +135,22 @@ class IPAddressApplicationPanel(PluginTemplateExtension):
         )
 
 
-template_extensions = [SiteFloorPlanLink, DeviceFloorPlanLink, DeviceApplicationPanel, VMApplicationPanel, IPAddressApplicationPanel]
+class ServiceApplicationPanel(PluginTemplateExtension):
+    models = ['ipam.service']
+
+    def right_page(self):
+        service = self.context['object']
+        from .models import ApplicationDeployment
+        deployments = list(
+            ApplicationDeployment.objects.filter(service=service)
+            .select_related('application')[:10]
+        )
+        if not deployments:
+            return ''
+        return self.render(
+            'netbox_map/inc/service_applications_panel.html',
+            extra_context={'deployments': deployments}
+        )
+
+
+template_extensions = [SiteFloorPlanLink, DeviceFloorPlanLink, DeviceApplicationPanel, VMApplicationPanel, IPAddressApplicationPanel, ServiceApplicationPanel]

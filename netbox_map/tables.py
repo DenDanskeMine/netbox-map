@@ -429,13 +429,17 @@ class ApplicationDeploymentTable(NetBoxTable):
         linkify=True,
         verbose_name=_('IP Address')
     )
+    service = tables.Column(
+        linkify=True,
+        verbose_name=_('Service')
+    )
     tags = columns.TagColumn()
 
     class Meta(NetBoxTable.Meta):
         model = ApplicationDeployment
         fields = (
             'pk', 'id', 'application', 'host_type', 'host', 'role',
-            'port', 'protocol', 'ip_address', 'description', 'tags', 'actions',
+            'port', 'protocol', 'ip_address', 'service', 'description', 'tags', 'actions',
         )
         default_columns = (
             'pk', 'application', 'host_type', 'host', 'role', 'port',

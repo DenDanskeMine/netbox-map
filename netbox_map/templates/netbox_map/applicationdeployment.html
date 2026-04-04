@@ -37,6 +37,10 @@
             <td>{% if object.ip_address %}<a href="{{ object.ip_address.get_absolute_url }}">{{ object.ip_address }}</a>{% else %}&mdash;{% endif %}</td>
           </tr>
           <tr>
+            <th scope="row">{% trans "Service" %}</th>
+            <td>{% if object.service %}<a href="{{ object.service.get_absolute_url }}">{{ object.service }}</a>{% else %}&mdash;{% endif %}</td>
+          </tr>
+          <tr>
             <th scope="row">{% trans "Description" %}</th>
             <td>{{ object.description|placeholder }}</td>
           </tr>

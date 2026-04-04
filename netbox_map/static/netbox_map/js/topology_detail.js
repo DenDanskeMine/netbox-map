@@ -177,6 +177,7 @@
                 + '<span class="adp-host-dot" style="background:' + dotColor + ';"></span>'
                 + '<span class="adp-host-name">' + esc(deploy.host_name) + '</span>'
                 + (deploy.ip_address ? '<span class="adp-host-ip">' + esc(deploy.ip_address) + '</span>' : '')
+                + (deploy.service_name ? '<span class="adp-host-svc">' + esc(deploy.service_name) + '</span>' : '')
                 + '<span class="adp-host-role">' + esc(deploy.role) + '</span>'
                 + '</a>';
         }

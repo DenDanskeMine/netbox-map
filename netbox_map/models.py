@@ -931,6 +931,12 @@ class ApplicationDeployment(NetBoxModel):
         verbose_name=_('IP Address'),
         help_text=_('IP address this deployment listens on'),
     )
+    service = models.ForeignKey(
+        'ipam.Service', on_delete=models.SET_NULL,
+        related_name='+', blank=True, null=True,
+        verbose_name=_('Service'),
+        help_text=_('NetBox application service linked to this deployment'),
+    )
     description = models.CharField(max_length=200, blank=True)
 
     clone_fields = ('application', 'role', 'port', 'protocol')

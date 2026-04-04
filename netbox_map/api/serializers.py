@@ -248,7 +248,7 @@ class ApplicationDeploymentSerializer(NetBoxModelSerializer):
         fields = [
             'id', 'url', 'display_url', 'display',
             'application', 'host_type', 'host_id', 'host',
-            'role', 'port', 'protocol', 'description',
+            'role', 'port', 'protocol', 'ip_address', 'service', 'description',
             'tags', 'custom_fields', 'created', 'last_updated',
         ]
         brief_fields = ('id', 'url', 'display', 'application', 'role')

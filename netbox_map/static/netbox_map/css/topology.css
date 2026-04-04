@@ -1724,6 +1724,11 @@ span.topo-iface-dot.empty {
     font-family: monospace;
     flex-shrink: 0;
 }
+.adp-host-svc {
+    font-size: 8px;
+    color: #3a4058;
+    flex-shrink: 0;
+}
 .adp-host-role {
     font-size: 9px;
     color: #3a4058;
@@ -2069,6 +2074,7 @@ span.topo-iface-dot.empty {
 [data-bs-theme="light"] .adp-host-name { color: #374151; }
 [data-bs-theme="light"] .adp-host-row:hover .adp-host-name { color: #1f2937; }
 [data-bs-theme="light"] .adp-host-ip { color: #9ca3af; }
+[data-bs-theme="light"] .adp-host-svc { color: #9ca3af; }
 [data-bs-theme="light"] .adp-host-role { color: #9ca3af; }
 [data-bs-theme="light"] .adp-empty { color: #9ca3af; }
 

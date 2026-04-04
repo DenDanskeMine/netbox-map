@@ -240,7 +240,7 @@ class ApplicationDeploymentFilterSet(NetBoxModelFilterSet):
 
     class Meta:
         model = ApplicationDeployment
-        fields = ['id', 'application_id', 'role']
+        fields = ['id', 'application_id', 'role', 'service']
 
     def search(self, queryset, name, value):
         return queryset.filter(application__name__icontains=value)

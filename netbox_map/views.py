@@ -1937,7 +1937,7 @@ class AppTopologyDetailView(LoginRequiredMixin, View):
         # Deployments — batch-fetch hosts to avoid N+1
         deploy_qs = list(ApplicationDeployment.objects.filter(
             application=app,
-        ).select_related('host_type'))
+        ).select_related('host_type', 'service'))
 
         # Group by content type, batch-fetch host objects
         device_ct = ContentType.objects.get_for_model(Device)
@@ -1973,6 +1973,7 @@ class AppTopologyDetailView(LoginRequiredMixin, View):
                 'protocol': deploy.protocol,
                 'host_status': host_status,
                 'ip_address': str(deploy.ip_address) if deploy.ip_address else '',
+                'service_name': str(deploy.service) if deploy.service else '',
             })
 
         return JsonResponse({
