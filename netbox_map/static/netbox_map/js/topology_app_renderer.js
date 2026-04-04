@@ -288,92 +288,104 @@
         });
     };
 
-    /* Layout for overlay mode — positions apps next to their host devices */
+    /* Layout for overlay mode — dagre compound graph with devices as parents */
     AppRenderer.prototype._layoutOverlay = function(appNodes, edges, deviceNodes) {
         var self = this;
         var saved = this.state.savedLayout || {};
 
-        // Build map: app_id → host device node (from deployed_on edges)
-        var appToHost = {};
+        // Build map: app_id → host device id (from deployed_on edges)
+        var appToHostId = {};
         edges.forEach(function(e) {
             if (e.edge_type !== 'deployed_on') return;
             var src = typeof e.source === 'object' ? e.source.id : e.source;
             var tgt = typeof e.target === 'object' ? e.target.id : e.target;
-            // deployed_on: source=app, target=device
             if (self._byId[tgt] && self._byId[tgt].node_type !== 'application') {
-                appToHost[src] = self._byId[tgt];
+                appToHostId[src] = tgt;
             }
         });
 
-        // Group apps by their host device
-        var hostGroups = {};  // deviceId → [appNode, ...]
-        var unhosted = [];
+        // Use dagre compound graph — devices as parents, apps as children
+        var g = new dagre.graphlib.Graph({ compound: true });
+        g.setGraph({
+            rankdir: 'LR',
+            ranksep: 80,
+            nodesep: 20,
+            marginx: 40,
+            marginy: 40,
+            ranker: 'network-simplex'
+        });
+        g.setDefaultEdgeLabel(function() { return {}; });
+
+        // Add device nodes as parents (use their EXISTING positions as rank hints)
+        (deviceNodes || []).forEach(function(n) {
+            if (n.x !== undefined) {
+                g.setNode(n.id, {
+                    width: (n._cardW || 200) + 20,
+                    height: (n._cardH || 60) + 20,
+                });
+            }
+        });
+
+        // Add app nodes
         appNodes.forEach(function(n) {
-            var host = appToHost[n.id];
-            if (host && host.x !== undefined) {
-                var hid = host.id;
-                if (!hostGroups[hid]) hostGroups[hid] = [];
-                hostGroups[hid].push(n);
-            } else {
-                unhosted.push(n);
+            g.setNode(n.id, { width: CARD_W, height: n._h });
+
+            // Set parent if hosted on a device
+            var hostId = appToHostId[n.id];
+            if (hostId && g.hasNode(hostId)) {
+                g.setParent(n.id, hostId);
             }
         });
 
-        // Position each app group to the right of its host device
-        var APP_OFFSET_X = CARD_W + 60;  // gap between device right edge and first app
-        Object.keys(hostGroups).forEach(function(hostId) {
-            var host = self._byId[hostId];
-            var apps = hostGroups[hostId];
-            var hostRight = host.x + (host._cardW || 200) + 60;
-            var hostCenterY = host.y + (host._cardH || 60) / 2;
-
-            // Stack apps vertically, centered on host Y
-            var totalH = 0;
-            apps.forEach(function(a) { totalH += a._h + 10; });
-            var startY = hostCenterY - totalH / 2;
-
-            apps.forEach(function(a, i) {
-                var key = String(a.id);
-                if (saved[key] && saved[key].x !== undefined) {
-                    a.x = saved[key].x;
-                    a.y = saved[key].y;
-                } else {
-                    a.x = hostRight;
-                    a.y = startY;
-                    startY += a._h + 10;
-                }
-            });
+        // Add ONLY dependency edges (NOT deployed_on — child→parent edges crash dagre)
+        edges.forEach(function(e) {
+            if (e.edge_type !== 'dependency') return;
+            var s = typeof e.source === 'object' ? e.source.id : e.source;
+            var t = typeof e.target === 'object' ? e.target.id : e.target;
+            if (g.hasNode(s) && g.hasNode(t)) {
+                g.setEdge(t, s);  // reverse for LR ranking
+            }
         });
 
-        // Unhosted apps: position below everything using dagre
-        if (unhosted.length > 0) {
-            var maxX = 0, maxY = 0;
-            appNodes.forEach(function(n) {
-                if (n.x !== undefined) {
-                    maxX = Math.max(maxX, n.x + CARD_W);
-                    maxY = Math.max(maxY, n.y + n._h);
-                }
-            });
-            (deviceNodes || []).forEach(function(n) {
-                if (n.x !== undefined) {
-                    maxX = Math.max(maxX, n.x + 200);
-                    maxY = Math.max(maxY, n.y + (n._cardH || 60));
-                }
-            });
+        dagre.layout(g);
 
-            var curY = maxY + 60;
-            unhosted.forEach(function(a) {
-                var key = String(a.id);
-                if (saved[key] && saved[key].x !== undefined) {
-                    a.x = saved[key].x;
-                    a.y = saved[key].y;
+        // Apply positions — offset relative to host device's actual position
+        appNodes.forEach(function(n) {
+            var key = String(n.id);
+            if (saved[key] && saved[key].x !== undefined) {
+                n.x = saved[key].x;
+                n.y = saved[key].y;
+                return;
+            }
+
+            var dn = g.node(n.id);
+            if (!dn) return;
+
+            var hostId = appToHostId[n.id];
+            var host = hostId ? self._byId[hostId] : null;
+
+            if (host && host.x !== undefined) {
+                // Position relative to the host device
+                var dagreHost = g.node(hostId);
+                if (dagreHost) {
+                    // dagre positions are center-based; compute offset from dagre host center
+                    var offsetX = dn.x - dagreHost.x;
+                    var offsetY = dn.y - dagreHost.y;
+                    // Apply offset to actual host position (host center)
+                    var hostCX = host.x + (host._cardW || 200) / 2;
+                    var hostCY = host.y + (host._cardH || 60) / 2;
+                    n.x = hostCX + offsetX - CARD_W / 2;
+                    n.y = hostCY + offsetY - n._h / 2;
                 } else {
-                    a.x = maxX / 2;
-                    a.y = curY;
-                    curY += a._h + 15;
+                    n.x = host.x + (host._cardW || 200) + 30;
+                    n.y = host.y;
                 }
-            });
-        }
+            } else {
+                // Unhosted — use dagre's absolute position
+                n.x = dn.x - CARD_W / 2;
+                n.y = dn.y - n._h / 2;
+            }
+        });
     };
 
     /* ══════════════════════════════════════════
