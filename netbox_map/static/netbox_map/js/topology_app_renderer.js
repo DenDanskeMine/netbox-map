@@ -320,12 +320,24 @@
 
         // Place each app group BELOW its host device
         // This preserves the user's horizontal device layout
+        var NET_CARD_W = 200;   // network renderer card width
+        var NET_HEADER_H = 38;  // network renderer header height
+        var NET_PORT_H = 24;    // network renderer port height
+        var NET_PORT_GAP = 3;
+        var NET_CARD_PAD = 10;
         var GAP = 20;
+
         Object.keys(hostGroups).forEach(function(hostId) {
             var host = self._byId[hostId];
             var apps = hostGroups[hostId];
-            var hostBottom = host.y + (host._cardH || 60) + GAP;
-            var hostCenterX = host.x + ((host._cardW || 200) - CARD_W) / 2;
+
+            // Compute actual device card height from ports (network renderer formula)
+            var portCount = (host.ports || []).length;
+            var hostH = NET_HEADER_H + portCount * (NET_PORT_H + NET_PORT_GAP) + NET_CARD_PAD;
+            if (portCount === 0) hostH = NET_HEADER_H + NET_CARD_PAD;
+
+            var hostBottom = host.y + hostH + GAP;
+            var hostCenterX = host.x + (NET_CARD_W - CARD_W) / 2;
 
             apps.forEach(function(a, i) {
                 var key = String(a.id);
@@ -345,8 +357,10 @@
             var maxX = 0, maxY = 0;
             (deviceNodes || []).forEach(function(n) {
                 if (n.x !== undefined) {
-                    maxX = Math.max(maxX, n.x + (n._cardW || 200));
-                    maxY = Math.max(maxY, n.y + (n._cardH || 60));
+                    var pc = (n.ports || []).length;
+                    var dh = NET_HEADER_H + pc * (NET_PORT_H + NET_PORT_GAP) + NET_CARD_PAD;
+                    maxX = Math.max(maxX, n.x + NET_CARD_W);
+                    maxY = Math.max(maxY, n.y + dh);
                 }
             });
             appNodes.forEach(function(n) {
