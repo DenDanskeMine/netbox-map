@@ -2153,3 +2153,22 @@ span.topo-iface-dot.empty {
 }
 .aedge-cable.aedge-dim { stroke-opacity: 0.03 !important; }
 .aedge-cable.aedge-hi { stroke-opacity: 0.7 !important; stroke-width: 2 !important; }
+
+/* App card — "on this device" highlight */
+.acard.acard-on-device .acard-bg {
+    stroke: #22d3ee !important;
+    stroke-width: 1.5;
+}
+[data-bs-theme="light"] .acard.acard-on-device .acard-bg {
+    stroke: #0891b2 !important;
+}
+
+/* On-device indicator in detail panel */
+.adp-on-device {
+    padding: 3px 14px 6px;
+    font-size: 9px;
+    color: #22d3ee;
+}
+.adp-on-device strong { color: #67e8f9; }
+[data-bs-theme="light"] .adp-on-device { color: #0891b2; }
+[data-bs-theme="light"] .adp-on-device strong { color: #0e7490; }

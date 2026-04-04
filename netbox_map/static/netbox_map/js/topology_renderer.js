@@ -1059,7 +1059,7 @@
                 menu.append('div').attr('class', 'ctx-item')
                     .html('<i class="mdi mdi-graph-outline"></i> View Apps on Device')
                     .on('click', function() {
-                        window.location.href = '/plugins/map/topology/?mode=apps&device_ids=' + d.device_id;
+                        window.location.href = '/plugins/map/topology/?mode=apps&device_ids=' + d.device_id + '&highlight_device=' + d.device_id;
                         menu.remove();
                     });
             }

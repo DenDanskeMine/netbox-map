@@ -1600,6 +1600,7 @@ class AppTopologyDataView(LoginRequiredMixin, View):
         app_ids_param = request.GET.get('app_ids')
         focus_app_param = request.GET.get('focus_app')
         device_ids_param = request.GET.get('device_ids')
+        highlight_device_param = request.GET.get('highlight_device')
         tags = request.GET.getlist('tag')
 
         apps = Application.objects.select_related('group', 'tenant', 'site', 'primary_ip').annotate(
@@ -1722,6 +1723,25 @@ class AppTopologyDataView(LoginRequiredMixin, View):
 
         if not app_map:
             return JsonResponse({'nodes': [], 'edges': [], 'stats': {'node_count': 0, 'edge_count': 0}})
+
+        # Mark apps deployed on the highlighted device
+        if highlight_device_param:
+            try:
+                hl_dev_id = int(highlight_device_param)
+                device_ct = ContentType.objects.get_for_model(Device)
+                hl_app_ids = set(
+                    ApplicationDeployment.objects.filter(
+                        host_type=device_ct, host_id=hl_dev_id
+                    ).values_list('application_id', flat=True)
+                )
+                hl_dev = Device.objects.filter(pk=hl_dev_id).first()
+                hl_dev_name = hl_dev.name if hl_dev else ''
+                for app_pk in hl_app_ids:
+                    if app_pk in app_map:
+                        app_map[app_pk]['on_device'] = True
+                        app_map[app_pk]['on_device_name'] = hl_dev_name
+            except (ValueError, TypeError):
+                pass
 
         app_ids = set(app_map.keys())
 

@@ -686,7 +686,7 @@
 
         var cards = layer.selectAll('.acard')
             .data(nodes).enter().append('g')
-            .attr('class', 'acard')
+            .attr('class', function(d) { return 'acard' + (d.on_device ? ' acard-on-device' : ''); })
             .attr('transform', function(d) { return 'translate(' + d.x + ',' + d.y + ')'; });
 
         this._cards = cards;
@@ -1319,7 +1319,7 @@
             m.append('div').attr('class', 'ctx-item')
                 .html('<i class="mdi mdi-graph-outline"></i> View Apps on Device')
                 .on('click', function() {
-                    window.location.href = '/plugins/map/topology/?mode=apps&device_ids=' + d.device_id;
+                    window.location.href = '/plugins/map/topology/?mode=apps&device_ids=' + d.device_id + '&highlight_device=' + d.device_id;
                     m.remove();
                 });
         }

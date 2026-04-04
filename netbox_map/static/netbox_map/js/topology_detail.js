@@ -76,6 +76,11 @@
         html += '<div class="adp-crit" style="color:' + critColor + ';">'
             + esc((node.criticality || '').toUpperCase()) + '</div>';
 
+        // On-device indicator
+        if (node.on_device && node.on_device_name) {
+            html += '<div class="adp-on-device">Runs on <strong>' + esc(node.on_device_name) + '</strong></div>';
+        }
+
         html += '</div>'; // end header
 
         // ── Status explanation ──
