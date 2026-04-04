@@ -511,16 +511,15 @@
         var appParams = new URLSearchParams();
         Object.keys(state.initialFilters).forEach(function(key) {
             var val = state.initialFilters[key];
-            if (key === 'focus_app' || key === 'app_ids') {
+            if (key === 'focus_app' || key === 'app_ids' || key === 'device_ids') {
                 appParams.set(key, val);
             } else {
+                // Network params — also pass site_id to app endpoint
                 if (Array.isArray(val)) val.forEach(function(v) { netParams.append(key, v); });
                 else netParams.set(key, val);
+                if (key === 'site_id') appParams.set(key, val);
             }
         });
-
-        var netUrl = state.topologyUrl + (netParams.toString() ? '?' + netParams.toString() : '');
-        var appUrl = state.appDataUrl + (appParams.toString() ? '?' + appParams.toString() : '');
 
         // If network view has specific devices, scope apps to those devices
         if (!appParams.has('app_ids') && !appParams.has('focus_app')) {
@@ -532,8 +531,10 @@
                 });
                 if (devIds.length > 0) appParams.set('device_ids', devIds.join(','));
             }
-            appUrl = state.appDataUrl + (appParams.toString() ? '?' + appParams.toString() : '');
         }
+
+        var netUrl = state.topologyUrl + (netParams.toString() ? '?' + netParams.toString() : '');
+        var appUrl = state.appDataUrl + (appParams.toString() ? '?' + appParams.toString() : '');
 
         // Fetch both in parallel
         Promise.all([api.get(netUrl), api.get(appUrl)]).then(function(results) {
