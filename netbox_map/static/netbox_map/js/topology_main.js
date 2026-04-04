@@ -411,6 +411,33 @@
             }
         });
 
+        // If we have device nodes from a saved view, scope apps to those devices
+        if (!params.has('app_ids') && !params.has('focus_app') && !params.has('device_ids')) {
+            // Check saved layout for device IDs
+            var layout = state.savedLayout;
+            if (layout && typeof layout === 'object') {
+                var deviceIds = [];
+                Object.keys(layout).forEach(function(key) {
+                    if (key.indexOf('device-') === 0) {
+                        deviceIds.push(key.replace('device-', ''));
+                    }
+                });
+                if (deviceIds.length > 0) {
+                    params.set('device_ids', deviceIds.join(','));
+                }
+            }
+            // Also check if we have loaded network nodes
+            if (!params.has('device_ids') && state.nodes && state.nodes.length > 0) {
+                var netDevIds = [];
+                state.nodes.forEach(function(n) {
+                    if (n.device_id) netDevIds.push(n.device_id);
+                });
+                if (netDevIds.length > 0) {
+                    params.set('device_ids', netDevIds.join(','));
+                }
+            }
+        }
+
         var url = state.appDataUrl + (params.toString() ? '?' + params.toString() : '');
 
         api.get(url).then(function(data) {

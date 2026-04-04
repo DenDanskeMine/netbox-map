@@ -1561,6 +1561,7 @@ class AppTopologyDataView(LoginRequiredMixin, View):
         group_id = request.GET.get('group_id')
         app_ids_param = request.GET.get('app_ids')
         focus_app_param = request.GET.get('focus_app')
+        device_ids_param = request.GET.get('device_ids')
         tags = request.GET.getlist('tag')
 
         apps = Application.objects.select_related('group', 'tenant', 'site', 'primary_ip').annotate(
@@ -1600,6 +1601,19 @@ class AppTopologyDataView(LoginRequiredMixin, View):
                     related_ids |= new
                     queue = list(new)
                 apps = apps.filter(pk__in=related_ids)
+        elif device_ids_param:
+            # Filter to apps deployed on specific devices (from saved network view)
+            dev_ids = [int(x) for x in device_ids_param.split(',') if x.strip().isdigit()]
+            device_ct = ContentType.objects.get_for_model(Device)
+            deployed_app_ids = set(
+                ApplicationDeployment.objects.filter(
+                    host_type=device_ct, host_id__in=dev_ids
+                ).values_list('application_id', flat=True)
+            )
+            if deployed_app_ids:
+                apps = apps.filter(pk__in=deployed_app_ids)
+            else:
+                apps = apps.none()
         elif app_ids_param:
             ids = [int(x) for x in app_ids_param.split(',') if x.strip().isdigit()]
             apps = apps.filter(pk__in=ids)
