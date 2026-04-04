@@ -106,7 +106,20 @@
         (deviceNodes || []).forEach(function(n) {
             if (!self._byId[n.id]) {
                 self._byId[n.id] = n;
-                n._h = n._cardH || 60;
+                // Compute height from ports
+                var pc = (n.ports || []).length;
+                n._h = 38 + pc * 27 + 10;
+                if (pc === 0) n._h = 48;
+                // Initialize port structures so _assignPortSides doesn't crash
+                if (!n._portById) {
+                    n._portById = {};
+                    n._portsL = [];
+                    n._portsR = [];
+                    (n.ports || []).forEach(function(p) {
+                        n._portById[p.id] = p;
+                        self._portMap[p.id] = n;
+                    });
+                }
             }
         });
 
