@@ -69,6 +69,7 @@
             }
         }
         if (node.version) html += '<span class="adp-tag adp-tag-code">v' + esc(node.version) + '</span>';
+        if (node.primary_ip) html += '<span class="adp-tag adp-tag-code">' + esc(node.primary_ip) + '</span>';
         html += '</div>';
 
         // Criticality bar
@@ -175,6 +176,7 @@
             return '<a class="adp-host-row" href="' + esc(hostUrl) + '" target="_blank">'
                 + '<span class="adp-host-dot" style="background:' + dotColor + ';"></span>'
                 + '<span class="adp-host-name">' + esc(deploy.host_name) + '</span>'
+                + (deploy.ip_address ? '<span class="adp-host-ip">' + esc(deploy.ip_address) + '</span>' : '')
                 + '<span class="adp-host-role">' + esc(deploy.role) + '</span>'
                 + '</a>';
         }

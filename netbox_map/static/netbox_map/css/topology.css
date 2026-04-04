@@ -1718,6 +1718,12 @@ span.topo-iface-dot.empty {
     white-space: nowrap;
 }
 .adp-host-row:hover .adp-host-name { color: #c8d0e0; }
+.adp-host-ip {
+    font-size: 9px;
+    color: #484f58;
+    font-family: monospace;
+    flex-shrink: 0;
+}
 .adp-host-role {
     font-size: 9px;
     color: #3a4058;

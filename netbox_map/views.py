@@ -1552,7 +1552,7 @@ class AppTopologyDataView(LoginRequiredMixin, View):
         app_ids_param = request.GET.get('app_ids')
         tags = request.GET.getlist('tag')
 
-        apps = Application.objects.select_related('group', 'tenant', 'site').annotate(
+        apps = Application.objects.select_related('group', 'tenant', 'site', 'primary_ip').annotate(
             deploy_count=Count('deployments', distinct=True),
             dep_out_count=Count('dependencies', distinct=True),
             dep_in_count=Count('dependents', distinct=True),
@@ -1609,6 +1609,7 @@ class AppTopologyDataView(LoginRequiredMixin, View):
                 'description': app.description,
                 'url': app.get_absolute_url(),
                 'ports': [],
+                'primary_ip': str(app.primary_ip) if app.primary_ip else '',
                 'deploy_count': app.deploy_count,
                 'dependency_count': app.dep_out_count + app.dep_in_count,
             }
@@ -1971,6 +1972,7 @@ class AppTopologyDetailView(LoginRequiredMixin, View):
                 'port': deploy.port,
                 'protocol': deploy.protocol,
                 'host_status': host_status,
+                'ip_address': str(deploy.ip_address) if deploy.ip_address else '',
             })
 
         return JsonResponse({
