@@ -2131,10 +2131,10 @@ span.topo-iface-dot.empty {
 .dcard .dcard-status { transition: fill 0.15s; }
 
 .aedge-deployed {
-    stroke: #8b949e;
-    stroke-width: 1;
-    stroke-opacity: 0.4;
-    stroke-dasharray: 4,3;
+    stroke: #22d3ee;
+    stroke-width: 1.2;
+    stroke-opacity: 0.5;
+    stroke-dasharray: 6,3;
 }
 .aedge-deployed.aedge-dim { stroke-opacity: 0.04 !important; }
 .aedge-deployed.aedge-hi { stroke-opacity: 0.8 !important; stroke-width: 1.5 !important; }
@@ -2144,7 +2144,7 @@ span.topo-iface-dot.empty {
 [data-bs-theme="light"] .dcard:hover .dcard-bg { stroke: rgba(0,0,0,0.18); }
 [data-bs-theme="light"] .dcard .dcard-name { fill: #6b7280; }
 [data-bs-theme="light"] .dcard .dcard-sub { fill: #9ca3af; }
-[data-bs-theme="light"] .aedge-deployed { stroke: #6b7280; stroke-opacity: 0.5; }
+[data-bs-theme="light"] .aedge-deployed { stroke: #0891b2; stroke-opacity: 0.5; }
 
 /* Cable edges in mixed mode */
 .aedge-cable {
