@@ -386,13 +386,17 @@ class ApplicationTable(NetBoxTable):
         linkify=True,
         verbose_name=_('Tenant')
     )
+    primary_ip = tables.Column(
+        linkify=True,
+        verbose_name=_('Primary IP')
+    )
     tags = columns.TagColumn()
 
     class Meta(NetBoxTable.Meta):
         model = Application
         fields = (
             'pk', 'id', 'name', 'status', 'criticality', 'environment',
-            'version', 'default_port', 'default_protocol', 'group', 'site', 'tenant', 'description', 'tags', 'actions',
+            'version', 'default_port', 'default_protocol', 'primary_ip', 'group', 'site', 'tenant', 'description', 'tags', 'actions',
         )
         default_columns = (
             'pk', 'name', 'status', 'criticality', 'environment', 'group', 'site', 'tenant',
@@ -421,13 +425,17 @@ class ApplicationDeploymentTable(NetBoxTable):
     port = tables.Column(
         verbose_name=_('Port')
     )
+    ip_address = tables.Column(
+        linkify=True,
+        verbose_name=_('IP Address')
+    )
     tags = columns.TagColumn()
 
     class Meta(NetBoxTable.Meta):
         model = ApplicationDeployment
         fields = (
             'pk', 'id', 'application', 'host_type', 'host', 'role',
-            'port', 'protocol', 'description', 'tags', 'actions',
+            'port', 'protocol', 'ip_address', 'description', 'tags', 'actions',
         )
         default_columns = (
             'pk', 'application', 'host_type', 'host', 'role', 'port',

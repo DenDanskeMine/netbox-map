@@ -3,6 +3,7 @@ from django.contrib.contenttypes.models import ContentType
 from django.utils.translation import gettext_lazy as _
 
 from dcim.models import Site, Location, Rack, Device, DeviceRole, PowerPanel, PowerFeed, RearPort, FrontPort, Region, SiteGroup
+from ipam.models import IPAddress
 from tenancy.models import Tenant
 from netbox.forms import NetBoxModelForm, NetBoxModelFilterSetForm, NetBoxModelBulkEditForm, NetBoxModelImportForm
 from utilities.forms.fields import (
@@ -1339,6 +1340,11 @@ class ApplicationForm(NetBoxModelForm):
         queryset=ApplicationGroup.objects.all(),
         required=False,
     )
+    primary_ip = DynamicModelChoiceField(
+        label=_('Primary IP'),
+        queryset=IPAddress.objects.all(),
+        required=False,
+    )
     comments = CommentField()
 
     fieldsets = (
@@ -1347,7 +1353,7 @@ class ApplicationForm(NetBoxModelForm):
             name=_('Application')
         ),
         FieldSet(
-            'default_port', 'default_protocol',
+            'default_port', 'default_protocol', 'primary_ip',
             name=_('Service Defaults')
         ),
         FieldSet(
@@ -1365,7 +1371,7 @@ class ApplicationForm(NetBoxModelForm):
         fields = [
             'name', 'status', 'criticality', 'environment', 'version',
             'description', 'comments', 'external_url',
-            'default_port', 'default_protocol',
+            'default_port', 'default_protocol', 'primary_ip',
             'group', 'site', 'tenant', 'tags',
         ]
 
@@ -1536,10 +1542,15 @@ class ApplicationDeploymentForm(NetBoxModelForm):
         queryset=Device.objects.none(),
         required=False,
     )
+    ip_address = DynamicModelChoiceField(
+        label=_('IP Address'),
+        queryset=IPAddress.objects.all(),
+        required=False,
+    )
 
     fieldsets = (
         FieldSet(
-            'template', 'application', 'role', 'port', 'protocol', 'description', 'tags',
+            'template', 'application', 'role', 'port', 'protocol', 'ip_address', 'description', 'tags',
             name=_('Deployment')
         ),
         FieldSet(
@@ -1552,7 +1563,7 @@ class ApplicationDeploymentForm(NetBoxModelForm):
         model = ApplicationDeployment
         fields = [
             'application', 'host_type', 'host_id', 'role',
-            'port', 'protocol', 'description', 'tags',
+            'port', 'protocol', 'ip_address', 'description', 'tags',
         ]
 
     def __init__(self, *args, **kwargs):

@@ -881,6 +881,12 @@ class Application(NetBoxModel):
         'dcim.Site', on_delete=models.SET_NULL,
         related_name='+', blank=True, null=True,
     )
+    primary_ip = models.ForeignKey(
+        'ipam.IPAddress', on_delete=models.SET_NULL,
+        related_name='+', blank=True, null=True,
+        verbose_name=_('Primary IP'),
+        help_text=_('Primary IP address for this application'),
+    )
 
     clone_fields = ('status', 'criticality', 'environment', 'group', 'tenant', 'site', 'default_port', 'default_protocol')
 
@@ -919,6 +925,12 @@ class ApplicationDeployment(NetBoxModel):
     )
     port = models.PositiveIntegerField(blank=True, null=True, validators=[MinValueValidator(1), MaxValueValidator(65535)])
     protocol = models.CharField(max_length=50, blank=True)
+    ip_address = models.ForeignKey(
+        'ipam.IPAddress', on_delete=models.SET_NULL,
+        related_name='+', blank=True, null=True,
+        verbose_name=_('IP Address'),
+        help_text=_('IP address this deployment listens on'),
+    )
     description = models.CharField(max_length=200, blank=True)
 
     clone_fields = ('application', 'role', 'port', 'protocol')

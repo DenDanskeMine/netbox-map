@@ -112,4 +112,27 @@ class VMApplicationPanel(PluginTemplateExtension):
         )
 
 
-template_extensions = [SiteFloorPlanLink, DeviceFloorPlanLink, DeviceApplicationPanel, VMApplicationPanel]
+class IPAddressApplicationPanel(PluginTemplateExtension):
+    models = ['ipam.ipaddress']
+
+    def right_page(self):
+        ip = self.context['object']
+        from .models import Application, ApplicationDeployment
+        applications = list(Application.objects.filter(primary_ip=ip))
+        deployments = list(
+            ApplicationDeployment.objects
+            .filter(ip_address=ip)
+            .select_related('application')
+        )
+        if not applications and not deployments:
+            return ''
+        return self.render(
+            'netbox_map/inc/ip_applications_panel.html',
+            extra_context={
+                'applications': applications,
+                'deployments': deployments,
+            }
+        )
+
+
+template_extensions = [SiteFloorPlanLink, DeviceFloorPlanLink, DeviceApplicationPanel, VMApplicationPanel, IPAddressApplicationPanel]

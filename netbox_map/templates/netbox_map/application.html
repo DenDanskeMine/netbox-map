@@ -49,6 +49,10 @@
             <td>{{ object.default_protocol|placeholder }}</td>
           </tr>
           <tr>
+            <th scope="row">{% trans "Primary IP" %}</th>
+            <td>{% if object.primary_ip %}<a href="{{ object.primary_ip.get_absolute_url }}">{{ object.primary_ip }}</a>{% else %}&mdash;{% endif %}</td>
+          </tr>
+          <tr>
             <th scope="row">{% trans "Description" %}</th>
             <td>{{ object.description|placeholder }}</td>
           </tr>

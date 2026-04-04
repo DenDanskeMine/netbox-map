@@ -33,6 +33,10 @@
             <td>{{ object.protocol|placeholder }}</td>
           </tr>
           <tr>
+            <th scope="row">{% trans "IP Address" %}</th>
+            <td>{% if object.ip_address %}<a href="{{ object.ip_address.get_absolute_url }}">{{ object.ip_address }}</a>{% else %}&mdash;{% endif %}</td>
+          </tr>
+          <tr>
             <th scope="row">{% trans "Description" %}</th>
             <td>{{ object.description|placeholder }}</td>
           </tr>
