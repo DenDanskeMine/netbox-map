@@ -222,16 +222,8 @@
     });
 
     // Load topology data
-    // Params that are only for the app endpoint, not network
-    var APP_ONLY_PARAMS = { focus_app: 1, app_ids: 1 };
-
     function loadTopology() {
-        // Filter out app-only params for the network endpoint
-        var netFilters = {};
-        Object.keys(state.initialFilters).forEach(function(key) {
-            if (!APP_ONLY_PARAMS[key]) netFilters[key] = state.initialFilters[key];
-        });
-        var hasFilters = Object.keys(netFilters).length > 0;
+        var hasFilters = Object.keys(state.initialFilters).length > 0;
 
         if (!hasFilters) {
             // No filters — show empty state but don't block (picker can still add devices)
@@ -245,7 +237,7 @@
 
         // Build URL params — handle arrays (e.g. role_id=[1,2] → role_id=1&role_id=2)
         var params = new URLSearchParams();
-        Object.keys(netFilters).forEach(function(key) {
+        Object.keys(state.initialFilters).forEach(function(key) {
             var val = netFilters[key];
             if (Array.isArray(val)) {
                 val.forEach(function(v) { params.append(key, v); });
