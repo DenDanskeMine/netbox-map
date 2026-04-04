@@ -288,55 +288,92 @@
         });
     };
 
-    /* Layout for overlay mode — positions apps relative to their host devices */
+    /* Layout for overlay mode — positions apps next to their host devices */
     AppRenderer.prototype._layoutOverlay = function(appNodes, edges, deviceNodes) {
-        // Use dagre for app-to-app layout, but anchor to device positions
-        var g = new dagre.graphlib.Graph();
-        g.setGraph({
-            rankdir: 'LR',
-            ranksep: 120,
-            nodesep: 30,
-            marginx: 40,
-            marginy: 40,
-            ranker: 'network-simplex'
-        });
-        g.setDefaultEdgeLabel(function() { return {}; });
-
-        // Add app nodes
-        appNodes.forEach(function(n) {
-            g.setNode(n.id, { width: CARD_W, height: n._h });
-        });
-
-        // Add dependency edges (reversed for LR ranking)
-        edges.forEach(function(e) {
-            if (e.edge_type !== 'dependency') return;
-            var s = typeof e.source === 'object' ? e.source.id : e.source;
-            var t = typeof e.target === 'object' ? e.target.id : e.target;
-            if (g.hasNode(s) && g.hasNode(t)) g.setEdge(t, s);
-        });
-
-        dagre.layout(g);
-
-        // Find the rightmost device X to offset apps to the right of the network
-        var maxDeviceX = 0;
-        (deviceNodes || []).forEach(function(n) {
-            if (n.x !== undefined) maxDeviceX = Math.max(maxDeviceX, n.x + (CARD_W || 200) + 100);
-        });
-
-        // Apply dagre positions with device offset
+        var self = this;
         var saved = this.state.savedLayout || {};
-        appNodes.forEach(function(n) {
-            var dn = g.node(n.id);
-            if (!dn) return;
-            var key = String(n.id);
-            if (saved[key] && saved[key].x !== undefined) {
-                n.x = saved[key].x;
-                n.y = saved[key].y;
-            } else {
-                n.x = dn.x - CARD_W / 2 + maxDeviceX;
-                n.y = dn.y - n._h / 2;
+
+        // Build map: app_id → host device node (from deployed_on edges)
+        var appToHost = {};
+        edges.forEach(function(e) {
+            if (e.edge_type !== 'deployed_on') return;
+            var src = typeof e.source === 'object' ? e.source.id : e.source;
+            var tgt = typeof e.target === 'object' ? e.target.id : e.target;
+            // deployed_on: source=app, target=device
+            if (self._byId[tgt] && self._byId[tgt].node_type !== 'application') {
+                appToHost[src] = self._byId[tgt];
             }
         });
+
+        // Group apps by their host device
+        var hostGroups = {};  // deviceId → [appNode, ...]
+        var unhosted = [];
+        appNodes.forEach(function(n) {
+            var host = appToHost[n.id];
+            if (host && host.x !== undefined) {
+                var hid = host.id;
+                if (!hostGroups[hid]) hostGroups[hid] = [];
+                hostGroups[hid].push(n);
+            } else {
+                unhosted.push(n);
+            }
+        });
+
+        // Position each app group to the right of its host device
+        var APP_OFFSET_X = CARD_W + 60;  // gap between device right edge and first app
+        Object.keys(hostGroups).forEach(function(hostId) {
+            var host = self._byId[hostId];
+            var apps = hostGroups[hostId];
+            var hostRight = host.x + (host._cardW || 200) + 60;
+            var hostCenterY = host.y + (host._cardH || 60) / 2;
+
+            // Stack apps vertically, centered on host Y
+            var totalH = 0;
+            apps.forEach(function(a) { totalH += a._h + 10; });
+            var startY = hostCenterY - totalH / 2;
+
+            apps.forEach(function(a, i) {
+                var key = String(a.id);
+                if (saved[key] && saved[key].x !== undefined) {
+                    a.x = saved[key].x;
+                    a.y = saved[key].y;
+                } else {
+                    a.x = hostRight;
+                    a.y = startY;
+                    startY += a._h + 10;
+                }
+            });
+        });
+
+        // Unhosted apps: position below everything using dagre
+        if (unhosted.length > 0) {
+            var maxX = 0, maxY = 0;
+            appNodes.forEach(function(n) {
+                if (n.x !== undefined) {
+                    maxX = Math.max(maxX, n.x + CARD_W);
+                    maxY = Math.max(maxY, n.y + n._h);
+                }
+            });
+            (deviceNodes || []).forEach(function(n) {
+                if (n.x !== undefined) {
+                    maxX = Math.max(maxX, n.x + 200);
+                    maxY = Math.max(maxY, n.y + (n._cardH || 60));
+                }
+            });
+
+            var curY = maxY + 60;
+            unhosted.forEach(function(a) {
+                var key = String(a.id);
+                if (saved[key] && saved[key].x !== undefined) {
+                    a.x = saved[key].x;
+                    a.y = saved[key].y;
+                } else {
+                    a.x = maxX / 2;
+                    a.y = curY;
+                    curY += a._h + 15;
+                }
+            });
+        }
     };
 
     /* ══════════════════════════════════════════
