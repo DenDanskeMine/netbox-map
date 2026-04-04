@@ -50,12 +50,20 @@
             state.topologyMode = layout._topology_mode;
         }
 
+        // Merge mode-specific positions into the top level
+        var modeKey = '_pos_' + state.topologyMode;
+        if (layout[modeKey] && typeof layout[modeKey] === 'object') {
+            Object.keys(layout[modeKey]).forEach(function(nodeId) {
+                layout[nodeId] = Object.assign(layout[nodeId] || {}, layout[modeKey][nodeId]);
+            });
+        }
+
         for (var nodeId in layout) {
-            if (nodeId === '_hierarchy' || nodeId === '_topology_mode') continue;
+            if (nodeId.charAt(0) === '_') continue;  // skip metadata keys
             var data = layout[nodeId];
+            if (!data || typeof data !== 'object') continue;
             if (data.hidden) state.hiddenNodes.add(nodeId);
             if (data.pinned) {
-                // Mark node as pinned — will be applied after nodes are loaded
                 state._pinnedNodes = state._pinnedNodes || new Set();
                 state._pinnedNodes.add(nodeId);
             }
@@ -71,17 +79,21 @@
     function collectLayout() {
         var layout = {};
 
-        // Preserve existing saved layout positions for nodes not currently rendered
-        // (e.g., network devices when saving from app mode)
+        // Preserve ALL existing saved data (positions for other modes, metadata)
         var existing = state.savedLayout || {};
         Object.keys(existing).forEach(function(key) {
-            if (key.charAt(0) !== '_' && existing[key].x !== undefined) {
-                layout[key] = Object.assign({}, existing[key]);
-            }
+            layout[key] = typeof existing[key] === 'object' && existing[key] !== null
+                ? Object.assign({}, existing[key]) : existing[key];
         });
 
-        // Overlay current rendered positions
-        var renderedNodes = (appRenderer && appRenderer._nodes) || renderer._stencilNodeData || state.nodes;
+        // Save current mode's positions under a mode-specific key
+        var modeKey = '_pos_' + state.topologyMode;
+        var modePositions = {};
+
+        var renderedNodes = (state.topologyMode !== 'network' && appRenderer && appRenderer._nodes)
+            ? appRenderer._nodes
+            : (renderer._stencilNodeData || state.nodes);
+
         renderedNodes.forEach(function(n) {
             var entry = { x: n.x || 0, y: n.y || 0 };
             if (state.hiddenNodes.has(n.id)) entry.hidden = true;
@@ -95,8 +107,13 @@
             });
             if (Object.keys(portOverrides).length > 0) entry.port_overrides = portOverrides;
 
+            modePositions[n.id] = entry;
+
+            // Also save at top level for backward compat
             layout[n.id] = entry;
         });
+
+        layout[modeKey] = modePositions;
         if (state.topologyMode !== 'network') {
             layout._topology_mode = state.topologyMode;
         }
