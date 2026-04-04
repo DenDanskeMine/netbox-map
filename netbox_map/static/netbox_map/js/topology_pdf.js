@@ -515,30 +515,41 @@
             if (e.dependency_type === 'soft') doc.setLineDashPattern([1.5, 1]);
             else doc.setLineDashPattern([]);
 
-            // Simple orthogonal: exit right/left based on position
-            var sx, stx, sy, sty;
+            // Bezier curves — each edge gets a unique path
+            var sx, stx, sDir, tDir;
             if (sn.x + APP_W <= tn.x) {
-                sx = sn.x + APP_W; stx = tn.x;
+                sx = sn.x + APP_W; stx = tn.x; sDir = 1; tDir = -1;
+            } else if (tn.x + APP_W <= sn.x) {
+                sx = sn.x; stx = tn.x + APP_W; sDir = -1; tDir = 1;
             } else {
-                sx = sn.x; stx = tn.x + APP_W;
+                sx = sn.x + APP_W; stx = tn.x; sDir = 1; tDir = -1;
             }
-            sy = sn.y + (sn._h || 60) / 2;
-            sty = tn.y + (tn._h || 60) / 2;
-            var midX = (sx + stx) / 2;
 
-            doc.line(tx(sx), ty(sy), tx(midX), ty(sy));
-            doc.line(tx(midX), ty(sy), tx(midX), ty(sty));
-            doc.line(tx(midX), ty(sty), tx(stx), ty(sty));
+            // Use port Y if available, else card center
+            var sy = sn.y + (sn._h || 60) / 2;
+            var sty = tn.y + (tn._h || 60) / 2;
+            if (e.source_port && sn._portById && sn._portById[e.source_port]) {
+                sy = sn.y + sn._portById[e.source_port]._y;
+            }
+            if (e.target_port && tn._portById && tn._portById[e.target_port]) {
+                sty = tn.y + tn._portById[e.target_port]._y;
+            }
+
+            var dx = Math.abs(stx - sx);
+            var cp = Math.max(dx * 0.4, 40);
+            var pts = sampleBezier(sx, sy, sx + cp * sDir, sy, stx + cp * tDir, sty, stx, sty, 30);
+            for (var pi = 0; pi < pts.length - 1; pi++) {
+                doc.line(tx(pts[pi].x), ty(pts[pi].y), tx(pts[pi + 1].x), ty(pts[pi + 1].y));
+            }
 
             // Arrow at target
             var arrSize = Math.max(ts(4), 0.6);
-            var arrDir = stx === tn.x ? -1 : 1;
             doc.setFillColor(rgb.r, rgb.g, rgb.b);
             if (e.dependency_type !== 'soft') {
                 doc.triangle(
                     tx(stx), ty(sty),
-                    tx(stx) + arrSize * arrDir, ty(sty) - arrSize * 0.5,
-                    tx(stx) + arrSize * arrDir, ty(sty) + arrSize * 0.5,
+                    tx(stx) + arrSize * tDir, ty(sty) - arrSize * 0.5,
+                    tx(stx) + arrSize * tDir, ty(sty) + arrSize * 0.5,
                     'F'
                 );
             }
@@ -583,10 +594,13 @@
                 doc.setFont('helvetica', 'bold');
                 var pw = doc.getTextWidth(pillText) + ts(4);
                 var px = cx + cw - pw - ts(4);
-                doc.setFillColor(pillColor.r, pillColor.g, pillColor.b);
-                doc.setGState(new jsPDF.GState({ opacity: 0.15 }));
+                // Light tinted pill background
+                doc.setFillColor(
+                    Math.min(255, pillColor.r + 180),
+                    Math.min(255, pillColor.g + 180),
+                    Math.min(255, pillColor.b + 180)
+                );
                 doc.roundedRect(px, cy + ts(4), pw, ts(10), 1, 1, 'F');
-                doc.setGState(new jsPDF.GState({ opacity: 1 }));
                 doc.setTextColor(pillColor.r, pillColor.g, pillColor.b);
                 doc.text(pillText, px + pw / 2, cy + ts(11), { align: 'center' });
             }
