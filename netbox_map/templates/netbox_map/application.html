@@ -72,7 +72,7 @@
             <tbody>
               {% for dep in deployments %}
               <tr>
-                <td>{{ dep.host|default:"—" }}</td>
+                <td>{% if dep.host %}<a href="{{ dep.host.get_absolute_url }}">{{ dep.host }}</a>{% else %}&mdash;{% endif %}</td>
                 <td>{{ dep.get_role_display }}</td>
                 <td>{{ dep.port|default:"—" }}</td>
               </tr>

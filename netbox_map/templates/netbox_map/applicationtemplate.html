@@ -48,7 +48,7 @@
             {% for dep in deployments %}
             <tr>
               <td><a href="{{ dep.application.get_absolute_url }}">{{ dep.application }}</a></td>
-              <td>{{ dep.host }}</td>
+              <td>{% if dep.host %}<a href="{{ dep.host.get_absolute_url }}">{{ dep.host }}</a>{% else %}&mdash;{% endif %}</td>
               <td>{{ dep.get_role_display }}</td>
             </tr>
             {% endfor %}
