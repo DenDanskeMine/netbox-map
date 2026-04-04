@@ -4,13 +4,13 @@ from netbox.api.viewsets import NetBoxModelViewSet
 from .. import filtersets
 from ..models import (
     FloorPlan, FloorPlanTile, CustomMarkerType, LocationCoordinates, MapMarker, TilePortAssignment, CablePath, TopologySavedView,
-    ApplicationGroup, Application, ApplicationDeployment, ApplicationDependency,
+    ApplicationGroup, ApplicationTemplate, Application, ApplicationDeployment, ApplicationDependency,
 )
 from .serializers import (
     FloorPlanSerializer, FloorPlanTileSerializer, CustomMarkerTypeSerializer,
     LocationCoordinatesSerializer, MapMarkerSerializer, TilePortAssignmentSerializer,
     CablePathSerializer, TopologySavedViewSerializer,
-    ApplicationGroupSerializer, ApplicationSerializer,
+    ApplicationGroupSerializer, ApplicationTemplateSerializer, ApplicationSerializer,
     ApplicationDeploymentSerializer, ApplicationDependencySerializer,
 )
 
@@ -68,6 +68,12 @@ class ApplicationGroupViewSet(NetBoxModelViewSet):
     queryset = ApplicationGroup.objects.all()
     serializer_class = ApplicationGroupSerializer
     filterset_class = filtersets.ApplicationGroupFilterSet
+
+
+class ApplicationTemplateViewSet(NetBoxModelViewSet):
+    queryset = ApplicationTemplate.objects.select_related('group')
+    serializer_class = ApplicationTemplateSerializer
+    filterset_class = filtersets.ApplicationTemplateFilterSet
 
 
 class ApplicationViewSet(NetBoxModelViewSet):

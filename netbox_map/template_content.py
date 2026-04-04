@@ -57,7 +57,7 @@ class DeviceFloorPlanLink(PluginTemplateExtension):
 class DeviceApplicationPanel(PluginTemplateExtension):
     models = ['dcim.device']
 
-    def right_page(self):
+    def left_page(self):
         device = self.context['object']
         device_ct = ContentType.objects.get_for_model(device)
         from .models import ApplicationDeployment
@@ -86,7 +86,7 @@ class DeviceApplicationPanel(PluginTemplateExtension):
 class VMApplicationPanel(PluginTemplateExtension):
     models = ['virtualization.virtualmachine']
 
-    def right_page(self):
+    def left_page(self):
         vm = self.context['object']
         vm_ct = ContentType.objects.get_for_model(vm)
         from .models import ApplicationDeployment

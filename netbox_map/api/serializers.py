@@ -9,7 +9,7 @@ from utilities.api import get_serializer_for_model
 from ..choices import BUILTIN_TYPE_SLUGS
 from ..models import (
     FloorPlan, FloorPlanTile, CustomMarkerType, LocationCoordinates, MapMarker, TilePortAssignment, CablePath, TopologySavedView,
-    ApplicationGroup, Application, ApplicationDeployment, ApplicationDependency,
+    ApplicationGroup, ApplicationTemplate, Application, ApplicationDeployment, ApplicationDependency,
 )
 
 
@@ -217,6 +217,22 @@ class ApplicationGroupSerializer(NetBoxModelSerializer):
         brief_fields = ('id', 'url', 'display', 'name', 'slug', 'color')
 
 
+class ApplicationTemplateSerializer(NetBoxModelSerializer):
+    group = ApplicationGroupSerializer(nested=True, required=False, allow_null=True, default=None)
+
+    class Meta:
+        model = ApplicationTemplate
+        fields = [
+            'id', 'url', 'display_url', 'display',
+            'name', 'slug', 'description',
+            'default_status', 'default_criticality', 'default_environment', 'default_version',
+            'default_port', 'default_protocol', 'default_role',
+            'group', 'name_format',
+            'tags', 'custom_fields', 'created', 'last_updated',
+        ]
+        brief_fields = ('id', 'url', 'display', 'name', 'slug')
+
+
 class ApplicationSerializer(NetBoxModelSerializer):
     group = ApplicationGroupSerializer(nested=True, required=False, allow_null=True, default=None)
     site = SiteSerializer(nested=True, required=False, allow_null=True, default=None)
@@ -226,6 +242,7 @@ class ApplicationSerializer(NetBoxModelSerializer):
         fields = [
             'id', 'url', 'display_url', 'display',
             'name', 'status', 'criticality', 'environment', 'version',
+            'default_port', 'default_protocol', 'primary_ip',
             'description', 'comments', 'external_url',
             'group', 'site', 'tenant',
             'tags', 'custom_fields', 'created', 'last_updated',
