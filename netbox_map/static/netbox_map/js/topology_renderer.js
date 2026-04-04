@@ -1248,7 +1248,7 @@
             .on('end', function(ev, d) {
                 // Only re-sort if device actually moved (not just a click)
                 var moved = Math.abs(d.x - d._dragStartX) > 2 || Math.abs(d.y - d._dragStartY) > 2;
-                if (moved && self.state.autoSortPorts) {
+                if (moved && self.state.autoSortPorts && self.state.topologyMode !== 'mixed') {
                     // Sync all positions to state.nodes first
                     nodeData.forEach(function(nd) {
                         var orig = self.state.nodes.find(function(n) { return n.id === nd.id; });

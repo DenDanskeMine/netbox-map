@@ -145,7 +145,9 @@
         this._bind(edges);
 
         this.base._stencilNodeData = (this.base._stencilNodeData || []).concat(nodes);
-        this.base.fitToView();
+        // Delay fitToView slightly to ensure SVG elements are rendered
+        var base = this.base;
+        setTimeout(function() { base.fitToView(); }, 50);
     };
 
     AppRenderer.prototype.focusNode = function(id) {
@@ -310,12 +312,15 @@
 
         // Find rightmost device edge to position apps to the right
         var maxDeviceX = 0;
+        var positionedCount = 0;
         (deviceNodes || []).forEach(function(n) {
-            if (n.x !== undefined) {
-                maxDeviceX = Math.max(maxDeviceX, n.x + 200 + 80);
+            if (n.x !== undefined && !isNaN(n.x)) {
+                maxDeviceX = Math.max(maxDeviceX, n.x + (n._cardW || 200) + 80);
+                positionedCount++;
             }
         });
-        if (maxDeviceX === 0) maxDeviceX = 100;
+        console.log('[OVERLAY] devices:', (deviceNodes || []).length, 'positioned:', positionedCount, 'maxDeviceX:', maxDeviceX);
+        if (maxDeviceX === 0) maxDeviceX = 600; // reasonable default if no devices positioned
 
         // Use dagre for app layout — same as app-only mode
         // This gives proper left-to-right dependency flow
