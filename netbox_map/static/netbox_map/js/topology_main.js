@@ -438,6 +438,13 @@
 
             if (sidebarEl) sidebarEl.classList.remove('hidden');
 
+            // Auto-focus on the target app if focus_app or app_ids param was used
+            var focusId = state.initialFilters.focus_app || state.initialFilters.app_ids;
+            if (focusId && appRenderer) {
+                var targetId = 'app-' + String(focusId).split(',')[0];
+                setTimeout(function() { appRenderer.focusNode(targetId); }, 300);
+            }
+
             var statNodes = document.getElementById('stat-nodes');
             var statEdges = document.getElementById('stat-edges');
             if (statNodes) statNodes.textContent = data.stats.node_count;
