@@ -399,6 +399,44 @@ class TopologyDataView(LoginRequiredMixin, View):
                         'url': cable.get_absolute_url(),
                     })
 
+        # ── Add application deployment ports to device nodes (for mixed mode) ──
+        # Shows which apps run on each device as port-like rows on the card
+        device_ct = ContentType.objects.get_for_model(Device)
+        deployments = ApplicationDeployment.objects.filter(
+            host_type=device_ct, host_id__in=device_ids
+        ).select_related('application')
+
+        for dep in deployments:
+            dev_id = dep.host_id
+            if dev_id not in device_map:
+                continue
+            port_id = f'app-deploy-{dep.pk}'
+            device_map[dev_id]['ports'].append({
+                'id': port_id,
+                'name': dep.application.name,
+                'port_class': 'app-deploy',
+                'type': dep.get_role_display(),
+                'speed': None,
+                'cabled': True,  # so it renders as a port row
+            })
+            # Add deployed-on edge
+            edges.append({
+                'id': f'deploy-{dep.pk}',
+                'edge_type': 'deployed_on',
+                'source': f'app-{dep.application_id}',
+                'target': f'device-{dev_id}',
+                'source_port': None,
+                'target_port': port_id,
+                'source_port_name': dep.application.name,
+                'target_port_name': dep.application.name,
+                'directed': False,
+                'color': '#5a6080',
+                'cable_type': dep.get_role_display(),
+                'cable_id': f'dp{dep.pk}',
+                'status': '',
+                'status_value': '',
+            })
+
         return JsonResponse({
             'nodes': nodes,
             'edges': edges,
