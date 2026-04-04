@@ -1989,18 +1989,24 @@ class AppTopologyDataView(LoginRequiredMixin, View):
                         if escalated:
                             queue.append(dependent_pk)
 
-        # Add deployed-on edges
+        # Add deployed-on edges (with port references for mixed mode routing)
         for dep in deployments:
             if dep.host_type_id == device_ct.pk and dep.host_id in device_ids:
+                target_port_id = f'app-deploy-{dep.pk}'
                 edges.append({
                     'id': f'deploy-{dep.pk}',
                     'edge_type': 'deployed_on',
                     'source': f'app-{dep.application_id}',
                     'target': f'device-{dep.host_id}',
+                    'source_port': None,
+                    'target_port': target_port_id,
+                    'source_port_name': dep.application.name if dep.application_id in app_map else '',
+                    'target_port_name': dep.application.name if dep.application_id in app_map else '',
                     'directed': False,
-                    'color': '#5a6080',
+                    'color': '#22d3ee',
                     'label': dep.get_role_display(),
                     'cable_type': f'{dep.get_role_display()} :{dep.port}' if dep.port else dep.get_role_display(),
+                    'cable_id': f'dp{dep.pk}',
                 })
 
         # Count affected apps (no DB writes in GET — notifications handled separately)
