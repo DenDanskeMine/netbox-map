@@ -41,6 +41,14 @@
             <td>{% if object.tenant %}<a href="{{ object.tenant.get_absolute_url }}">{{ object.tenant }}</a>{% else %}&mdash;{% endif %}</td>
           </tr>
           <tr>
+            <th scope="row">{% trans "Port" %}</th>
+            <td>{{ object.default_port|placeholder }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Protocol" %}</th>
+            <td>{{ object.default_protocol|placeholder }}</td>
+          </tr>
+          <tr>
             <th scope="row">{% trans "Description" %}</th>
             <td>{{ object.description|placeholder }}</td>
           </tr>

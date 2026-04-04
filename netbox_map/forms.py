@@ -1347,6 +1347,10 @@ class ApplicationForm(NetBoxModelForm):
             name=_('Application')
         ),
         FieldSet(
+            'default_port', 'default_protocol',
+            name=_('Service Defaults')
+        ),
+        FieldSet(
             'group', 'site', 'tenant',
             name=_('Assignment')
         ),
@@ -1361,6 +1365,7 @@ class ApplicationForm(NetBoxModelForm):
         fields = [
             'name', 'status', 'criticality', 'environment', 'version',
             'description', 'comments', 'external_url',
+            'default_port', 'default_protocol',
             'group', 'site', 'tenant', 'tags',
         ]
 

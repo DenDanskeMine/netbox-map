@@ -392,7 +392,7 @@ class ApplicationTable(NetBoxTable):
         model = Application
         fields = (
             'pk', 'id', 'name', 'status', 'criticality', 'environment',
-            'version', 'group', 'site', 'tenant', 'description', 'tags', 'actions',
+            'version', 'default_port', 'default_protocol', 'group', 'site', 'tenant', 'description', 'tags', 'actions',
         )
         default_columns = (
             'pk', 'name', 'status', 'criticality', 'environment', 'group', 'site', 'tenant',

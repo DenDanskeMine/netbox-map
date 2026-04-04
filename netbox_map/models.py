@@ -867,6 +867,8 @@ class Application(NetBoxModel):
     description = models.CharField(max_length=500, blank=True)
     comments = models.TextField(blank=True)
     external_url = models.URLField(max_length=500, blank=True, help_text=_('URL to docs, dashboard, or entry point'))
+    default_port = models.IntegerField(null=True, blank=True, help_text=_('Default port this application listens on'))
+    default_protocol = models.CharField(max_length=50, blank=True, help_text=_('Default protocol (e.g., HTTP, TCP, gRPC)'))
     group = models.ForeignKey(
         'netbox_map.ApplicationGroup', on_delete=models.SET_NULL,
         related_name='applications', blank=True, null=True,
@@ -880,7 +882,7 @@ class Application(NetBoxModel):
         related_name='+', blank=True, null=True,
     )
 
-    clone_fields = ('status', 'criticality', 'environment', 'group', 'tenant', 'site')
+    clone_fields = ('status', 'criticality', 'environment', 'group', 'tenant', 'site', 'default_port', 'default_protocol')
 
     class Meta:
         ordering = ('name',)
