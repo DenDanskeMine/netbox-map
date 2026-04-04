@@ -319,7 +319,6 @@
                 positionedCount++;
             }
         });
-        console.log('[OVERLAY] devices:', (deviceNodes || []).length, 'positioned:', positionedCount, 'maxDeviceX:', maxDeviceX);
         if (maxDeviceX === 0) maxDeviceX = 600; // reasonable default if no devices positioned
 
         // Use dagre for app layout — same as app-only mode
