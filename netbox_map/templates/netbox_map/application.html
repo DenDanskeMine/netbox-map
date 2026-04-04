@@ -103,8 +103,11 @@
       <div class="card">
         <h5 class="card-header">{% trans "Actions" %}</h5>
         <div class="card-body d-flex gap-2 flex-wrap">
-          <a href="{% url 'plugins:netbox_map:topology' %}" class="btn btn-primary">
+          <a href="{% url 'plugins:netbox_map:topology' %}?mode=apps&app_ids={{ object.pk }}" class="btn btn-primary">
             <i class="mdi mdi-sitemap"></i> {% trans "View in Topology" %}
+          </a>
+          <a href="{% url 'plugins:netbox_map:topology' %}?mode=apps&focus_app={{ object.pk }}" class="btn btn-info">
+            <i class="mdi mdi-graph-outline"></i> {% trans "View Dependencies" %}
           </a>
           <a href="{% url 'plugins:netbox_map:application_bulk_deploy' pk=object.pk %}" class="btn btn-success">
             <i class="mdi mdi-rocket-launch"></i> {% trans "Bulk Deploy to Hosts" %}

@@ -18,6 +18,7 @@ class MapConfig(PluginConfig):
     def ready(self):
         super().ready()
         from . import signals  # noqa: F401
+        from . import dashboard  # noqa: F401 — registers dashboard widgets
 
 
 config = MapConfig

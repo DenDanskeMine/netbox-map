@@ -360,20 +360,39 @@
         } else {
             loadTopology();
         }
+        if (typeof updateURL === 'function') updateURL();
     }
 
     if (modeNetwork) modeNetwork.addEventListener('click', function() { switchToMode('network'); });
     if (modeApps) modeApps.addEventListener('click', function() { switchToMode('apps'); });
 
-    // Initial load — check if saved layout restores app topology mode
-    if (state.savedLayout && state.savedLayout._topology_mode) {
+    // ── URL param reading — takes priority over saved layout ──
+    var urlMode = container.getAttribute('data-topology-mode');
+    if (!urlMode) {
+        var urlParams = new URLSearchParams(window.location.search);
+        urlMode = urlParams.get('mode') || '';
+    }
+
+    // Initial load — URL mode > saved layout mode > default
+    if (urlMode === 'apps') {
+        state.topologyMode = 'apps';
+    } else if (state.savedLayout && state.savedLayout._topology_mode) {
         state.topologyMode = state.savedLayout._topology_mode;
     }
+
     if (state.topologyMode === 'apps') {
-        setModeActive(modeApps);
-        loadAppTopology();
+        switchToMode('apps');
     } else {
         loadTopology();
+    }
+
+    // ── Shareable URL update ──
+    function updateURL() {
+        var url = new URL(window.location);
+        url.searchParams.set('mode', state.topologyMode);
+        if (state.savedViewId) url.searchParams.set('view_id', state.savedViewId);
+        else url.searchParams.delete('view_id');
+        window.history.replaceState(null, '', url.toString());
     }
 
     function loadAppTopology() {

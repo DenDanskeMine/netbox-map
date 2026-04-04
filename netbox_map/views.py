@@ -45,6 +45,15 @@ class TopologyView(LoginRequiredMixin, View):
         if role_ids:
             initial_filters['role_id'] = role_ids
 
+        # App topology params
+        topology_mode = request.GET.get('mode', '')
+        app_ids = request.GET.getlist('app_ids')
+        if app_ids:
+            initial_filters['app_ids'] = ','.join(app_ids)
+        focus_app = request.GET.get('focus_app')
+        if focus_app:
+            initial_filters['focus_app'] = focus_app
+
         # Load saved view if requested
         saved_view = None
         saved_view_data = '{}'
@@ -70,6 +79,7 @@ class TopologyView(LoginRequiredMixin, View):
             'saved_view_data': saved_view_data,
             'saved_views': list(saved_views),
             'saved_views_json': json.dumps(list(saved_views)),
+            'topology_mode': topology_mode or '',
         })
 
 
@@ -1550,6 +1560,7 @@ class AppTopologyDataView(LoginRequiredMixin, View):
         site_id = request.GET.get('site_id')
         group_id = request.GET.get('group_id')
         app_ids_param = request.GET.get('app_ids')
+        focus_app_param = request.GET.get('focus_app')
         tags = request.GET.getlist('tag')
 
         apps = Application.objects.select_related('group', 'tenant', 'site', 'primary_ip').annotate(
@@ -1558,7 +1569,38 @@ class AppTopologyDataView(LoginRequiredMixin, View):
             dep_in_count=Count('dependents', distinct=True),
         )
 
-        if app_ids_param:
+        # Focus app: show this app + all its upstream + downstream deps
+        if focus_app_param:
+            try:
+                focus_pk = int(focus_app_param)
+            except (ValueError, TypeError):
+                focus_pk = None
+            if focus_pk:
+                related_ids = {focus_pk}
+                # Upstream: what this app depends on (and recurse)
+                queue = [focus_pk]
+                for _ in range(10):  # max depth
+                    targets = set(ApplicationDependency.objects.filter(
+                        source_application_id__in=queue
+                    ).values_list('target_application_id', flat=True))
+                    new = targets - related_ids
+                    if not new:
+                        break
+                    related_ids |= new
+                    queue = list(new)
+                # Downstream: what depends on this app (and recurse)
+                queue = [focus_pk]
+                for _ in range(10):
+                    sources = set(ApplicationDependency.objects.filter(
+                        target_application_id__in=queue
+                    ).values_list('source_application_id', flat=True))
+                    new = sources - related_ids
+                    if not new:
+                        break
+                    related_ids |= new
+                    queue = list(new)
+                apps = apps.filter(pk__in=related_ids)
+        elif app_ids_param:
             ids = [int(x) for x in app_ids_param.split(',') if x.strip().isdigit()]
             apps = apps.filter(pk__in=ids)
         else:

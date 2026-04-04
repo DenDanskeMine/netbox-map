@@ -159,7 +159,8 @@
      data-save-url="{% url 'plugins:netbox_map:topology_save_layout' %}"
      data-saved-view-id="{{ saved_view.pk|default:'' }}"
      data-app-data-url="{% url 'plugins:netbox_map:topology_app_data' %}"
-     data-app-detail-url="{% url 'plugins:netbox_map:topology_app_detail' app_id=0 %}">
+     data-app-detail-url="{% url 'plugins:netbox_map:topology_app_detail' app_id=0 %}"
+     data-topology-mode="{{ topology_mode }}">
   <div class="topology-graph-area">
     <svg id="topology-svg"></svg>
     <div id="topo-alerts" class="topo-alerts d-none"></div>

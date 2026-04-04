@@ -1,0 +1,45 @@
+<div class="d-flex gap-3 mb-3">
+  <div class="text-center flex-fill">
+    <div class="fs-3 fw-bold text-success">{{ healthy }}</div>
+    <div class="text-muted small">Healthy</div>
+  </div>
+  {% if down > 0 %}
+  <div class="text-center flex-fill">
+    <div class="fs-3 fw-bold text-danger">{{ down }}</div>
+    <div class="text-muted small">Impacted</div>
+  </div>
+  {% endif %}
+  <div class="text-center flex-fill">
+    <div class="fs-3 fw-bold">{{ total }}</div>
+    <div class="text-muted small">Total</div>
+  </div>
+</div>
+
+{% if impacted_apps %}
+<table class="table table-sm table-hover mb-2">
+  <thead>
+    <tr>
+      <th>Application</th>
+      <th>Criticality</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for app in impacted_apps %}
+    <tr>
+      <td><a href="{{ app.get_absolute_url }}">{{ app.name }}</a></td>
+      <td>
+        <span class="badge" style="background-color: {{ app.get_criticality_color }};">
+          {{ app.get_criticality_display }}
+        </span>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+<div class="text-center">
+  <a href="{% url 'plugins:netbox_map:topology' %}?mode=apps" class="btn btn-sm btn-outline-primary">
+    Open Topology
+  </a>
+</div>
