@@ -320,8 +320,8 @@
 
         // Update toolbar visibility for network-only controls
         var networkOnlyBtns = ['topo-add-devices', 'topo-edit-hierarchy', 'topo-auto-sort',
-            'topo-collapse-pp', 'cable-color-physical', 'cable-color-speed', 'cable-curve',
-            'cable-ortho', 'topo-toggle-labels', 'view-stencil', 'view-node'];
+            'topo-collapse-pp', 'cable-color-physical', 'cable-color-speed',
+            'topo-toggle-labels', 'view-stencil', 'view-node'];
         networkOnlyBtns.forEach(function(id) {
             var el = document.getElementById(id);
             if (el) el.style.display = (mode === 'apps') ? 'none' : '';
@@ -1077,11 +1077,21 @@
     var cableOrtho = document.getElementById('cable-ortho');
     if (cableCurve) cableCurve.addEventListener('click', function() {
         cableCurve.classList.add('active'); if (cableOrtho) cableOrtho.classList.remove('active');
-        renderer.switchCableStyle('curve');
+        state.cableStyle = 'curve';
+        if (state.topologyMode === 'apps' && appRenderer) {
+            appRenderer.switchEdgeStyle('curve');
+        } else {
+            renderer.switchCableStyle('curve');
+        }
     });
     if (cableOrtho) cableOrtho.addEventListener('click', function() {
         if (cableCurve) cableCurve.classList.remove('active'); cableOrtho.classList.add('active');
-        renderer.switchCableStyle('ortho');
+        state.cableStyle = 'ortho';
+        if (state.topologyMode === 'apps' && appRenderer) {
+            appRenderer.switchEdgeStyle('ortho');
+        } else {
+            renderer.switchCableStyle('ortho');
+        }
     });
 
     // Cable labels toggle

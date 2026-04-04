@@ -1996,3 +1996,78 @@ span.topo-iface-dot.empty {
     color: #505868;
     text-align: center;
 }
+
+/* ══════════════════════════════════════════
+   Light Mode Overrides for App Topology
+   ══════════════════════════════════════════ */
+[data-bs-theme="light"] .acard .acard-bg { fill: #ffffff; stroke: rgba(0,0,0,0.1); }
+[data-bs-theme="light"] .acard:hover .acard-bg { stroke: rgba(0,0,0,0.2); }
+[data-bs-theme="light"] .acard.selected .acard-bg { stroke: #2563eb; }
+[data-bs-theme="light"] .acard .acard-name { fill: #1f2937; }
+[data-bs-theme="light"] .acard .acard-sub { fill: #6b7280; }
+[data-bs-theme="light"] .acard .acard-sep { stroke: rgba(0,0,0,0.08); }
+[data-bs-theme="light"] .acard .acard-footer { fill: #9ca3af; }
+[data-bs-theme="light"] .acard:hover .acard-footer { fill: #6b7280; }
+[data-bs-theme="light"] .aport-row-even { fill: rgba(0,0,0,0.03); }
+[data-bs-theme="light"] .aport-row-odd { fill: rgba(0,0,0,0.01); }
+[data-bs-theme="light"] .acard-col-div { stroke: rgba(0,0,0,0.06); }
+[data-bs-theme="light"] .aport-section-hdr { fill: #9ca3af; }
+[data-bs-theme="light"] .acard:hover .aport-section-hdr { fill: #6b7280; }
+[data-bs-theme="light"] .aport-label { fill: #6b7280; }
+[data-bs-theme="light"] .acard:hover .aport-label { fill: #374151; }
+[data-bs-theme="light"] .aport-tick { fill: #d1d5db; }
+[data-bs-theme="light"] .acard:hover .aport-tick { fill: #9ca3af; }
+[data-bs-theme="light"] .acard-host-badge rect { fill: #f3f4f6; }
+[data-bs-theme="light"] .acard-host-badge text { fill: #9ca3af; }
+[data-bs-theme="light"] .acard:hover .acard-host-badge text { fill: #6b7280; }
+
+/* Light mode — tooltips & popups */
+[data-bs-theme="light"] .aedge-tooltip { background: #fff; border-color: rgba(0,0,0,0.12); color: #6b7280; }
+[data-bs-theme="light"] .host-popup { background: #fff; border-color: rgba(0,0,0,0.12); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+[data-bs-theme="light"] .host-popup-title { color: #9ca3af; }
+[data-bs-theme="light"] .host-popup-name { color: #374151; }
+[data-bs-theme="light"] .host-popup-row:hover .host-popup-name { color: #1f2937; }
+[data-bs-theme="light"] .host-popup-row:hover { background: rgba(0,0,0,0.04); }
+[data-bs-theme="light"] .host-popup-role { color: #9ca3af; }
+[data-bs-theme="light"] .host-popup-loading, [data-bs-theme="light"] .host-popup-empty { color: #9ca3af; }
+
+/* Light mode — alert overlay */
+[data-bs-theme="light"] .topo-alert-bar { background: #fff; border-color: rgba(0,0,0,0.1); }
+[data-bs-theme="light"] .topo-alert-list { border-top-color: rgba(0,0,0,0.06); }
+[data-bs-theme="light"] .topo-alert-item:hover { background: #f3f4f6; }
+[data-bs-theme="light"] .topo-alert-toggle { color: #9ca3af; }
+[data-bs-theme="light"] .topo-alert-dismiss { color: #9ca3af; }
+[data-bs-theme="light"] .topo-alert-name { color: #1f2937; }
+[data-bs-theme="light"] .topo-alert-reason { color: #9ca3af; }
+
+/* Light mode — simulation */
+[data-bs-theme="light"] .sim-impact-summary { background: #fff; border-color: rgba(0,0,0,0.1); }
+[data-bs-theme="light"] .sim-impact-summary .sim-body { color: #6b7280; }
+[data-bs-theme="light"] .sim-impact-summary .sim-detail { color: #9ca3af; }
+[data-bs-theme="light"] .sim-clear-btn { background: #d1fae5; color: #065f46; border-color: #a7f3d0; }
+[data-bs-theme="light"] .sim-clear-btn:hover { background: #a7f3d0; }
+
+/* Light mode — detail panel */
+[data-bs-theme="light"] .adp-header { border-bottom-color: rgba(0,0,0,0.06); }
+[data-bs-theme="light"] .adp-name { color: #1f2937; }
+[data-bs-theme="light"] .adp-name:hover { color: #111827; }
+[data-bs-theme="light"] .adp-tag { border-color: rgba(0,0,0,0.1); color: #6b7280; }
+[data-bs-theme="light"] .adp-tag-code { color: #4b5563; }
+[data-bs-theme="light"] .adp-alert-detail { color: #6b7280; }
+[data-bs-theme="light"] .adp-alert-detail strong { color: #1f2937; }
+[data-bs-theme="light"] .adp-info { color: #9ca3af; }
+[data-bs-theme="light"] .adp-actions { border-bottom-color: rgba(0,0,0,0.06); }
+[data-bs-theme="light"] .adp-link { color: #2563eb; }
+[data-bs-theme="light"] .adp-link:hover { color: #1d4ed8; }
+[data-bs-theme="light"] .adp-section-hdr { color: #9ca3af; border-top-color: rgba(0,0,0,0.04); }
+[data-bs-theme="light"] .adp-section-hdr span { color: #d1d5db; }
+[data-bs-theme="light"] .adp-dep-name { color: #374151; }
+[data-bs-theme="light"] .adp-dep-row:hover .adp-dep-name { color: #1f2937; }
+[data-bs-theme="light"] .adp-dep-row:hover, [data-bs-theme="light"] .adp-host-row:hover { background: rgba(0,0,0,0.03); }
+[data-bs-theme="light"] .adp-dep-proto { color: #9ca3af; }
+[data-bs-theme="light"] .adp-dep-type.dep-soft { color: #9ca3af; background: rgba(0,0,0,0.03); }
+[data-bs-theme="light"] .adp-host-name { color: #374151; }
+[data-bs-theme="light"] .adp-host-row:hover .adp-host-name { color: #1f2937; }
+[data-bs-theme="light"] .adp-host-ip { color: #9ca3af; }
+[data-bs-theme="light"] .adp-host-role { color: #9ca3af; }
+[data-bs-theme="light"] .adp-empty { color: #9ca3af; }

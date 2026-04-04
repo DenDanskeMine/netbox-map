@@ -284,7 +284,7 @@
                 return 'aedge' + (d.dependency_type === 'soft' ? ' aedge-soft' : ' aedge-hard');
             })
             .attr('stroke', function(d) { return d.color || '#6c757d'; })
-            .attr('d', function(d) { return self._orthoPath(d); })
+            .attr('d', function(d) { return self._edgePath(d); })
             .attr('marker-end', function(d) {
                 var c = (d.color || '#6c757d').replace('#', '');
                 return d.dependency_type === 'soft' ? self._openArrow(c) : self._filledArrow(c);
@@ -421,6 +421,57 @@
              + ' L' + candidateX + ',' + (ty - r * dySign)
              + ' Q' + candidateX + ',' + ty + ' ' + (candidateX + r * dxSign2) + ',' + ty
              + ' L' + tx + ',' + ty;
+    };
+
+    /* Bezier path — smooth curves that naturally separate */
+    AppRenderer.prototype._bezierPath = function(d) {
+        var srcId = typeof d.source === 'object' ? d.source.id : d.source;
+        var tgtId = typeof d.target === 'object' ? d.target.id : d.target;
+        var sn = this._byId[srcId];
+        var tn = this._byId[tgtId];
+        if (!sn || !tn) return '';
+
+        var sp = this._portY(d.source_port);
+        var tp = this._portY(d.target_port);
+        var sy = sn.y + (sp !== null ? sp : sn._h / 2);
+        var ty = tn.y + (tp !== null ? tp : tn._h / 2);
+
+        var sx, stx, sDir, tDir;
+        if (sn.x + CARD_W <= tn.x) {
+            sx = sn.x + CARD_W; stx = tn.x; sDir = 1; tDir = -1;
+        } else if (tn.x + CARD_W <= sn.x) {
+            sx = sn.x; stx = tn.x + CARD_W; sDir = -1; tDir = 1;
+        } else {
+            var exitRight = sn.x < tn.x;
+            sx = exitRight ? sn.x + CARD_W : sn.x;
+            stx = exitRight ? tn.x : tn.x + CARD_W;
+            sDir = exitRight ? 1 : -1;
+            tDir = exitRight ? -1 : 1;
+        }
+
+        var dxAbs = Math.abs(stx - sx);
+        var cp = Math.max(dxAbs * 0.45, 60);
+
+        return 'M' + sx + ',' + sy
+             + ' C' + (sx + cp * sDir) + ',' + sy
+             + ' ' + (stx + cp * tDir) + ',' + ty
+             + ' ' + stx + ',' + ty;
+    };
+
+    /* Route dispatcher — picks ortho or bezier based on state */
+    AppRenderer.prototype._edgePath = function(d) {
+        return this.state.cableStyle === 'ortho' ? this._orthoPath(d) : this._bezierPath(d);
+    };
+
+    /* Switch edge style and re-render edges */
+    AppRenderer.prototype.switchEdgeStyle = function(style) {
+        this.state.cableStyle = style;
+        var self = this;
+        if (this._lines) {
+            this._lines.attr('d', function(d) { return self._edgePath(d); });
+        }
+        // Update hit paths too
+        this.base.g.selectAll('.aedge-hit').attr('d', function(d) { return self._edgePath(d); });
     };
 
     AppRenderer.prototype._portY = function(portId) {
@@ -716,14 +767,14 @@
                 if (orig) { orig.x = d.x; orig.y = d.y; }
 
                 // Redraw edges
-                self._lines.attr('d', function(e) { return self._orthoPath(e); });
+                self._lines.attr('d', function(e) { return self._edgePath(e); });
             })
             .on('end', function(ev, d) {
                 d3.select(this).classed('dragging', false);
                 if (d._dragActive) {
                     // Reassign port sides after drag
                     self._assignPortSides(edges);
-                    self._lines.attr('d', function(e) { return self._orthoPath(e); });
+                    self._lines.attr('d', function(e) { return self._edgePath(e); });
                 }
             })
         );
@@ -795,7 +846,7 @@
         hitLayer.selectAll('.aedge-hit')
             .data(edges).enter().append('path')
             .attr('class', 'aedge-hit')
-            .attr('d', function(d) { return self._orthoPath(d); })
+            .attr('d', function(d) { return self._edgePath(d); })
             .attr('fill', 'none')
             .attr('stroke', 'transparent')
             .attr('stroke-width', 12)
