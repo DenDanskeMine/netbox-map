@@ -223,7 +223,7 @@
 
     // Load topology data
     // Params that are only for the app endpoint, not network
-    var APP_ONLY_PARAMS = { focus_app: 1, app_ids: 1, device_ids: 1 };
+    var APP_ONLY_PARAMS = { focus_app: 1, app_ids: 1 };
 
     function loadTopology() {
         // Filter out app-only params for the network endpoint
@@ -596,7 +596,8 @@
             applySavedLayout();
 
             // Step 1: Render network devices + cables using the NETWORK renderer
-            // (full stencil cards with interface ports and cable routing)
+            // Force stencil mode for mixed view (full cards with interface ports)
+            state.viewMode = 'stencil';
             var netNodes = mergedNodes.filter(function(n) { return n.node_type !== 'application'; });
             var netEdges = mergedEdges.filter(function(e) { return e.edge_type !== 'dependency' && e.edge_type !== 'deployed_on'; });
             renderer.render(netNodes, netEdges);
