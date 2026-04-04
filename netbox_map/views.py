@@ -1640,7 +1640,7 @@ class AppTopologyDataView(LoginRequiredMixin, View):
                     queue = list(new)
                 apps = apps.filter(pk__in=related_ids)
         elif device_ids_param:
-            # Filter to apps deployed on specific devices (from saved network view)
+            # Filter to apps deployed on specific devices + their dependency partners
             dev_ids = [int(x) for x in device_ids_param.split(',') if x.strip().isdigit()]
             device_ct = ContentType.objects.get_for_model(Device)
             deployed_app_ids = set(
@@ -1649,7 +1649,17 @@ class AppTopologyDataView(LoginRequiredMixin, View):
                 ).values_list('application_id', flat=True)
             )
             if deployed_app_ids:
-                apps = apps.filter(pk__in=deployed_app_ids)
+                # Expand to include dependency partners (1 level)
+                related_ids = set(deployed_app_ids)
+                # Apps these depend on
+                related_ids |= set(ApplicationDependency.objects.filter(
+                    source_application_id__in=deployed_app_ids
+                ).values_list('target_application_id', flat=True))
+                # Apps that depend on these
+                related_ids |= set(ApplicationDependency.objects.filter(
+                    target_application_id__in=deployed_app_ids
+                ).values_list('source_application_id', flat=True))
+                apps = apps.filter(pk__in=related_ids)
             else:
                 apps = apps.none()
         elif app_ids_param:

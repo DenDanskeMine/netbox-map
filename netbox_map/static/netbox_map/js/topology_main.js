@@ -512,30 +512,23 @@
         Object.keys(state.initialFilters).forEach(function(key) {
             var val = state.initialFilters[key];
             if (key === 'focus_app' || key === 'app_ids') {
-                // App-only params
                 appParams.set(key, val);
             } else if (key === 'device_ids') {
-                // Both endpoints need device_ids
+                // Network needs device_ids; app endpoint gets site_id instead
                 netParams.set(key, val);
-                appParams.set(key, val);
             } else {
-                // Network params — also pass site_id to app endpoint
                 if (Array.isArray(val)) val.forEach(function(v) { netParams.append(key, v); });
                 else netParams.set(key, val);
+                // Pass site_id to app endpoint for full dependency data
                 if (key === 'site_id') appParams.set(key, val);
             }
         });
 
-        // If network view has specific devices, scope apps to those devices
-        if (!appParams.has('app_ids') && !appParams.has('focus_app')) {
-            var layout = state.savedLayout;
-            if (layout && typeof layout === 'object') {
-                var devIds = [];
-                Object.keys(layout).forEach(function(k) {
-                    if (k.indexOf('device-') === 0) devIds.push(k.replace('device-', ''));
-                });
-                if (devIds.length > 0) appParams.set('device_ids', devIds.join(','));
-            }
+        // If no site_id for app endpoint, try to get it from saved view filters
+        if (!appParams.has('site_id') && !appParams.has('app_ids') && !appParams.has('focus_app')) {
+            // Fall back to device_ids for app scoping only if no site available
+            var devIdsVal = state.initialFilters.device_ids;
+            if (devIdsVal) appParams.set('device_ids', devIdsVal);
         }
 
         var netUrl = state.topologyUrl + (netParams.toString() ? '?' + netParams.toString() : '');
