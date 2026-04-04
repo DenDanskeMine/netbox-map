@@ -310,16 +310,15 @@
 
         if (appNodes.length === 0) return;
 
-        // Find rightmost device edge to position apps to the right
+        // Find rightmost device edge + add small gap for app placement
         var maxDeviceX = 0;
-        var positionedCount = 0;
         (deviceNodes || []).forEach(function(n) {
             if (n.x !== undefined && !isNaN(n.x)) {
-                maxDeviceX = Math.max(maxDeviceX, n.x + (n._cardW || 200) + 80);
-                positionedCount++;
+                maxDeviceX = Math.max(maxDeviceX, n.x + 200);
             }
         });
-        if (maxDeviceX === 0) maxDeviceX = 600; // reasonable default if no devices positioned
+        maxDeviceX += 60; // single gap between device area and app area
+        if (maxDeviceX <= 60) maxDeviceX = 400;
 
         // Use dagre for app layout — same as app-only mode
         // This gives proper left-to-right dependency flow
