@@ -85,6 +85,56 @@
         this.base.fitToView();
     };
 
+    /**
+     * Render app cards + edges as an OVERLAY on existing network content.
+     * Does NOT clear SVG layers — appends to them.
+     * Used by mixed mode after the network renderer has drawn devices + cables.
+     */
+    AppRenderer.prototype.renderOverlay = function(appNodes, appEdges, deviceNodes) {
+        var self = this;
+
+        // Prepare app nodes
+        this._byId = {};
+        this._portMap = {};
+        var nodes = appNodes.map(function(n) { return Object.assign({}, n, { ports: (n.ports || []).slice() }); });
+        nodes.forEach(function(n) {
+            self._buildPorts(n);
+            self._byId[n.id] = n;
+        });
+
+        // Also register device nodes in _byId for edge routing
+        (deviceNodes || []).forEach(function(n) {
+            if (!self._byId[n.id]) {
+                self._byId[n.id] = n;
+                n._h = n._cardH || 60;
+            }
+        });
+
+        // Filter edges to only those with valid endpoints
+        var edges = appEdges.filter(function(e) {
+            var s = typeof e.source === 'object' ? e.source.id : e.source;
+            var t = typeof e.target === 'object' ? e.target.id : e.target;
+            return self._byId[s] && self._byId[t];
+        });
+
+        this._nodes = nodes;
+        this._edges = edges;
+
+        // Layout app nodes using dagre (device positions are already set by network renderer)
+        this._layoutOverlay(nodes, edges, deviceNodes);
+        this._assignPortSides(edges);
+
+        // Draw WITHOUT clearing — append to existing layers
+        var root = this.base.g;
+        this._ensureMarkers();
+        this._paintEdges(edges, root.select('.edge-layer'));
+        this._paintCards(nodes, root.select('.node-layer'));
+        this._bind(edges);
+
+        this.base._stencilNodeData = (this.base._stencilNodeData || []).concat(nodes);
+        this.base.fitToView();
+    };
+
     AppRenderer.prototype.focusNode = function(id) {
         var n = this._byId[id];
         if (!n) return;
@@ -233,6 +283,57 @@
                 n.y = saved[k].y;
             } else {
                 n.x = dn.x - CARD_W / 2;
+                n.y = dn.y - n._h / 2;
+            }
+        });
+    };
+
+    /* Layout for overlay mode — positions apps relative to their host devices */
+    AppRenderer.prototype._layoutOverlay = function(appNodes, edges, deviceNodes) {
+        // Use dagre for app-to-app layout, but anchor to device positions
+        var g = new dagre.graphlib.Graph();
+        g.setGraph({
+            rankdir: 'LR',
+            ranksep: 120,
+            nodesep: 30,
+            marginx: 40,
+            marginy: 40,
+            ranker: 'network-simplex'
+        });
+        g.setDefaultEdgeLabel(function() { return {}; });
+
+        // Add app nodes
+        appNodes.forEach(function(n) {
+            g.setNode(n.id, { width: CARD_W, height: n._h });
+        });
+
+        // Add dependency edges (reversed for LR ranking)
+        edges.forEach(function(e) {
+            if (e.edge_type !== 'dependency') return;
+            var s = typeof e.source === 'object' ? e.source.id : e.source;
+            var t = typeof e.target === 'object' ? e.target.id : e.target;
+            if (g.hasNode(s) && g.hasNode(t)) g.setEdge(t, s);
+        });
+
+        dagre.layout(g);
+
+        // Find the rightmost device X to offset apps to the right of the network
+        var maxDeviceX = 0;
+        (deviceNodes || []).forEach(function(n) {
+            if (n.x !== undefined) maxDeviceX = Math.max(maxDeviceX, n.x + (CARD_W || 200) + 100);
+        });
+
+        // Apply dagre positions with device offset
+        var saved = this.state.savedLayout || {};
+        appNodes.forEach(function(n) {
+            var dn = g.node(n.id);
+            if (!dn) return;
+            var key = String(n.id);
+            if (saved[key] && saved[key].x !== undefined) {
+                n.x = saved[key].x;
+                n.y = saved[key].y;
+            } else {
+                n.x = dn.x - CARD_W / 2 + maxDeviceX;
                 n.y = dn.y - n._h / 2;
             }
         });

@@ -587,9 +587,27 @@
 
             applySavedLayout();
 
-            if (appRenderer) {
-                appRenderer.render(mergedNodes, mergedEdges);
+            // Step 1: Render network devices + cables using the NETWORK renderer
+            // (full stencil cards with interface ports and cable routing)
+            var netNodes = mergedNodes.filter(function(n) { return n.node_type !== 'application'; });
+            var netEdges = mergedEdges.filter(function(e) { return e.edge_type !== 'dependency' && e.edge_type !== 'deployed_on'; });
+            renderer.render(netNodes, netEdges);
+
+            // Step 2: Overlay app cards + dependency/deployed-on edges
+            // WITHOUT clearing the existing SVG content
+            var appNodes = mergedNodes.filter(function(n) { return n.node_type === 'application'; });
+            var appEdges = mergedEdges.filter(function(e) { return e.edge_type === 'dependency' || e.edge_type === 'deployed_on'; });
+
+            if (appRenderer && appNodes.length > 0) {
+                appRenderer.renderOverlay(appNodes, appEdges, netNodes);
             }
+
+            // Merge element selections for shared features
+            if (appRenderer && appRenderer._cards && renderer.nodeElements) {
+                var allCards = d3.selectAll('.topo-stencil-node, .acard, .dcard');
+                renderer.nodeElements = allCards;
+            }
+
             events.emit('data:loaded', { nodes: mergedNodes, edges: mergedEdges });
 
             if (sidebarEl) sidebarEl.classList.remove('hidden');
