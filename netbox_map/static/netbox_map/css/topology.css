@@ -2131,17 +2131,25 @@ span.topo-iface-dot.empty {
 .dcard .dcard-status { transition: fill 0.15s; }
 
 .aedge-deployed {
-    stroke: #5a6080;
-    stroke-width: 0.8;
-    stroke-opacity: 0.2;
-    stroke-dasharray: 3,4;
+    stroke: #8b949e;
+    stroke-width: 1;
+    stroke-opacity: 0.4;
+    stroke-dasharray: 4,3;
 }
-.aedge-deployed.aedge-dim { stroke-opacity: 0.02 !important; }
-.aedge-deployed.aedge-hi { stroke-opacity: 0.5 !important; stroke-width: 1.5 !important; }
+.aedge-deployed.aedge-dim { stroke-opacity: 0.04 !important; }
+.aedge-deployed.aedge-hi { stroke-opacity: 0.8 !important; stroke-width: 1.5 !important; }
 
 /* Light mode */
 [data-bs-theme="light"] .dcard .dcard-bg { fill: #f3f4f6; stroke: rgba(0,0,0,0.08); }
 [data-bs-theme="light"] .dcard:hover .dcard-bg { stroke: rgba(0,0,0,0.18); }
 [data-bs-theme="light"] .dcard .dcard-name { fill: #6b7280; }
 [data-bs-theme="light"] .dcard .dcard-sub { fill: #9ca3af; }
-[data-bs-theme="light"] .aedge-deployed { stroke: #9ca3af; }
+[data-bs-theme="light"] .aedge-deployed { stroke: #6b7280; stroke-opacity: 0.5; }
+
+/* Cable edges in mixed mode */
+.aedge-cable {
+    stroke-width: 1.2;
+    stroke-opacity: 0.35;
+}
+.aedge-cable.aedge-dim { stroke-opacity: 0.03 !important; }
+.aedge-cable.aedge-hi { stroke-opacity: 0.7 !important; stroke-width: 2 !important; }

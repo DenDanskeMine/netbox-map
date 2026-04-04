@@ -70,7 +70,17 @@
     // Collect current layout for saving — reads positions from renderer's actual data
     function collectLayout() {
         var layout = {};
-        // Use renderer's positioned data (has actual x,y from layout + drag)
+
+        // Preserve existing saved layout positions for nodes not currently rendered
+        // (e.g., network devices when saving from app mode)
+        var existing = state.savedLayout || {};
+        Object.keys(existing).forEach(function(key) {
+            if (key.charAt(0) !== '_' && existing[key].x !== undefined) {
+                layout[key] = Object.assign({}, existing[key]);
+            }
+        });
+
+        // Overlay current rendered positions
         var renderedNodes = (appRenderer && appRenderer._nodes) || renderer._stencilNodeData || state.nodes;
         renderedNodes.forEach(function(n) {
             var entry = { x: n.x || 0, y: n.y || 0 };
@@ -356,7 +366,9 @@
         state.selectedNode = null;
         events.emit('node:deselect');
 
-        if (mode === 'apps' || mode === 'mixed') {
+        if (mode === 'mixed') {
+            loadMixedTopology();
+        } else if (mode === 'apps') {
             loadAppTopology();
         } else {
             loadTopology();
@@ -486,6 +498,109 @@
                 emptyEl.querySelector('p').textContent = 'Error loading application topology data.';
             }
             console.error('App topology load error:', err);
+        });
+    }
+
+    // ── Mixed topology: fetch BOTH network + app data, merge, render ──
+    function loadMixedTopology() {
+        if (loadingEl) loadingEl.classList.remove('d-none');
+        if (emptyEl) emptyEl.classList.add('d-none');
+
+        // Build params for both endpoints
+        var netParams = new URLSearchParams();
+        var appParams = new URLSearchParams();
+        Object.keys(state.initialFilters).forEach(function(key) {
+            var val = state.initialFilters[key];
+            if (key === 'focus_app' || key === 'app_ids') {
+                appParams.set(key, val);
+            } else {
+                if (Array.isArray(val)) val.forEach(function(v) { netParams.append(key, v); });
+                else netParams.set(key, val);
+            }
+        });
+
+        var netUrl = state.topologyUrl + (netParams.toString() ? '?' + netParams.toString() : '');
+        var appUrl = state.appDataUrl + (appParams.toString() ? '?' + appParams.toString() : '');
+
+        // If network view has specific devices, scope apps to those devices
+        if (!appParams.has('app_ids') && !appParams.has('focus_app')) {
+            var layout = state.savedLayout;
+            if (layout && typeof layout === 'object') {
+                var devIds = [];
+                Object.keys(layout).forEach(function(k) {
+                    if (k.indexOf('device-') === 0) devIds.push(k.replace('device-', ''));
+                });
+                if (devIds.length > 0) appParams.set('device_ids', devIds.join(','));
+            }
+            appUrl = state.appDataUrl + (appParams.toString() ? '?' + appParams.toString() : '');
+        }
+
+        // Fetch both in parallel
+        Promise.all([api.get(netUrl), api.get(appUrl)]).then(function(results) {
+            if (loadingEl) loadingEl.classList.add('d-none');
+
+            var netData = results[0];
+            var appData = results[1];
+
+            // Merge: combine nodes + edges, avoid duplicate device nodes
+            var mergedNodes = [];
+            var seenIds = new Set();
+
+            // Network nodes first (full device cards with interfaces)
+            (netData.nodes || []).forEach(function(n) {
+                seenIds.add(n.id);
+                n._source = 'network';
+                mergedNodes.push(n);
+            });
+
+            // App nodes (skip devices already from network data)
+            (appData.nodes || []).forEach(function(n) {
+                if (!seenIds.has(n.id)) {
+                    n._source = 'app';
+                    mergedNodes.push(n);
+                }
+            });
+
+            // Merge edges
+            var mergedEdges = [];
+            var seenEdges = new Set();
+            (netData.edges || []).forEach(function(e) {
+                seenEdges.add(e.id);
+                mergedEdges.push(e);
+            });
+            (appData.edges || []).forEach(function(e) {
+                if (!seenEdges.has(e.id)) mergedEdges.push(e);
+            });
+
+            state.nodes = mergedNodes;
+            state.edges = mergedEdges;
+
+            if (mergedNodes.length === 0) {
+                if (emptyEl) {
+                    emptyEl.classList.remove('d-none');
+                    emptyEl.querySelector('p').textContent = 'No data found for mixed view.';
+                }
+                if (sidebarEl) sidebarEl.classList.add('hidden');
+                return;
+            }
+
+            applySavedLayout();
+
+            if (appRenderer) {
+                appRenderer.render(mergedNodes, mergedEdges);
+            }
+            events.emit('data:loaded', { nodes: mergedNodes, edges: mergedEdges });
+
+            if (sidebarEl) sidebarEl.classList.remove('hidden');
+
+            var statNodes = document.getElementById('stat-nodes');
+            var statEdges = document.getElementById('stat-edges');
+            if (statNodes) statNodes.textContent = mergedNodes.length;
+            if (statEdges) statEdges.textContent = mergedEdges.length;
+
+        }).catch(function(err) {
+            if (loadingEl) loadingEl.classList.add('d-none');
+            console.error('Mixed topology load error:', err);
         });
     }
 

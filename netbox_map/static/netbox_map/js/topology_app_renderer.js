@@ -40,13 +40,19 @@
         var isMixed = this.state.topologyMode === 'mixed';
         var nodes = [], edges = [];
         rawNodes.forEach(function(n) {
-            if (n.node_type === 'application' || (isMixed && n.node_type === 'device')) {
+            if (n.node_type === 'application' || (isMixed && (n.node_type === 'device' || n.device_id))) {
                 nodes.push(Object.assign({}, n, { ports: (n.ports || []).slice() }));
             }
         });
         rawEdges.forEach(function(e) {
+            // In mixed mode, accept all edge types (dependency, deployed_on, cables)
             if (e.edge_type === 'dependency' || (isMixed && e.edge_type === 'deployed_on')) {
                 edges.push(Object.assign({}, e));
+            } else if (isMixed && !e.edge_type) {
+                // Network cable edges have no edge_type field
+                var copy = Object.assign({}, e);
+                copy.edge_type = 'cable';
+                edges.push(copy);
             }
         });
 
@@ -307,15 +313,15 @@
             .data(edges).enter().append('path')
             .attr('class', function(d) {
                 if (d.edge_type === 'deployed_on') return 'aedge aedge-deployed';
+                if (d.edge_type === 'cable') return 'aedge aedge-cable';
                 return 'aedge' + (d.dependency_type === 'soft' ? ' aedge-soft' : ' aedge-hard');
             })
             .attr('stroke', function(d) {
-                if (d.edge_type === 'deployed_on') return d.color || '#5a6080';
                 return d.color || '#6c757d';
             })
             .attr('d', function(d) { return self._edgePath(d); })
             .attr('marker-end', function(d) {
-                if (d.edge_type === 'deployed_on') return null;
+                if (d.edge_type === 'deployed_on' || d.edge_type === 'cable') return null;
                 var c = (d.color || '#6c757d').replace('#', '');
                 return d.dependency_type === 'soft' ? self._openArrow(c) : self._filledArrow(c);
             });
