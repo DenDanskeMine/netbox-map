@@ -979,15 +979,19 @@
                 var orig = self.state.nodes.find(function(n) { return n.id === d.id; });
                 if (orig) { orig.x = d.x; orig.y = d.y; }
 
-                // Redraw edges
-                self._lines.attr('d', function(e) { return self._edgePath(e); });
+                // Redraw app edges only (don't touch network cables)
+                self._lines.filter(function(e) {
+                    return e.edge_type === 'dependency' || e.edge_type === 'deployed_on';
+                }).attr('d', function(e) { return self._edgePath(e); });
             })
             .on('end', function(ev, d) {
                 d3.select(this).classed('dragging', false);
                 if (d._dragActive) {
-                    // Reassign port sides after drag
+                    // Reassign port sides after drag — only update app edges, not network cables
                     self._assignPortSides(edges);
-                    self._lines.attr('d', function(e) { return self._edgePath(e); });
+                    self._lines.filter(function(e) {
+                        return e.edge_type === 'dependency' || e.edge_type === 'deployed_on';
+                    }).attr('d', function(e) { return self._edgePath(e); });
                 }
             })
         );
