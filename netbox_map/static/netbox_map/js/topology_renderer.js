@@ -260,7 +260,7 @@
     Renderer.prototype.render = function(nodes, edges, skipFit) {
         this._skipFit = !!skipFit;
         // All modes use _renderStencil — it handles both device and app nodes
-        if (this.state.viewMode === 'stencil' || this.state.topologyMode === 'apps') {
+        if (this.state.viewMode === 'stencil' || this.state.topologyMode === 'apps' || this.state.topologyMode === 'mixed') {
             this._renderStencil(nodes, edges);
         } else {
             this._renderNodes(nodes, edges);
