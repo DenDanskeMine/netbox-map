@@ -296,28 +296,7 @@
                     d.cable_label].filter(Boolean).join(' ');
         });
 
-        // Edge labels (visible when toggle is active via .show-cable-labels)
-        edges.forEach(function(d) {
-            var label = d.cable_label || d.dependency_type || '';
-            if (!label) return;
-
-            // Find midpoint of the orthogonal path
-            var srcId = typeof d.source === 'object' ? d.source.id : d.source;
-            var tgtId = typeof d.target === 'object' ? d.target.id : d.target;
-            var sn = self._byId[srcId];
-            var tn = self._byId[tgtId];
-            if (!sn || !tn) return;
-
-            var mx = (sn.x + CARD_W / 2 + tn.x + CARD_W / 2) / 2;
-            var sy = sn.y + (self._portY(d.source_port) || sn._h / 2);
-            var ty = tn.y + (self._portY(d.target_port) || tn._h / 2);
-            var my = (sy + ty) / 2;
-
-            layer.append('text').attr('class', 'aedge-label')
-                .attr('x', mx).attr('y', my - 4)
-                .attr('text-anchor', 'middle')
-                .text(label);
-        });
+        // Edge tooltips handled by hit paths (wider target area)
     };
 
     /* Channel computation: edges sharing the same column gap get stacked */
@@ -825,9 +804,20 @@
                 self._lines.classed('aedge-dim', true);
                 self._lines.filter(function(e) { return e === d; })
                     .classed('aedge-dim', false).classed('aedge-hi', true);
+                // Show tooltip
+                var label = d.cable_label || d.dependency_type || '';
+                if (label) {
+                    d3.selectAll('.aedge-tooltip').remove();
+                    d3.select('body').append('div')
+                        .attr('class', 'aedge-tooltip')
+                        .style('left', (ev.clientX + 12) + 'px')
+                        .style('top', (ev.clientY - 24) + 'px')
+                        .text(label);
+                }
             })
             .on('mouseleave', function() {
                 self._lines.classed('aedge-dim', false).classed('aedge-hi', false);
+                d3.selectAll('.aedge-tooltip').remove();
             });
 
         // P3-19: Keyboard navigation

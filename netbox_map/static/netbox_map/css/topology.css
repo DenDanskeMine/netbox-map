@@ -1869,14 +1869,19 @@ span.topo-iface-dot.empty {
 .aedge-hard { stroke-width: 1.5; stroke-opacity: 0.45; }
 .aedge-soft { stroke-width: 1; stroke-opacity: 0.3; stroke-dasharray: 8,4; }
 
-/* Edge labels — hidden by default, shown via toolbar toggle */
-.aedge-label {
-    font-size: 8px;
-    fill: #484f58;
+/* Edge hover tooltip */
+.aedge-tooltip {
+    position: fixed;
+    z-index: 9999;
+    background: #1e2238;
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 3px;
+    padding: 3px 8px;
+    font-size: 10px;
+    color: #8b949e;
     pointer-events: none;
-    display: none;
+    white-space: nowrap;
 }
-.show-cable-labels .aedge-label { display: block; }
 .aedge-dim { stroke-opacity: 0.03 !important; }
 .aedge-hi { stroke-opacity: 0.8 !important; stroke-width: 1.5 !important; }
 
@@ -1947,7 +1952,7 @@ span.topo-iface-dot.empty {
     text-transform: uppercase;
     letter-spacing: 0.5px;
 }
-.host-popup-row {
+.host-popup-row, .host-popup-row:hover, .host-popup-row:focus, .host-popup-row:active {
     display: flex;
     align-items: center;
     padding: 4px 12px;

@@ -1314,6 +1314,12 @@ class ApplicationListView(generic.ObjectListView):
 class ApplicationView(generic.ObjectView):
     queryset = Application.objects.select_related('group', 'site', 'tenant')
 
+    def get_extra_context(self, request, instance):
+        deployments = ApplicationDeployment.objects.filter(
+            application=instance
+        ).select_related('host_type')[:20]
+        return {'deployments': deployments}
+
 
 @register_model_view(Application, 'edit')
 class ApplicationEditView(generic.ObjectEditView):

@@ -321,7 +321,7 @@
         // Update toolbar visibility for network-only controls
         var networkOnlyBtns = ['topo-add-devices', 'topo-edit-hierarchy', 'topo-auto-sort',
             'topo-collapse-pp', 'cable-color-physical', 'cable-color-speed', 'cable-curve',
-            'cable-ortho', 'view-stencil', 'view-node'];
+            'cable-ortho', 'topo-toggle-labels', 'view-stencil', 'view-node'];
         networkOnlyBtns.forEach(function(id) {
             var el = document.getElementById(id);
             if (el) el.style.display = (mode === 'apps') ? 'none' : '';

@@ -54,6 +54,39 @@
       </div>
     </div>
     <div class="col-md-6">
+      <div class="card">
+        <h5 class="card-header d-flex justify-content-between align-items-center">
+          {% trans "Deployed Hosts" %}
+          <span class="badge bg-primary">{{ deployments|length }}</span>
+        </h5>
+        {% if deployments %}
+        <div class="table-responsive">
+          <table class="table table-hover mb-0">
+            <thead>
+              <tr>
+                <th>{% trans "Host" %}</th>
+                <th>{% trans "Role" %}</th>
+                <th>{% trans "Port" %}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for dep in deployments %}
+              <tr>
+                <td>{{ dep.host|default:"—" }}</td>
+                <td>{{ dep.get_role_display }}</td>
+                <td>{{ dep.port|default:"—" }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <div class="card-body text-muted text-center small">
+          {% trans "Not deployed to any hosts." %}
+        </div>
+        {% endif %}
+      </div>
+
       {% include 'inc/panels/tags.html' %}
       <div class="card">
         <h5 class="card-header">{% trans "Actions" %}</h5>
