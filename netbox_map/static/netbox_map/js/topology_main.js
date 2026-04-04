@@ -511,7 +511,12 @@
         var appParams = new URLSearchParams();
         Object.keys(state.initialFilters).forEach(function(key) {
             var val = state.initialFilters[key];
-            if (key === 'focus_app' || key === 'app_ids' || key === 'device_ids') {
+            if (key === 'focus_app' || key === 'app_ids') {
+                // App-only params
+                appParams.set(key, val);
+            } else if (key === 'device_ids') {
+                // Both endpoints need device_ids
+                netParams.set(key, val);
                 appParams.set(key, val);
             } else {
                 // Network params — also pass site_id to app endpoint
