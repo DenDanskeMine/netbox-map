@@ -2071,3 +2071,39 @@ span.topo-iface-dot.empty {
 [data-bs-theme="light"] .adp-host-ip { color: #9ca3af; }
 [data-bs-theme="light"] .adp-host-role { color: #9ca3af; }
 [data-bs-theme="light"] .adp-empty { color: #9ca3af; }
+
+/* Light mode — canvas background */
+[data-bs-theme="light"] .topology-graph-area { background: #f9fafb; }
+[data-bs-theme="light"] .topology-sidebar { background: #ffffff; border-left-color: rgba(0,0,0,0.08); }
+
+/* ══════════════════════════════════════════
+   Light Mode — Network Topology
+   ══════════════════════════════════════════ */
+
+/* Stencil cards */
+[data-bs-theme="light"] .topo-stencil-node .stencil-shadow { fill: rgba(0,0,0,0.06); }
+[data-bs-theme="light"] .topo-stencil-node .stencil-bg { fill: #ffffff; stroke: rgba(0,0,0,0.1); }
+[data-bs-theme="light"] .topo-stencil-node:hover .stencil-bg { stroke: rgba(0,0,0,0.22); }
+[data-bs-theme="light"] .topo-stencil-node.selected .stencil-bg { stroke: #2563eb; }
+[data-bs-theme="light"] .topo-stencil-node .stencil-name { fill: #1f2937; }
+[data-bs-theme="light"] .topo-stencil-node .stencil-type { fill: #6b7280; }
+[data-bs-theme="light"] .topo-stencil-node .port-name { fill: #374151; }
+
+/* Node view (circles) */
+[data-bs-theme="light"] .topo-node .node-bg { stroke: rgba(0,0,0,0.15); }
+[data-bs-theme="light"] .topo-node:hover .node-bg { stroke: rgba(0,0,0,0.4); }
+[data-bs-theme="light"] .topo-node .node-label { fill: #374151; }
+[data-bs-theme="light"] .topo-node .node-icon { fill: rgba(255,255,255,0.95); }
+[data-bs-theme="light"] .topo-node .status-dot { stroke: #f9fafb; }
+
+/* Edges */
+[data-bs-theme="light"] .topo-edge { stroke-opacity: 0.6; }
+
+/* Cable labels */
+[data-bs-theme="light"] .cable-label { fill: #4b5563; }
+
+/* Connector dots */
+[data-bs-theme="light"] .connector-dot { opacity: 0.9; }
+
+/* Legend */
+[data-bs-theme="light"] .topology-footer { background: #f9fafb; border-top-color: rgba(0,0,0,0.08); }
