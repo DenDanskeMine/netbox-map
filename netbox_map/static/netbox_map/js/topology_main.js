@@ -600,12 +600,13 @@
             renderer.render(netNodes, netEdges);
 
             // Step 2: Overlay app cards + dependency/deployed-on edges
-            // WITHOUT clearing the existing SVG content
+            // Use POSITIONED device nodes from the network renderer (not the originals)
+            var positionedDevices = renderer._stencilNodeData || netNodes;
             var appNodes = mergedNodes.filter(function(n) { return n.node_type === 'application'; });
             var appEdges = mergedEdges.filter(function(e) { return e.edge_type === 'dependency' || e.edge_type === 'deployed_on'; });
 
             if (appRenderer && appNodes.length > 0) {
-                appRenderer.renderOverlay(appNodes, appEdges, netNodes);
+                appRenderer.renderOverlay(appNodes, appEdges, positionedDevices);
             }
 
             // Merge element selections for shared features
