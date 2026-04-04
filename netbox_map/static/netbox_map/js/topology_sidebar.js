@@ -203,34 +203,51 @@
             // Filter: only show application nodes (no devices)
             filtered = filtered.filter(function(n) { return n.node_type === 'application'; });
 
+            // Group instances by base name: "fluentd (srv-001)" → base "fluentd"
+            var groups = {};
+            var groupOrder = [];
             filtered.forEach(function(n) {
-                var selected = self.state.selectedNode && self.state.selectedNode.id === n.id ? ' selected' : '';
-                var isHidden = self.state.hiddenNodes.has(n.id);
-                var hs = n.host_status || 'healthy';
-                var statusColor = hs === 'down' ? '#e74c3c' : hs === 'degraded' ? '#e67e22' : App.statusColor(n.status_value);
-                var critColor = n.criticality_color || '#6c757d';
-
-                html += '<div class="topo-device-item' + selected + (isHidden ? ' hidden-node' : '') + '" data-node-id="' + App.escapeHtml(n.id) + '">'
-                    + '<span class="role-dot" style="background:' + App.escapeHtml(statusColor) + ';' + (isHidden ? 'opacity:0.3;' : '') + '"></span>'
-                    + '<div class="device-info">'
-                    + '<div class="device-name">' + App.escapeHtml(n.name) + '</div>'
-                    + '<div class="device-meta">'
-                    + App.escapeHtml(n.environment || '');
-                if (n.group) html += ' &middot; ' + App.escapeHtml(n.group);
-                html += '</div></div>';
-
-                // Right side: criticality + host count
-                html += '<div class="app-item-right">';
-                html += '<span class="app-crit" style="color:' + App.escapeHtml(critColor) + ';">'
-                    + App.escapeHtml((n.criticality || '').toUpperCase()) + '</span>';
-                if (n.deploy_count > 0) {
-                    html += '<span class="app-hosts">' + n.deploy_count + '</span>';
+                var name = n.name || '';
+                var parenIdx = name.indexOf(' (');
+                var baseName = parenIdx > 0 ? name.substring(0, parenIdx) : name;
+                if (!groups[baseName]) {
+                    groups[baseName] = [];
+                    groupOrder.push(baseName);
                 }
-                html += '</div>';
+                groups[baseName].push(n);
+            });
 
-                html += '<button class="topo-hide-btn" data-hide-id="' + App.escapeHtml(n.id) + '" title="' + (isHidden ? 'Show' : 'Hide') + '">'
-                    + '<i class="mdi mdi-eye' + (isHidden ? '-off' : '') + '"></i></button>'
-                    + '</div>';
+            groupOrder.forEach(function(baseName) {
+                var items = groups[baseName];
+
+                if (items.length === 1) {
+                    // Single item — render flat (no grouping)
+                    html += self._renderAppItem(items[0]);
+                } else {
+                    // Multiple instances — collapsible group
+                    var downCount = items.filter(function(n) { return (n.host_status || 'healthy') === 'down'; }).length;
+                    var degradedCount = items.filter(function(n) { return (n.host_status || 'healthy') === 'degraded'; }).length;
+                    var groupId = 'appgrp-' + baseName.replace(/[^a-z0-9]/gi, '-');
+                    var critColor = items[0].criticality_color || '#6c757d';
+
+                    html += '<div class="topo-app-group" data-group-id="' + App.escapeHtml(groupId) + '">'
+                        + '<span class="app-group-chevron"><i class="mdi mdi-chevron-right"></i></span>'
+                        + '<div class="device-info">'
+                        + '<div class="device-name">' + App.escapeHtml(baseName) + '</div>'
+                        + '<div class="device-meta">' + items.length + ' instances'
+                        + (downCount > 0 ? ' &middot; <span style="color:#f85149;">' + downCount + ' down</span>' : '')
+                        + (degradedCount > 0 ? ' &middot; <span style="color:#d29922;">' + degradedCount + ' degraded</span>' : '')
+                        + '</div></div>'
+                        + '<span class="app-crit" style="color:' + App.escapeHtml(critColor) + ';">'
+                        + App.escapeHtml((items[0].criticality || '').toUpperCase()) + '</span>'
+                        + '</div>';
+
+                    html += '<div class="topo-app-group-items d-none" id="' + App.escapeHtml(groupId) + '">';
+                    items.forEach(function(n) {
+                        html += self._renderAppItem(n);
+                    });
+                    html += '</div>';
+                }
             });
         } else {
             filtered.forEach(function(n) {
@@ -287,6 +304,52 @@
                 self.events.emit('node:hidden');
             });
         });
+
+        // Click handlers — group expand/collapse
+        this.deviceListEl.querySelectorAll('.topo-app-group').forEach(function(el) {
+            el.addEventListener('click', function() {
+                var groupId = this.getAttribute('data-group-id');
+                var itemsEl = document.getElementById(groupId);
+                if (!itemsEl) return;
+                var collapsed = itemsEl.classList.toggle('d-none');
+                var chevron = this.querySelector('.app-group-chevron i');
+                if (chevron) chevron.className = 'mdi mdi-chevron-' + (collapsed ? 'right' : 'down');
+                this.classList.toggle('expanded', !collapsed);
+            });
+        });
+    };
+
+    Sidebar.prototype._renderAppItem = function(n) {
+        var selected = this.state.selectedNode && this.state.selectedNode.id === n.id ? ' selected' : '';
+        var isHidden = this.state.hiddenNodes.has(n.id);
+        var hs = n.host_status || 'healthy';
+        var statusColor = hs === 'down' ? '#e74c3c' : hs === 'degraded' ? '#e67e22' : App.statusColor(n.status_value);
+        var critColor = n.criticality_color || '#6c757d';
+
+        // Show short name if it has a parenthetical suffix
+        var displayName = n.name || '';
+        var parenIdx = displayName.indexOf(' (');
+        var shortName = parenIdx > 0 ? displayName.substring(parenIdx + 2, displayName.length - 1) : displayName;
+
+        var h = '<div class="topo-device-item' + selected + (isHidden ? ' hidden-node' : '') + '" data-node-id="' + App.escapeHtml(n.id) + '">'
+            + '<span class="role-dot" style="background:' + App.escapeHtml(statusColor) + ';' + (isHidden ? 'opacity:0.3;' : '') + '"></span>'
+            + '<div class="device-info">'
+            + '<div class="device-name">' + App.escapeHtml(shortName) + '</div>'
+            + '<div class="device-meta">'
+            + App.escapeHtml(n.environment || '');
+        if (n.group) h += ' &middot; ' + App.escapeHtml(n.group);
+        h += '</div></div>';
+        h += '<div class="app-item-right">';
+        h += '<span class="app-crit" style="color:' + App.escapeHtml(critColor) + ';">'
+            + App.escapeHtml((n.criticality || '').toUpperCase()) + '</span>';
+        if (n.deploy_count > 0) {
+            h += '<span class="app-hosts">' + n.deploy_count + '</span>';
+        }
+        h += '</div>';
+        h += '<button class="topo-hide-btn" data-hide-id="' + App.escapeHtml(n.id) + '" title="' + (isHidden ? 'Show' : 'Hide') + '">'
+            + '<i class="mdi mdi-eye' + (isHidden ? '-off' : '') + '"></i></button>'
+            + '</div>';
+        return h;
     };
 
     Sidebar.prototype._applyVisibilityFilter = function() {
