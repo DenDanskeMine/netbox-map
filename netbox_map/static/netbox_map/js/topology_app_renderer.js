@@ -36,13 +36,18 @@
     AppRenderer.prototype.render = function(rawNodes, rawEdges) {
         var self = this;
 
-        // ── Filter: apps + dependency edges only ──
+        // ── Filter nodes/edges based on mode ──
+        var isMixed = this.state.topologyMode === 'mixed';
         var nodes = [], edges = [];
         rawNodes.forEach(function(n) {
-            if (n.node_type === 'application') nodes.push(Object.assign({}, n, { ports: (n.ports || []).slice() }));
+            if (n.node_type === 'application' || (isMixed && n.node_type === 'device')) {
+                nodes.push(Object.assign({}, n, { ports: (n.ports || []).slice() }));
+            }
         });
         rawEdges.forEach(function(e) {
-            if (e.edge_type === 'dependency') edges.push(Object.assign({}, e));
+            if (e.edge_type === 'dependency' || (isMixed && e.edge_type === 'deployed_on')) {
+                edges.push(Object.assign({}, e));
+            }
         });
 
         // ── Build lookups + port structures ──
@@ -96,6 +101,16 @@
        ══════════════════════════════════════════ */
 
     AppRenderer.prototype._buildPorts = function(n) {
+        // Device nodes: compact, no ports
+        if (n.node_type === 'device') {
+            n._portById = {};
+            n._portsL = [];
+            n._portsR = [];
+            n._h = 44;
+            n._cardH = 44;
+            return;
+        }
+
         var self = this;
         var byId = {};
 
@@ -229,7 +244,17 @@
 
         this._ensureMarkers();
         this._paintEdges(edges, root.select('.edge-layer'));
-        this._paintCards(nodes, root.select('.node-layer'));
+
+        var nodeLayer = root.select('.node-layer');
+        var appNodes = nodes.filter(function(n) { return n.node_type === 'application'; });
+        var deviceNodes = nodes.filter(function(n) { return n.node_type === 'device'; });
+
+        this._paintCards(appNodes, nodeLayer);
+        if (deviceNodes.length > 0) {
+            this._paintDeviceCards(deviceNodes, nodeLayer);
+            // Merge all cards into one selection for interactions
+            this._cards = nodeLayer.selectAll('.acard, .dcard');
+        }
         this._bind(edges);
     };
 
@@ -281,11 +306,16 @@
         this._lines = layer.selectAll('.aedge')
             .data(edges).enter().append('path')
             .attr('class', function(d) {
+                if (d.edge_type === 'deployed_on') return 'aedge aedge-deployed';
                 return 'aedge' + (d.dependency_type === 'soft' ? ' aedge-soft' : ' aedge-hard');
             })
-            .attr('stroke', function(d) { return d.color || '#6c757d'; })
+            .attr('stroke', function(d) {
+                if (d.edge_type === 'deployed_on') return d.color || '#5a6080';
+                return d.color || '#6c757d';
+            })
             .attr('d', function(d) { return self._edgePath(d); })
             .attr('marker-end', function(d) {
+                if (d.edge_type === 'deployed_on') return null;
                 var c = (d.color || '#6c757d').replace('#', '');
                 return d.dependency_type === 'soft' ? self._openArrow(c) : self._filledArrow(c);
             });
@@ -678,6 +708,45 @@
                 g.attr('data-app-id', d.app_id);
             }
         });
+    };
+
+    /* ── Device Cards (mixed mode) ── */
+
+    AppRenderer.prototype._paintDeviceCards = function(nodes, layer) {
+        var cards = layer.selectAll('.dcard')
+            .data(nodes).enter().append('g')
+            .attr('class', 'dcard')
+            .attr('transform', function(d) { return 'translate(' + d.x + ',' + d.y + ')'; });
+
+        // Background
+        cards.append('rect').attr('class', 'dcard-bg')
+            .attr('width', CARD_W).attr('height', 44)
+            .attr('rx', CARD_R);
+
+        // Device name
+        cards.append('text').attr('class', 'dcard-name')
+            .attr('x', 10).attr('y', 17)
+            .each(function(d) {
+                var t = d.name || '';
+                if (t.length > 24) t = t.substring(0, 22) + '\u2026';
+                d3.select(this).text(t);
+            });
+
+        // Status dot
+        cards.each(function(d) {
+            d3.select(this).append('circle').attr('class', 'dcard-status')
+                .attr('cx', CARD_W - 10).attr('cy', 14).attr('r', 3)
+                .attr('fill', App.statusColor(d.status_value));
+        });
+
+        // Device type subtitle
+        cards.append('text').attr('class', 'dcard-sub')
+            .attr('x', 10).attr('y', 32)
+            .each(function(d) {
+                var t = d.device_type || d.role || '';
+                if (t.length > 28) t = t.substring(0, 26) + '\u2026';
+                d3.select(this).text(t);
+            });
     };
 
     /* ══════════════════════════════════════════

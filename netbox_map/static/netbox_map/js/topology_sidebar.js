@@ -60,8 +60,9 @@
     Sidebar.prototype.build = function() {
         // Update search placeholder for mode
         if (this.searchInput) {
-            this.searchInput.placeholder = this.state.topologyMode === 'apps'
-                ? 'Search applications...'
+            var mode = this.state.topologyMode;
+            this.searchInput.placeholder = mode === 'mixed' ? 'Search apps & devices...'
+                : mode === 'apps' ? 'Search applications...'
                 : 'Search devices...';
         }
         this._buildRoleToggles();
@@ -72,7 +73,7 @@
         var self = this;
         if (!this.roleTogglesEl) return;
 
-        if (this.state.topologyMode === 'apps') {
+        if (this.state.topologyMode === 'apps' || this.state.topologyMode === 'mixed') {
             this._buildCriticalityToggles();
             return;
         }
@@ -170,7 +171,7 @@
         if (!this.deviceListEl) return;
         var self = this;
         var query = this.state.searchQuery;
-        var isAppMode = this.state.topologyMode === 'apps';
+        var isAppMode = this.state.topologyMode === 'apps' || this.state.topologyMode === 'mixed';
 
         var filtered = this.state.nodes.filter(function(n) {
             if (isAppMode) {
@@ -363,7 +364,7 @@
     Sidebar.prototype._applyVisibilityFilter = function() {
         var self = this;
         var query = this.state.searchQuery;
-        var isAppMode = this.state.topologyMode === 'apps';
+        var isAppMode = this.state.topologyMode === 'apps' || this.state.topologyMode === 'mixed';
 
         // Build set of visible node IDs
         var visibleIds = new Set();

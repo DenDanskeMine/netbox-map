@@ -310,13 +310,14 @@
 
     function switchToMode(mode) {
         state.topologyMode = mode;
-        setModeActive(mode === 'apps' ? modeApps : modeNetwork);
+        setModeActive(mode === 'apps' ? modeApps : mode === 'mixed' ? modeMixed : modeNetwork);
 
         // Switch footer legend
         var legendNetwork = document.getElementById('legend-network');
         var legendApps = document.getElementById('legend-apps');
-        if (legendNetwork) legendNetwork.classList.toggle('d-none', mode === 'apps');
-        if (legendApps) legendApps.classList.toggle('d-none', mode !== 'apps');
+        var isAppish = mode === 'apps' || mode === 'mixed';
+        if (legendNetwork) legendNetwork.classList.toggle('d-none', isAppish);
+        if (legendApps) legendApps.classList.toggle('d-none', !isAppish);
 
         // Update toolbar visibility for network-only controls
         var networkOnlyBtns = ['topo-add-devices', 'topo-edit-hierarchy', 'topo-auto-sort',
@@ -324,7 +325,7 @@
             'topo-toggle-labels', 'view-stencil', 'view-node'];
         networkOnlyBtns.forEach(function(id) {
             var el = document.getElementById(id);
-            if (el) el.style.display = (mode === 'apps') ? 'none' : '';
+            if (el) el.style.display = isAppish ? 'none' : '';
         });
 
         // Update stats labels
@@ -355,7 +356,7 @@
         state.selectedNode = null;
         events.emit('node:deselect');
 
-        if (mode === 'apps') {
+        if (mode === 'apps' || mode === 'mixed') {
             loadAppTopology();
         } else {
             loadTopology();
@@ -365,6 +366,7 @@
 
     if (modeNetwork) modeNetwork.addEventListener('click', function() { switchToMode('network'); });
     if (modeApps) modeApps.addEventListener('click', function() { switchToMode('apps'); });
+    if (modeMixed) modeMixed.addEventListener('click', function() { switchToMode('mixed'); });
 
     // ── URL param reading — takes priority over saved layout ──
     var urlMode = container.getAttribute('data-topology-mode');
@@ -374,14 +376,14 @@
     }
 
     // Initial load — URL mode > saved layout mode > default
-    if (urlMode === 'apps') {
-        state.topologyMode = 'apps';
+    if (urlMode === 'apps' || urlMode === 'mixed') {
+        state.topologyMode = urlMode;
     } else if (state.savedLayout && state.savedLayout._topology_mode) {
         state.topologyMode = state.savedLayout._topology_mode;
     }
 
-    if (state.topologyMode === 'apps') {
-        switchToMode('apps');
+    if (state.topologyMode === 'apps' || state.topologyMode === 'mixed') {
+        switchToMode(state.topologyMode);
     } else {
         loadTopology();
     }

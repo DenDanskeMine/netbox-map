@@ -2113,3 +2113,35 @@ span.topo-iface-dot.empty {
 
 /* Legend */
 [data-bs-theme="light"] .topology-footer { background: #f9fafb; border-top-color: rgba(0,0,0,0.08); }
+
+/* ══════════════════════════════════════════
+   Mixed Mode — Device Cards + Deployed-on
+   ══════════════════════════════════════════ */
+.dcard { cursor: pointer; }
+.dcard .dcard-bg {
+    fill: #1a1e2e;
+    stroke: rgba(90,96,128,0.12);
+    stroke-width: 0.5;
+}
+.dcard:hover .dcard-bg { stroke: rgba(90,96,128,0.3); }
+.dcard.selected .dcard-bg { stroke: #4a9eff; stroke-width: 1.5; }
+.dcard.acard-dim { opacity: 0.1; }
+.dcard .dcard-name { font-size: 11px; font-weight: 600; fill: #7d8590; }
+.dcard .dcard-sub { font-size: 9px; fill: #484f58; }
+.dcard .dcard-status { transition: fill 0.15s; }
+
+.aedge-deployed {
+    stroke: #5a6080;
+    stroke-width: 0.8;
+    stroke-opacity: 0.2;
+    stroke-dasharray: 3,4;
+}
+.aedge-deployed.aedge-dim { stroke-opacity: 0.02 !important; }
+.aedge-deployed.aedge-hi { stroke-opacity: 0.5 !important; stroke-width: 1.5 !important; }
+
+/* Light mode */
+[data-bs-theme="light"] .dcard .dcard-bg { fill: #f3f4f6; stroke: rgba(0,0,0,0.08); }
+[data-bs-theme="light"] .dcard:hover .dcard-bg { stroke: rgba(0,0,0,0.18); }
+[data-bs-theme="light"] .dcard .dcard-name { fill: #6b7280; }
+[data-bs-theme="light"] .dcard .dcard-sub { fill: #9ca3af; }
+[data-bs-theme="light"] .aedge-deployed { stroke: #9ca3af; }
