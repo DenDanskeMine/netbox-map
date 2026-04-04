@@ -1307,6 +1307,25 @@
                 .on('click', function() { self.clearSimulation(); m.remove(); });
         }
 
+        // View Dependencies — opens focused topology view
+        if (d.node_type === 'application' && d.app_id) {
+            m.append('div').attr('class', 'ctx-item')
+                .html('<i class="mdi mdi-graph-outline"></i> View Dependencies')
+                .on('click', function() {
+                    window.location.href = '/plugins/map/topology/?mode=apps&focus_app=' + d.app_id;
+                    m.remove();
+                });
+        } else if (d.device_id) {
+            m.append('div').attr('class', 'ctx-item')
+                .html('<i class="mdi mdi-graph-outline"></i> View Apps on Device')
+                .on('click', function() {
+                    window.location.href = '/plugins/map/topology/?mode=apps&device_ids=' + d.device_id;
+                    m.remove();
+                });
+        }
+
+        m.append('div').attr('class', 'ctx-divider');
+
         m.append('div').attr('class', 'ctx-item').text('Isolate connections')
             .on('click', function() {
                 var s = new Set([d.id]);
