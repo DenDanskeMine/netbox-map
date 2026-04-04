@@ -230,16 +230,24 @@
                     var groupId = 'appgrp-' + baseName.replace(/[^a-z0-9]/gi, '-');
                     var critColor = items[0].criticality_color || '#6c757d';
 
-                    html += '<div class="topo-app-group" data-group-id="' + App.escapeHtml(groupId) + '">'
-                        + '<span class="app-group-chevron"><i class="mdi mdi-chevron-right"></i></span>'
+                    // Determine worst status in group
+                    var worstColor = App.statusColor('active');
+                    if (downCount > 0) worstColor = '#e74c3c';
+                    else if (degradedCount > 0) worstColor = '#e67e22';
+
+                    html += '<div class="topo-app-group topo-device-item" data-group-id="' + App.escapeHtml(groupId) + '">'
+                        + '<span class="app-group-chevron" style="color:' + worstColor + ';"><i class="mdi mdi-chevron-right"></i></span>'
                         + '<div class="device-info">'
                         + '<div class="device-name">' + App.escapeHtml(baseName) + '</div>'
                         + '<div class="device-meta">' + items.length + ' instances'
                         + (downCount > 0 ? ' &middot; <span style="color:#f85149;">' + downCount + ' down</span>' : '')
                         + (degradedCount > 0 ? ' &middot; <span style="color:#d29922;">' + degradedCount + ' degraded</span>' : '')
                         + '</div></div>'
+                        + '<div class="app-item-right">'
                         + '<span class="app-crit" style="color:' + App.escapeHtml(critColor) + ';">'
                         + App.escapeHtml((items[0].criticality || '').toUpperCase()) + '</span>'
+                        + '<span class="app-hosts">' + items.length + '</span>'
+                        + '</div>'
                         + '</div>';
 
                     html += '<div class="topo-app-group-items d-none" id="' + App.escapeHtml(groupId) + '">';

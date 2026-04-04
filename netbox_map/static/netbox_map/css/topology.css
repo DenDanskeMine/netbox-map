@@ -443,26 +443,24 @@
     flex-shrink: 0;
 }
 
-/* App group header */
-.topo-app-group {
+/* App group header — uses .topo-device-item for base styles */
+.topo-app-group.expanded { background: var(--fp-active); }
+.app-group-chevron {
+    font-size: 16px;
+    flex-shrink: 0;
+    width: 10px;
     display: flex;
     align-items: center;
-    gap: 6px;
-    padding: 6px 12px;
-    cursor: pointer;
-    border-bottom: 1px solid var(--fp-border-light);
-    background: rgba(255,255,255,0.02);
+    justify-content: center;
+    transition: transform 0.15s;
 }
-.topo-app-group:hover { background: rgba(255,255,255,0.04); }
-.topo-app-group.expanded { background: rgba(255,255,255,0.03); }
-.app-group-chevron {
-    color: var(--fp-text-dim);
-    font-size: 14px;
-    width: 14px;
-    flex-shrink: 0;
+.topo-app-group.expanded .app-group-chevron {
+    transform: rotate(90deg);
 }
 .topo-app-group-items .topo-device-item {
-    padding-left: 32px;
+    padding-left: 28px;
+    border-left: 2px solid rgba(255,255,255,0.04);
+    margin-left: 16px;
 }
 
 /* App list item right side */
@@ -1868,8 +1866,17 @@ span.topo-iface-dot.empty {
 
 /* Edges */
 .aedge { fill: none; pointer-events: stroke; stroke-linejoin: round; }
-.aedge-hard { stroke-width: 1.5; stroke-opacity: 0.45; }             /* P2-17: bolder */
-.aedge-soft { stroke-width: 1; stroke-opacity: 0.3; stroke-dasharray: 8,4; } /* P2-17: bolder dash */
+.aedge-hard { stroke-width: 1.5; stroke-opacity: 0.45; }
+.aedge-soft { stroke-width: 1; stroke-opacity: 0.3; stroke-dasharray: 8,4; }
+
+/* Edge labels — hidden by default, shown via toolbar toggle */
+.aedge-label {
+    font-size: 8px;
+    fill: #484f58;
+    pointer-events: none;
+    display: none;
+}
+.show-cable-labels .aedge-label { display: block; }
 .aedge-dim { stroke-opacity: 0.03 !important; }
 .aedge-hi { stroke-opacity: 0.8 !important; stroke-width: 1.5 !important; }
 

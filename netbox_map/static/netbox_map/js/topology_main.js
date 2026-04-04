@@ -71,7 +71,7 @@
     function collectLayout() {
         var layout = {};
         // Use renderer's positioned data (has actual x,y from layout + drag)
-        var renderedNodes = (appRenderer && appRenderer._nodeData) || renderer._stencilNodeData || state.nodes;
+        var renderedNodes = (appRenderer && appRenderer._nodes) || renderer._stencilNodeData || state.nodes;
         renderedNodes.forEach(function(n) {
             var entry = { x: n.x || 0, y: n.y || 0 };
             if (state.hiddenNodes.has(n.id)) entry.hidden = true;
@@ -96,7 +96,7 @@
     // Get current positions from renderer for preserving across re-renders
     function getCurrentPositions() {
         var positions = {};
-        var renderedNodes = (appRenderer && appRenderer._nodeData) || renderer._stencilNodeData || [];
+        var renderedNodes = (appRenderer && appRenderer._nodes) || renderer._stencilNodeData || [];
         renderedNodes.forEach(function(n) {
             if (n.x !== undefined) positions[n.id] = { x: n.x, y: n.y };
         });
@@ -321,7 +321,7 @@
         // Update toolbar visibility for network-only controls
         var networkOnlyBtns = ['topo-add-devices', 'topo-edit-hierarchy', 'topo-auto-sort',
             'topo-collapse-pp', 'cable-color-physical', 'cable-color-speed', 'cable-curve',
-            'cable-ortho', 'topo-toggle-labels', 'view-stencil', 'view-node'];
+            'cable-ortho', 'view-stencil', 'view-node'];
         networkOnlyBtns.forEach(function(id) {
             var el = document.getElementById(id);
             if (el) el.style.display = (mode === 'apps') ? 'none' : '';
@@ -943,7 +943,11 @@
             delete state._origNodes;
             delete state._origEdges;
             delete state._allPositionsBeforePP;
-            renderer.render(state.nodes, state.edges);
+            if (state.topologyMode === 'apps' && appRenderer) {
+                appRenderer.render(state.nodes, state.edges);
+            } else {
+                renderer.render(state.nodes, state.edges);
+            }
             events.emit('data:loaded', { nodes: state.nodes, edges: state.edges });
         });
     }
