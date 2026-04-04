@@ -238,7 +238,7 @@
         // Build URL params — handle arrays (e.g. role_id=[1,2] → role_id=1&role_id=2)
         var params = new URLSearchParams();
         Object.keys(state.initialFilters).forEach(function(key) {
-            var val = netFilters[key];
+            var val = state.initialFilters[key];
             if (Array.isArray(val)) {
                 val.forEach(function(v) { params.append(key, v); });
             } else {
