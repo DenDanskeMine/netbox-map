@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [0.10.0] - 2026-04-08
 
 ### Added
 - **Application Mapping (Beta)**: Model applications, deployments, dependencies, and templates (#36)
@@ -155,6 +155,7 @@ Initial releases with core floor plan functionality:
 - Site detail page panel integration
 - REST API for floor plans and tiles
 
+[0.10.0]: https://github.com/DenDanskeMine/netbox-map/compare/v0.9.2...v0.10.0
 [0.9.2]: https://github.com/DenDanskeMine/netbox-map/compare/v0.9.1...v0.9.2
 [0.9.1]: https://github.com/DenDanskeMine/netbox-map/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/DenDanskeMine/netbox-map/compare/v0.8.2...v0.9.0
