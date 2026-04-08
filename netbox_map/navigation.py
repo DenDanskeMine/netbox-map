@@ -89,7 +89,7 @@ menu = PluginMenu(
                 )
             ),
         )),
-        (_('Applications'), (
+        (_('Applications (Beta)'), (
             PluginMenuItem(
                 link='plugins:netbox_map:application_list',
                 link_text=_('Applications'),
