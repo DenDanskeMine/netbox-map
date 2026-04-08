@@ -1,5 +1,8 @@
 # Application Mapping
 
+!!! warning "Beta Feature"
+    Application mapping and mixed mode topology are in beta. The data model is stable but the topology visualization is under active development. Expect UI changes in upcoming releases.
+
 Model your applications, their infrastructure deployments, and inter-application dependencies.
 
 ## Data Model

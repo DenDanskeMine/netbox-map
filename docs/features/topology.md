@@ -60,7 +60,10 @@ Toggle the pass-through collapse button to hide patch panels and show direct swi
 
 See [Application Mapping](applications.md) for details on the application topology view.
 
-## Mixed Mode
+## Mixed Mode ![Beta](https://img.shields.io/badge/status-beta-orange.svg)
+
+!!! warning "Beta"
+    Mixed mode is under active development. Layout and edge routing may change in upcoming releases.
 
 Mixed mode combines network and application topology:
 

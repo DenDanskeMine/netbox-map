@@ -53,6 +53,19 @@ A NetBox plugin for interactive floor plan visualization, site maps, rack utiliz
 - Toggle MAC address display, custom fields, GPS sync
 - No file editing or restarts needed
 
+**Network Topology**
+- Interactive topology view with stencil device cards and interface ports
+- Hierarchical layout, orthogonal cable routing with obstacle avoidance
+- Saved views with position persistence and filters
+- PDF export, cable coloring by type or speed, pass-through collapse
+
+**Application Mapping** ![Beta](https://img.shields.io/badge/status-beta-orange.svg)
+- Model applications, deployments to devices/VMs, and inter-app dependencies
+- Application topology view with dependency edges and failure simulation
+- Mixed mode: devices + apps + deployed-on connections on one canvas
+- Templates for bulk application deployment
+- Device/VM detail page integration (Applications tab + panel)
+
 **Integration**
 - Site detail page panel with floor plan links
 - Device detail page "Map Locations" tab

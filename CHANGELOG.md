@@ -4,6 +4,32 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Added
+- **Application Mapping (Beta)**: Model applications, deployments, dependencies, and templates (#36)
+- Application topology view with dependency edges and failure simulation
+- Mixed mode topology: devices + apps + deployed-on connections on one canvas
+- Application templates for bulk deployment
+- Device/VM detail page Applications tab and summary panel
+- IP address and NetBox Service integration on deployments
+- Dashboard widget for application health overview
+- REST API endpoints for all application models (full CRUD)
+- MapSettings singleton REST API endpoint
+- LocationCoordinates filterset with site_id filter
+- Test suite with 358 tests (models, API, filtersets, views)
+- GitHub Actions CI workflow (ruff lint + test jobs)
+- Documentation site via mkdocs (11 pages)
+- CHANGELOG.md, CONTRIBUTING.md, SECURITY.md
+- Ruff linting configuration aligned with NetBox conventions
+
+### Fixed
+- Mixed mode: saved view positions no longer wiped on load
+- Mixed mode: deployed-on edges now render correctly (NaN path fix)
+- Mixed mode: edges follow device cards when dragged
+- Mixed mode: app cards positioned near host device instead of stacked right
+- Migration drift warning on `manage.py migrate` (#38)
+
 ## [0.9.2] - 2026-03-30
 
 ### Fixed
