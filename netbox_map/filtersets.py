@@ -1,20 +1,37 @@
 import django_filters
+from dcim.choices import CableTypeChoices
+from dcim.models import Location, Site
 from django.contrib.contenttypes.models import ContentType
 from django.db import models
 from django.utils.translation import gettext_lazy as _
-
-from dcim.models import Site, Location
-from tenancy.models import Tenant
 from netbox.filtersets import NetBoxModelFilterSet
-from dcim.choices import CableTypeChoices
-from .models import (
-    FloorPlan, FloorPlanTile, CustomMarkerType, MapMarker, TilePortAssignment, CablePath, TopologySavedView,
-    ApplicationGroup, ApplicationTemplate, Application, ApplicationDeployment, ApplicationDependency,
-)
+from tenancy.models import Tenant
+
 from .choices import (
-    FloorPlanTileStatusChoices, CablePathStatusChoices, get_all_tile_type_choices,
-    ApplicationStatusChoices, ApplicationCriticalityChoices, ApplicationEnvironmentChoices,
-    DependencyTypeChoices, DependencyProtocolChoices, DeploymentRoleChoices,
+    ApplicationCriticalityChoices,
+    ApplicationEnvironmentChoices,
+    ApplicationStatusChoices,
+    CablePathStatusChoices,
+    DependencyProtocolChoices,
+    DependencyTypeChoices,
+    DeploymentRoleChoices,
+    FloorPlanTileStatusChoices,
+    get_all_tile_type_choices,
+)
+from .models import (
+    Application,
+    ApplicationDependency,
+    ApplicationDeployment,
+    ApplicationGroup,
+    ApplicationTemplate,
+    CablePath,
+    CustomMarkerType,
+    FloorPlan,
+    FloorPlanTile,
+    LocationCoordinates,
+    MapMarker,
+    TilePortAssignment,
+    TopologySavedView,
 )
 
 
@@ -83,6 +100,25 @@ class CustomMarkerTypeFilterSet(NetBoxModelFilterSet):
 
     def search(self, queryset, name, value):
         return queryset.filter(name__icontains=value)
+
+
+class LocationCoordinatesFilterSet(NetBoxModelFilterSet):
+    location_id = django_filters.ModelMultipleChoiceFilter(
+        queryset=Location.objects.all(),
+        label=_('Location (ID)'),
+    )
+    site_id = django_filters.ModelMultipleChoiceFilter(
+        field_name='location__site',
+        queryset=Site.objects.all(),
+        label=_('Site (ID)'),
+    )
+
+    class Meta:
+        model = LocationCoordinates
+        fields = ['id', 'location_id', 'site_id']
+
+    def search(self, queryset, name, value):
+        return queryset.filter(location__name__icontains=value)
 
 
 class TilePortAssignmentFilterSet(NetBoxModelFilterSet):

@@ -1,15 +1,27 @@
-from django.contrib.contenttypes.models import ContentType
-from rest_framework import serializers
-
-from dcim.api.serializers_.sites import SiteSerializer
 from dcim.api.serializers import LocationSerializer
+from dcim.api.serializers_.sites import SiteSerializer
+from django.contrib.contenttypes.models import ContentType
 from netbox.api.fields import ContentTypeField
 from netbox.api.serializers import NetBoxModelSerializer
+from rest_framework import serializers
 from utilities.api import get_serializer_for_model
+
 from ..choices import BUILTIN_TYPE_SLUGS
 from ..models import (
-    FloorPlan, FloorPlanTile, CustomMarkerType, LocationCoordinates, MapMarker, TilePortAssignment, CablePath, TopologySavedView,
-    ApplicationGroup, ApplicationTemplate, Application, ApplicationDeployment, ApplicationDependency,
+    Application,
+    ApplicationDependency,
+    ApplicationDeployment,
+    ApplicationGroup,
+    ApplicationTemplate,
+    CablePath,
+    CustomMarkerType,
+    FloorPlan,
+    FloorPlanTile,
+    LocationCoordinates,
+    MapMarker,
+    MapSettings,
+    TilePortAssignment,
+    TopologySavedView,
 )
 
 
@@ -291,3 +303,16 @@ class ApplicationDependencySerializer(NetBoxModelSerializer):
             'tags', 'custom_fields', 'created', 'last_updated',
         ]
         brief_fields = ('id', 'url', 'display', 'source_application', 'target_application', 'dependency_type')
+
+
+class MapSettingsSerializer(serializers.ModelSerializer):
+    """Singleton settings — not a NetBoxModel, so uses plain ModelSerializer."""
+
+    class Meta:
+        model = MapSettings
+        fields = [
+            'id',
+            'show_mac', 'show_custom_fields', 'sync_device_gps',
+            'device_fields', 'rack_fields', 'powerpanel_fields', 'powerfeed_fields',
+            'popover_fields', 'tile_popover_config',
+        ]

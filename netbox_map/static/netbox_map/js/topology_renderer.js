@@ -218,8 +218,10 @@
         this.svg = d3.select('#topology-svg');
         this._updateSize();
         this.g = this.svg.append('g');
-        this.g.append('g').attr('class', 'edge-layer');
-        this.g.append('g').attr('class', 'node-layer');
+        this.g.append('g').attr('class', 'edge-layer');       // all edges (cables + app) — behind cards
+        this.g.append('g').attr('class', 'node-layer');       // device cards
+        this.g.append('g').attr('class', 'overlay-node-layer'); // app cards — above device cards
+        this.g.append('g').attr('class', 'highlight-layer');  // hover-highlighted edges — topmost
 
         this.zoom = d3.zoom().scaleExtent([0.02, 5])
             .on('zoom', function(ev) { self.g.attr('transform', ev.transform); });
@@ -274,7 +276,7 @@
     Renderer.prototype._renderStencil = function(nodes, edges) {
         var self = this;
         this._updateSize();
-        this.g.selectAll('.edge-layer > *, .node-layer > *').remove();
+        this.g.selectAll('.edge-layer > *, .node-layer > *, .overlay-node-layer > *, .highlight-layer > *').remove();
         if (this.simulation) { this.simulation.stop(); this.simulation = null; }
         if (nodes.length === 0) return;
 
@@ -1224,6 +1226,11 @@
                 var orig = self.state.nodes.find(function(n) { return n.id === d.id; });
                 if (orig) { orig.x = d.x; orig.y = d.y; }
 
+                // Notify app renderer overlay so deployed-on edges follow
+                if (self.state.topologyMode === 'mixed') {
+                    self.events.emit('device:drag', { id: d.id, x: d.x, y: d.y });
+                }
+
                 // Redraw cables
                 self.edgeElements.attr('d', cablePath);
 
@@ -1308,7 +1315,7 @@
     Renderer.prototype._renderAppStencil = function(nodes, edges) {
         var self = this;
         this._updateSize();
-        this.g.selectAll('.edge-layer > *, .node-layer > *').remove();
+        this.g.selectAll('.edge-layer > *, .node-layer > *, .overlay-node-layer > *, .highlight-layer > *').remove();
         if (this.simulation) { this.simulation.stop(); this.simulation = null; }
         if (nodes.length === 0) return;
 
@@ -1642,7 +1649,7 @@
     Renderer.prototype._renderNodes = function(nodes, edges) {
         var self = this;
         this._updateSize();
-        this.g.selectAll('.edge-layer > *, .node-layer > *').remove();
+        this.g.selectAll('.edge-layer > *, .node-layer > *, .overlay-node-layer > *, .highlight-layer > *').remove();
         if (this.simulation) this.simulation.stop();
         if (nodes.length === 0) return;
 

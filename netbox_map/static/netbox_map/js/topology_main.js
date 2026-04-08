@@ -341,8 +341,8 @@
         if (btn) btn.classList.add('active');
     }
 
-    function switchToMode(mode) {
-        state.topologyMode = mode;
+    // Set up mode-specific UI (toolbar, legend, stats labels)
+    function applyModeUI(mode) {
         setModeActive(mode === 'apps' ? modeApps : mode === 'mixed' ? modeMixed : modeNetwork);
 
         // Switch footer legend
@@ -367,7 +367,6 @@
         if (statNodes && statNodes.nextSibling) {
             var nodesLabel = statNodes.parentNode;
             if (nodesLabel) {
-                // The text node after stat-nodes
                 var walker = document.createTreeWalker(nodesLabel, NodeFilter.SHOW_TEXT);
                 var textNode;
                 while (textNode = walker.nextNode()) {
@@ -380,8 +379,13 @@
                 }
             }
         }
+    }
 
-        // Clear state and reload
+    function switchToMode(mode) {
+        state.topologyMode = mode;
+        applyModeUI(mode);
+
+        // Clear state and reload (user-triggered mode switch — discard old positions)
         state.nodes = [];
         state.edges = [];
         state.savedLayout = {};
@@ -418,7 +422,13 @@
     }
 
     if (state.topologyMode === 'apps' || state.topologyMode === 'mixed') {
-        switchToMode(state.topologyMode);
+        // Initial load — set up UI but DON'T clear savedLayout (switchToMode wipes it)
+        applyModeUI(state.topologyMode);
+        if (state.topologyMode === 'mixed') {
+            loadMixedTopology();
+        } else {
+            loadAppTopology();
+        }
     } else {
         loadTopology();
     }
@@ -1063,6 +1073,13 @@
     }
 
     // Add connected devices (from right-click menu)
+    // Update app overlay edges when device is dragged in mixed mode
+    events.on('device:drag', function(data) {
+        if (appRenderer) {
+            appRenderer.updateDevicePosition(data.id, data.x, data.y);
+        }
+    });
+
     events.on('device:add-neighbors', function(node) {
         // Fetch the device's interfaces to find connected devices
         var url = state.deviceDetailUrl + node.device_id + '/';
@@ -1155,7 +1172,9 @@
             delete state._origNodes;
             delete state._origEdges;
             delete state._allPositionsBeforePP;
-            if (state.topologyMode === 'apps' && appRenderer) {
+            if (state.topologyMode === 'mixed') {
+                loadMixedTopology();
+            } else if (state.topologyMode === 'apps' && appRenderer) {
                 appRenderer.render(state.nodes, state.edges);
             } else {
                 renderer.render(state.nodes, state.edges);

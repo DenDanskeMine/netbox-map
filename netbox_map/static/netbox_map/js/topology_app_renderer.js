@@ -137,11 +137,19 @@
         this._layoutOverlay(nodes, edges, deviceNodes);
         this._assignPortSides(edges);
 
-        // Draw WITHOUT clearing — append to existing layers
+        // Draw edges in edge-layer (behind ALL cards), app cards in overlay-node-layer
         var root = this.base.g;
+        var edgeLayer = root.select('.edge-layer');
+        var overlayNodeLayer = root.select('.overlay-node-layer');
+        var highlightLayer = root.select('.highlight-layer');
+        // Clear previous overlay content (app edges + app cards)
+        edgeLayer.selectAll('.aedge, .aedge-dot').remove();
+        overlayNodeLayer.selectAll('*').remove();
+        highlightLayer.selectAll('*').remove();
+
         this._ensureMarkers();
-        this._paintEdges(edges, root.select('.edge-layer'));
-        this._paintCards(nodes, root.select('.node-layer'));
+        this._paintEdges(edges, edgeLayer);
+        this._paintCards(nodes, overlayNodeLayer);
         this._bind(edges);
 
         this.base._stencilNodeData = (this.base._stencilNodeData || []).concat(nodes);
@@ -165,6 +173,58 @@
             d3.zoomIdentity.translate(w / 2 - cx * scale, h / 2 - cy * scale).scale(scale)
         );
         this._select(n);
+    };
+
+    /* Update overlay edges when a device node is dragged by the network renderer */
+    AppRenderer.prototype.updateDevicePosition = function(deviceId, x, y) {
+        var n = this._byId[deviceId];
+        if (!n) return;
+        n.x = x;
+        n.y = y;
+        // Redraw only deployed-on and dependency edges (not network cables)
+        var self = this;
+        if (this._lines) {
+            this._lines.attr('d', function(d) { return self._edgePath(d); });
+        }
+        // Update hit paths too
+        this.base.g.selectAll('.aedge-hit').attr('d', function(d) { return self._edgePath(d); });
+        // Update connector dots
+        this._updateDots();
+    };
+
+    /* Recompute connector dot positions from current edge data */
+    AppRenderer.prototype._updateDots = function() {
+        var self = this;
+        var layer = this.base.g.select('.edge-layer');
+        layer.selectAll('.aedge-dot').remove();
+
+        if (!this._edges) return;
+        this._edges.forEach(function(e) {
+            var srcId = typeof e.source === 'object' ? e.source.id : e.source;
+            var tgtId = typeof e.target === 'object' ? e.target.id : e.target;
+            var sn = self._byId[srcId];
+            var tn = self._byId[tgtId];
+            if (!sn || !tn || sn.x === undefined || tn.x === undefined) return;
+
+            var sW = sn.node_type === 'application' ? CARD_W : 200;
+            var tW = tn.node_type === 'application' ? CARD_W : 200;
+            var sp = self._portY(e.source_port);
+            var tp = self._portY(e.target_port);
+            var sy = sn.y + (sp !== null ? sp : (sn._h || 44) / 2);
+            var ty = tn.y + (tp !== null ? tp : (tn._h || 44) / 2);
+
+            var srcRight = (sn.x + sW / 2) < (tn.x + tW / 2);
+            var sx = srcRight ? sn.x + sW : sn.x;
+            var tx = srcRight ? tn.x : tn.x + tW;
+
+            var dotColor = e.color || '#22d3ee';
+            layer.append('circle').attr('class', 'aedge-dot')
+                .attr('cx', sx).attr('cy', sy).attr('r', 3)
+                .attr('fill', dotColor).attr('opacity', 0.85);
+            layer.append('circle').attr('class', 'aedge-dot')
+                .attr('cx', tx).attr('cy', ty).attr('r', 3)
+                .attr('fill', dotColor).attr('opacity', 0.85);
+        });
     };
 
     /* ══════════════════════════════════════════
@@ -206,11 +266,20 @@
     AppRenderer.prototype._assignPortSides = function(edges) {
         var self = this;
 
-        // Reset per-side lists
-        this._nodes.forEach(function(n) { n._portsL = []; n._portsR = []; });
+        // Reset per-side lists (app nodes AND device nodes in _byId)
+        var allNodes = this._nodes.slice();
+        Object.keys(this._byId).forEach(function(nid) {
+            var n = self._byId[nid];
+            if (n.node_type !== 'application') allNodes.push(n);
+        });
+        allNodes.forEach(function(n) {
+            n._portsL = [];
+            n._portsR = [];
+        });
 
         // Clear previous assignment
-        this._nodes.forEach(function(n) {
+        allNodes.forEach(function(n) {
+            if (!n._portById) return;
             Object.keys(n._portById).forEach(function(pid) {
                 delete n._portById[pid]._assigned;
             });
@@ -223,7 +292,9 @@
             var tn = self._byId[tgtId];
             if (!sn || !tn) return;
 
-            var srcRight = (sn.x + CARD_W / 2) < (tn.x + CARD_W / 2);
+            var sW = sn.node_type === 'application' ? CARD_W : 200;
+            var tW = tn.node_type === 'application' ? CARD_W : 200;
+            var srcRight = (sn.x + sW / 2) < (tn.x + tW / 2);
 
             // Source port: exits TOWARD target
             var sp = e.source_port ? sn._portById[e.source_port] : null;
@@ -255,6 +326,24 @@
             var footerH = (n.deploy_count > 0) ? 20 : 4;
             n._h = Math.max(44, HEADER_H + blockH + footerH);
             n._cardH = n._h;
+        });
+
+        // Also compute port Y for device nodes (not in this._nodes but in this._byId)
+        // so that deployed-on edges can route to correct port positions
+        Object.keys(this._byId).forEach(function(nid) {
+            var n = self._byId[nid];
+            if (n.node_type === 'application') return; // already handled above
+            if (!n._portsL || !n._portsR) return;
+            if (n._portsL.length === 0 && n._portsR.length === 0) return;
+            // Spread deployed-on ports evenly along the device card height
+            var h = n._h || n._cardH || 48;
+            var pad = 15;
+            n._portsL.forEach(function(p, i) {
+                p._y = pad + (i + 0.5) * ((h - 2 * pad) / Math.max(n._portsL.length, 1));
+            });
+            n._portsR.forEach(function(p, i) {
+                p._y = pad + (i + 0.5) * ((h - 2 * pad) / Math.max(n._portsR.length, 1));
+            });
         });
     };
 
@@ -303,64 +392,143 @@
         });
     };
 
-    /* Layout for overlay mode — dagre for apps, offset to right of devices */
+    /* Layout for overlay mode — position apps near their host devices */
     AppRenderer.prototype._layoutOverlay = function(appNodes, edges, deviceNodes) {
         var self = this;
         var saved = this.state.savedLayout || {};
 
         if (appNodes.length === 0) return;
 
-        // Find rightmost device edge + add small gap for app placement
+        // Build device lookup
+        var deviceById = {};
+        (deviceNodes || []).forEach(function(n) {
+            if (n.x !== undefined && !isNaN(n.x)) deviceById[n.id] = n;
+        });
+
+        // Map each app to its host device via deployed_on edges
+        var appToHost = {};   // appId → deviceNode
+        var hostApps = {};    // deviceId → [appNode, ...]
+        edges.forEach(function(e) {
+            if (e.edge_type !== 'deployed_on') return;
+            var appId = typeof e.source === 'object' ? e.source.id : e.source;
+            var devId = typeof e.target === 'object' ? e.target.id : e.target;
+            var dev = deviceById[devId];
+            if (!dev) return;
+            appToHost[appId] = dev;
+            if (!hostApps[devId]) hostApps[devId] = [];
+            // Avoid duplicate entries
+            var appNode = appNodes.find(function(n) { return n.id === appId; });
+            if (appNode && hostApps[devId].indexOf(appNode) === -1) {
+                hostApps[devId].push(appNode);
+            }
+        });
+
+        // Find rightmost device x for orphan app placement
         var maxDeviceX = 0;
         (deviceNodes || []).forEach(function(n) {
             if (n.x !== undefined && !isNaN(n.x)) {
-                maxDeviceX = Math.max(maxDeviceX, n.x + 200);
+                maxDeviceX = Math.max(maxDeviceX, n.x + (CARD_W || 220));
             }
         });
-        maxDeviceX += 60; // single gap between device area and app area
-        if (maxDeviceX <= 60) maxDeviceX = 400;
 
-        // Use dagre for app layout — same as app-only mode
-        // This gives proper left-to-right dependency flow
-        var g = new dagre.graphlib.Graph();
-        g.setGraph({
-            rankdir: 'LR',
-            ranksep: 100,
-            nodesep: 25,
-            marginx: 0,
-            marginy: 40,
-            ranker: 'network-simplex'
-        });
-        g.setDefaultEdgeLabel(function() { return {}; });
+        // Position apps that have a host device: place to the RIGHT of their host
+        var APP_GAP_X = 30;   // horizontal gap between device card and app column
+        var APP_GAP_Y = 10;   // vertical gap between stacked apps
+        var NET_CARD_W = 200;  // device card width in stencil view
 
-        appNodes.forEach(function(n) {
-            g.setNode(n.id, { width: CARD_W, height: n._h });
+        // Build list of all device bounding boxes for collision checking
+        var deviceBoxes = [];
+        (deviceNodes || []).forEach(function(n) {
+            if (n.x === undefined || isNaN(n.x)) return;
+            deviceBoxes.push({
+                x: n.x, y: n.y,
+                w: NET_CARD_W,
+                h: n._cardH || n._h || 48
+            });
         });
 
-        // Only dependency edges for layout (deployed_on handled by edges only)
-        edges.forEach(function(e) {
-            if (e.edge_type !== 'dependency') return;
-            var s = typeof e.source === 'object' ? e.source.id : e.source;
-            var t = typeof e.target === 'object' ? e.target.id : e.target;
-            if (g.hasNode(s) && g.hasNode(t)) g.setEdge(t, s);
-        });
-
-        dagre.layout(g);
-
-        // Apply dagre positions, offset to the right of all devices
-        appNodes.forEach(function(n) {
-            var key = String(n.id);
-            if (saved[key] && saved[key].x !== undefined) {
-                n.x = saved[key].x;
-                n.y = saved[key].y;
-            } else {
-                var dn = g.node(n.id);
-                if (dn) {
-                    n.x = dn.x - CARD_W / 2 + maxDeviceX;
-                    n.y = dn.y - n._h / 2;
+        // Find a clear X position that doesn't overlap any device card
+        function findClearX(startX, appY, appH) {
+            var x = startX;
+            for (var attempt = 0; attempt < 10; attempt++) {
+                var blocked = false;
+                for (var i = 0; i < deviceBoxes.length; i++) {
+                    var db = deviceBoxes[i];
+                    // Check horizontal + vertical overlap
+                    if (x < db.x + db.w + 10 && x + CARD_W > db.x - 10 &&
+                        appY < db.y + db.h + 5 && appY + appH > db.y - 5) {
+                        // Push past this device
+                        x = db.x + db.w + APP_GAP_X;
+                        blocked = true;
+                    }
                 }
+                if (!blocked) break;
             }
+            return x;
+        }
+
+        Object.keys(hostApps).forEach(function(devId) {
+            var dev = deviceById[devId];
+            var apps = hostApps[devId];
+            if (!dev || apps.length === 0) return;
+
+            var baseX = dev.x + NET_CARD_W + APP_GAP_X;
+            var devH = dev._cardH || dev._h || 48;
+            // Center the app stack vertically around the device card center
+            var totalAppH = 0;
+            apps.forEach(function(a) { totalAppH += (a._h || 44) + APP_GAP_Y; });
+            totalAppH -= APP_GAP_Y;
+            var startY = dev.y + (devH - totalAppH) / 2;
+
+            apps.forEach(function(a) {
+                var key = String(a.id);
+                if (saved[key] && saved[key].x !== undefined) {
+                    a.x = saved[key].x;
+                    a.y = saved[key].y;
+                } else {
+                    a.x = findClearX(baseX, startY, a._h || 44);
+                    a.y = startY;
+                }
+                startY += (a._h || 44) + APP_GAP_Y;
+            });
         });
+
+        // Orphan apps (no host device in view) — use dagre to the right of everything
+        var orphans = appNodes.filter(function(n) { return !appToHost[n.id]; });
+        if (orphans.length > 0) {
+            var g = new dagre.graphlib.Graph();
+            g.setGraph({
+                rankdir: 'LR', ranksep: 100, nodesep: 25,
+                marginx: 0, marginy: 40, ranker: 'network-simplex'
+            });
+            g.setDefaultEdgeLabel(function() { return {}; });
+
+            orphans.forEach(function(n) {
+                g.setNode(n.id, { width: CARD_W, height: n._h });
+            });
+            edges.forEach(function(e) {
+                if (e.edge_type !== 'dependency') return;
+                var s = typeof e.source === 'object' ? e.source.id : e.source;
+                var t = typeof e.target === 'object' ? e.target.id : e.target;
+                if (g.hasNode(s) && g.hasNode(t)) g.setEdge(t, s);
+            });
+            dagre.layout(g);
+
+            var orphanOffsetX = maxDeviceX + APP_GAP_X + CARD_W + 80;
+            orphans.forEach(function(n) {
+                var key = String(n.id);
+                if (saved[key] && saved[key].x !== undefined) {
+                    n.x = saved[key].x;
+                    n.y = saved[key].y;
+                } else {
+                    var dn = g.node(n.id);
+                    if (dn) {
+                        n.x = dn.x - CARD_W / 2 + orphanOffsetX;
+                        n.y = dn.y - n._h / 2;
+                    }
+                }
+            });
+        }
     };
 
     /* ══════════════════════════════════════════
@@ -372,6 +540,8 @@
         var root = this.base.g;
         root.select('.edge-layer').selectAll('*').remove();
         root.select('.node-layer').selectAll('*').remove();
+        root.select('.overlay-node-layer').selectAll('*').remove();
+        root.select('.highlight-layer').selectAll('*').remove();
 
         this._ensureMarkers();
         this._paintEdges(edges, root.select('.edge-layer'));
@@ -457,6 +627,35 @@
                     d.cable_label].filter(Boolean).join(' ');
         });
 
+        // Connector dots at edge endpoints (matching network renderer style)
+        edges.forEach(function(e) {
+            var srcId = typeof e.source === 'object' ? e.source.id : e.source;
+            var tgtId = typeof e.target === 'object' ? e.target.id : e.target;
+            var sn = self._byId[srcId];
+            var tn = self._byId[tgtId];
+            if (!sn || !tn || sn.x === undefined || tn.x === undefined) return;
+
+            var sW = sn.node_type === 'application' ? CARD_W : 200;
+            var tW = tn.node_type === 'application' ? CARD_W : 200;
+            var sp = self._portY(e.source_port);
+            var tp = self._portY(e.target_port);
+            var sy = sn.y + (sp !== null ? sp : (sn._h || 44) / 2);
+            var ty = tn.y + (tp !== null ? tp : (tn._h || 44) / 2);
+
+            // Determine exit/entry sides
+            var srcRight = (sn.x + sW / 2) < (tn.x + tW / 2);
+            var sx = srcRight ? sn.x + sW : sn.x;
+            var tx = srcRight ? tn.x : tn.x + tW;
+
+            var dotColor = e.color || '#22d3ee';
+            layer.append('circle').attr('class', 'aedge-dot')
+                .attr('cx', sx).attr('cy', sy).attr('r', 3)
+                .attr('fill', dotColor).attr('opacity', 0.85);
+            layer.append('circle').attr('class', 'aedge-dot')
+                .attr('cx', tx).attr('cy', ty).attr('r', 3)
+                .attr('fill', dotColor).attr('opacity', 0.85);
+        });
+
         // Edge tooltips handled by hit paths (wider target area)
     };
 
@@ -496,22 +695,27 @@
         var sn = this._byId[srcId];
         var tn = this._byId[tgtId];
         if (!sn || !tn) return '';
+        if (sn.x === undefined || tn.x === undefined) return '';
 
         var sp = this._portY(d.source_port);
         var tp = this._portY(d.target_port);
-        var sy = sn.y + (sp !== null ? sp : sn._h / 2);
-        var ty = tn.y + (tp !== null ? tp : tn._h / 2);
+        var sy = sn.y + (sp !== null ? sp : (sn._h || 44) / 2);
+        var ty = tn.y + (tp !== null ? tp : (tn._h || 44) / 2);
+
+        // Per-node width: device cards are 200px, app cards are 220px
+        var sW = sn.node_type === 'application' ? CARD_W : 200;
+        var tW = tn.node_type === 'application' ? CARD_W : 200;
 
         // Exit/entry sides based on relative position
         var sx, tx, exitRight;
-        if (sn.x + CARD_W <= tn.x) {
-            sx = sn.x + CARD_W; tx = tn.x; exitRight = true;
-        } else if (tn.x + CARD_W <= sn.x) {
-            sx = sn.x; tx = tn.x + CARD_W; exitRight = false;
+        if (sn.x + sW <= tn.x) {
+            sx = sn.x + sW; tx = tn.x; exitRight = true;
+        } else if (tn.x + tW <= sn.x) {
+            sx = sn.x; tx = tn.x + tW; exitRight = false;
         } else {
             exitRight = sn.x < tn.x;
-            sx = exitRight ? sn.x + CARD_W : sn.x;
-            tx = exitRight ? tn.x : tn.x + CARD_W;
+            sx = exitRight ? sn.x + sW : sn.x;
+            tx = exitRight ? tn.x : tn.x + tW;
         }
 
         // Channel offset for parallel edges
@@ -591,21 +795,25 @@
         var sn = this._byId[srcId];
         var tn = this._byId[tgtId];
         if (!sn || !tn) return '';
+        if (sn.x === undefined || tn.x === undefined) return '';
 
         var sp = this._portY(d.source_port);
         var tp = this._portY(d.target_port);
-        var sy = sn.y + (sp !== null ? sp : sn._h / 2);
+        var sy = sn.y + (sp !== null ? sp : (sn._h || 44) / 2);
         var ty = tn.y + (tp !== null ? tp : tn._h / 2);
 
+        var sW = sn.node_type === 'application' ? CARD_W : 200;
+        var tW = tn.node_type === 'application' ? CARD_W : 200;
+
         var sx, stx, sDir, tDir;
-        if (sn.x + CARD_W <= tn.x) {
-            sx = sn.x + CARD_W; stx = tn.x; sDir = 1; tDir = -1;
-        } else if (tn.x + CARD_W <= sn.x) {
-            sx = sn.x; stx = tn.x + CARD_W; sDir = -1; tDir = 1;
+        if (sn.x + sW <= tn.x) {
+            sx = sn.x + sW; stx = tn.x; sDir = 1; tDir = -1;
+        } else if (tn.x + tW <= sn.x) {
+            sx = sn.x; stx = tn.x + tW; sDir = -1; tDir = 1;
         } else {
             var exitRight = sn.x < tn.x;
-            sx = exitRight ? sn.x + CARD_W : sn.x;
-            stx = exitRight ? tn.x : tn.x + CARD_W;
+            sx = exitRight ? sn.x + sW : sn.x;
+            stx = exitRight ? tn.x : tn.x + tW;
             sDir = exitRight ? 1 : -1;
             tDir = exitRight ? -1 : 1;
         }
@@ -641,7 +849,7 @@
         if (!n) return null;
         var p = n._portById[portId];
         if (!p) return null;
-        return p._y;
+        return (p._y !== undefined) ? p._y : null;
     };
 
     /* ── Cards ── */
@@ -894,40 +1102,78 @@
             self._select(d);
         });
 
-        // Hover card → highlight its edges (suppressed during simulation)
+        // Hover card → draw highlighted edges ON TOP of everything in highlight-layer
+        var hlLayer = this.base.g.select('.highlight-layer');
+
         this._cards
             .on('mouseenter', function(ev, d) {
                 if (self._simulationActive) return;
-                self._lines.each(function(e) {
+                // Dim all base edges
+                self._lines.classed('aedge-dim', true);
+                // Draw highlighted copies on top
+                var hitEdges = edges.filter(function(e) {
                     var s = typeof e.source === 'object' ? e.source.id : e.source;
                     var t = typeof e.target === 'object' ? e.target.id : e.target;
-                    var hit = (s === d.id || t === d.id);
-                    d3.select(this).classed('aedge-dim', !hit).classed('aedge-hi', hit);
+                    return s === d.id || t === d.id;
                 });
+                hlLayer.selectAll('.aedge-highlight').remove();
+                hitEdges.forEach(function(e) {
+                    var cls = 'aedge-highlight aedge';
+                    if (e.edge_type === 'deployed_on') cls += ' aedge-deployed';
+                    else if (e.dependency_type === 'soft') cls += ' aedge-soft';
+                    else cls += ' aedge-hard';
+                    hlLayer.append('path')
+                        .datum(e)
+                        .attr('class', cls + ' aedge-hi')
+                        .attr('stroke', e.color || '#6c757d')
+                        .attr('d', self._edgePath(e))
+                        .attr('marker-end', function() {
+                            if (e.edge_type === 'deployed_on') return null;
+                            var c = (e.color || '#6c757d').replace('#', '');
+                            return e.dependency_type === 'soft' ? self._openArrow(c) : self._filledArrow(c);
+                        });
+                });
+                // Dim unconnected cards
                 self._cards.each(function(n) {
                     if (n.id === d.id) return;
-                    var connected = edges.some(function(e) {
+                    var connected = hitEdges.some(function(e) {
                         var s = typeof e.source === 'object' ? e.source.id : e.source;
                         var t = typeof e.target === 'object' ? e.target.id : e.target;
-                        return (s === d.id && t === n.id) || (t === d.id && s === n.id);
+                        return s === n.id || t === n.id;
                     });
                     d3.select(this).classed('acard-dim', !connected);
                 });
             })
             .on('mouseleave', function() {
                 if (self._simulationActive) return;
-                self._lines.classed('aedge-dim', false).classed('aedge-hi', false);
+                self._lines.classed('aedge-dim', false);
+                hlLayer.selectAll('.aedge-highlight').remove();
                 self._cards.classed('acard-dim', false);
             });
 
-        // Hover edge → highlight just that edge
+        // Hover edge hit area → draw highlighted copy on top
         this._lines
-            .on('mouseenter', function() {
+            .on('mouseenter', function(ev, e) {
                 self._lines.classed('aedge-dim', true);
-                d3.select(this).classed('aedge-dim', false).classed('aedge-hi', true);
+                hlLayer.selectAll('.aedge-highlight').remove();
+                var cls = 'aedge-highlight aedge';
+                if (e.edge_type === 'deployed_on') cls += ' aedge-deployed';
+                else if (e.dependency_type === 'soft') cls += ' aedge-soft';
+                else cls += ' aedge-hard';
+                hlLayer.append('path')
+                    .datum(e)
+                    .attr('class', cls + ' aedge-hi')
+                    .attr('stroke', e.color || '#6c757d')
+                    .attr('d', self._edgePath(e))
+                    .attr('marker-end', function() {
+                        if (e.edge_type === 'deployed_on') return null;
+                        var c = (e.color || '#6c757d').replace('#', '');
+                        return e.dependency_type === 'soft' ? self._openArrow(c) : self._filledArrow(c);
+                    });
             })
             .on('mouseleave', function() {
-                self._lines.classed('aedge-dim', false).classed('aedge-hi', false);
+                self._lines.classed('aedge-dim', false);
+                hlLayer.selectAll('.aedge-highlight').remove();
             });
 
         // Drag — with 3px threshold to avoid accidental repositioning
@@ -970,6 +1216,7 @@
                 self._lines.filter(function(e) {
                     return e.edge_type === 'dependency' || e.edge_type === 'deployed_on';
                 }).attr('d', function(e) { return self._edgePath(e); });
+                self._updateDots();
             })
             .on('end', function(ev, d) {
                 d3.select(this).classed('dragging', false);
@@ -1045,8 +1292,9 @@
             self.events.emit('node:deselect');
         });
 
-        // P3-20: Invisible wider hit area for edges
-        var hitLayer = this.base.g.select('.edge-layer');
+        // P3-20: Invisible wider hit area for edges — in highlight layer (topmost, always interactive)
+        var hitLayer = this.base.g.select('.highlight-layer');
+        if (hitLayer.empty()) hitLayer = this.base.g.select('.edge-layer');
         hitLayer.selectAll('.aedge-hit')
             .data(edges).enter().append('path')
             .attr('class', 'aedge-hit')

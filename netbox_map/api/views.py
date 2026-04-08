@@ -1,17 +1,40 @@
-from django.contrib.contenttypes.prefetch import GenericPrefetch
 from dcim.models import FrontPort, RearPort
+from django.contrib.contenttypes.prefetch import GenericPrefetch
 from netbox.api.viewsets import NetBoxModelViewSet
+from rest_framework import mixins, viewsets
+
 from .. import filtersets
 from ..models import (
-    FloorPlan, FloorPlanTile, CustomMarkerType, LocationCoordinates, MapMarker, TilePortAssignment, CablePath, TopologySavedView,
-    ApplicationGroup, ApplicationTemplate, Application, ApplicationDeployment, ApplicationDependency,
+    Application,
+    ApplicationDependency,
+    ApplicationDeployment,
+    ApplicationGroup,
+    ApplicationTemplate,
+    CablePath,
+    CustomMarkerType,
+    FloorPlan,
+    FloorPlanTile,
+    LocationCoordinates,
+    MapMarker,
+    MapSettings,
+    TilePortAssignment,
+    TopologySavedView,
 )
 from .serializers import (
-    FloorPlanSerializer, FloorPlanTileSerializer, CustomMarkerTypeSerializer,
-    LocationCoordinatesSerializer, MapMarkerSerializer, TilePortAssignmentSerializer,
-    CablePathSerializer, TopologySavedViewSerializer,
-    ApplicationGroupSerializer, ApplicationTemplateSerializer, ApplicationSerializer,
-    ApplicationDeploymentSerializer, ApplicationDependencySerializer,
+    ApplicationDependencySerializer,
+    ApplicationDeploymentSerializer,
+    ApplicationGroupSerializer,
+    ApplicationSerializer,
+    ApplicationTemplateSerializer,
+    CablePathSerializer,
+    CustomMarkerTypeSerializer,
+    FloorPlanSerializer,
+    FloorPlanTileSerializer,
+    LocationCoordinatesSerializer,
+    MapMarkerSerializer,
+    MapSettingsSerializer,
+    TilePortAssignmentSerializer,
+    TopologySavedViewSerializer,
 )
 
 
@@ -36,6 +59,7 @@ class FloorPlanTileViewSet(NetBoxModelViewSet):
 class LocationCoordinatesViewSet(NetBoxModelViewSet):
     queryset = LocationCoordinates.objects.select_related('location__site')
     serializer_class = LocationCoordinatesSerializer
+    filterset_class = filtersets.LocationCoordinatesFilterSet
 
 
 class TilePortAssignmentViewSet(NetBoxModelViewSet):
@@ -92,3 +116,15 @@ class ApplicationDependencyViewSet(NetBoxModelViewSet):
     queryset = ApplicationDependency.objects.select_related('source_application', 'target_application')
     serializer_class = ApplicationDependencySerializer
     filterset_class = filtersets.ApplicationDependencyFilterSet
+
+
+class MapSettingsViewSet(mixins.RetrieveModelMixin, mixins.UpdateModelMixin, viewsets.GenericViewSet):
+    """
+    Singleton settings endpoint. Supports GET and PATCH/PUT only.
+    Always operates on the single MapSettings instance (pk=1).
+    """
+    serializer_class = MapSettingsSerializer
+    queryset = MapSettings.objects.all()
+
+    def get_object(self):
+        return MapSettings.load()

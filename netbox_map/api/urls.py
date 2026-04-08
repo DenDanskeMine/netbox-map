@@ -1,4 +1,6 @@
+from django.urls import path
 from netbox.api.routers import NetBoxRouter
+
 from . import views
 
 router = NetBoxRouter()
@@ -16,4 +18,9 @@ router.register('applications', views.ApplicationViewSet)
 router.register('application-deployments', views.ApplicationDeploymentViewSet)
 router.register('application-dependencies', views.ApplicationDependencyViewSet)
 
-urlpatterns = router.urls
+# Singleton endpoint — no list/create/delete, just GET/PATCH at a fixed URL
+_settings_view = views.MapSettingsViewSet.as_view({'get': 'retrieve', 'put': 'update', 'patch': 'partial_update'})
+
+urlpatterns = router.urls + [
+    path('map-settings/', _settings_view, name='mapsettings'),
+]

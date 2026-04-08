@@ -1,5 +1,7 @@
 import json
 
+from dcim.filtersets import SiteFilterSet
+from dcim.models import Device, Location, Site
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 from django.contrib.contenttypes.models import ContentType
@@ -10,23 +12,31 @@ from django.utils.decorators import method_decorator
 from django.utils.translation import gettext_lazy as _
 from django.views import View
 from django.views.decorators.csrf import ensure_csrf_cookie
-
-from dcim.filtersets import SiteFilterSet
-from dcim.models import Device, Location, Site
 from netbox.views import generic
 from utilities.views import ViewTab, register_model_view
 
 from . import filtersets, forms, tables
 from .choices import get_all_type_configs
 from .models import (
-    FloorPlan, FloorPlanTile, CustomMarkerType, LocationCoordinates, MapMarker, MapSettings, TilePortAssignment, CablePath, TopologySavedView,
-    ApplicationGroup, ApplicationTemplate, Application, ApplicationDeployment, ApplicationDependency,
+    Application,
+    ApplicationDependency,
+    ApplicationDeployment,
+    ApplicationGroup,
+    ApplicationTemplate,
+    CablePath,
+    CustomMarkerType,
+    FloorPlan,
+    FloorPlanTile,
+    LocationCoordinates,
+    MapMarker,
+    MapSettings,
+    TopologySavedView,
 )
-
 
 #
 # Topology views
 #
+
 
 @method_decorator(ensure_csrf_cookie, name='dispatch')
 class TopologyView(LoginRequiredMixin, View):
@@ -158,10 +168,16 @@ class TopologyDataView(LoginRequiredMixin, View):
 
     def get(self, request):
         from dcim.models import (
-            Device, Interface, Cable, FrontPort, RearPort,
-            ConsolePort, ConsoleServerPort, PowerPort, PowerOutlet,
+            CableTermination,
+            ConsolePort,
+            ConsoleServerPort,
+            Device,
+            FrontPort,
+            Interface,
+            PowerOutlet,
+            PowerPort,
+            RearPort,
         )
-        from dcim.models import CableTermination
 
         site_id = request.GET.get('site_id')
         tenant_id = request.GET.get('tenant_id')
@@ -238,7 +254,6 @@ class TopologyDataView(LoginRequiredMixin, View):
         # Get content types for all port models
         port_models = [Interface, FrontPort, RearPort, ConsolePort, ConsoleServerPort, PowerPort, PowerOutlet]
         port_cts = [ContentType.objects.get_for_model(m) for m in port_models]
-        port_ct_map = {ct.pk: model_cls for ct, model_cls in zip(port_cts, port_models)}
 
         # Build port-to-device mapping AND collect port details
         port_id_map = {}       # (ct_id, port_id) -> device_id
@@ -448,7 +463,7 @@ class TopologyDeviceDetailView(LoginRequiredMixin, View):
     """AJAX endpoint returning interfaces and ports for a device."""
 
     def get(self, request, device_id):
-        from dcim.models import Device, Interface, FrontPort, RearPort, CableTermination
+        from dcim.models import CableTermination, Device, FrontPort, Interface, RearPort
 
         try:
             device = Device.objects.get(pk=device_id)
@@ -2331,7 +2346,6 @@ class MarkerDetailView(LoginRequiredMixin, View):
                         'trace': trace_data,
                     })
         elif object_type in ('rearport', 'frontport'):
-            from dcim.models import RearPort, FrontPort
             # Build a single unified trace that shows the full path through
             # the patch panel: e.g. Server:eth0 → Cable → FrontPort →
             # RearPort → Cable → Switch:GigabitEthernet.
@@ -2348,7 +2362,6 @@ class MarkerDetailView(LoginRequiredMixin, View):
                         peer = mapping.front_port
                         if peer and peer.cable:
                             peer_hops = self._trace_through_panels(peer)
-                            peer_name = peer.name
                             break
                 else:
                     mappings = PortMapping.objects.filter(
@@ -2358,7 +2371,6 @@ class MarkerDetailView(LoginRequiredMixin, View):
                         peer = mapping.rear_port
                         if peer and peer.cable:
                             peer_hops = self._trace_through_panels(peer)
-                            peer_name = peer.name
                             break
             except Exception:
                 pass
@@ -2480,8 +2492,9 @@ class MarkerDetailView(LoginRequiredMixin, View):
         so we look up the corresponding FrontPort via PortMapping and
         keep tracing (FrontPort *does* have trace()).
         """
-        from dcim.models import PortMapping
         import logging
+
+        from dcim.models import PortMapping
         logger = logging.getLogger('netbox_map')
 
         all_hops = []
