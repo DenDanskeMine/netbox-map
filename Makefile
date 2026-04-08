@@ -4,7 +4,7 @@ PIP      := $(VENV)/bin/pip
 TWINE    := $(VENV)/bin/twine
 BUILD    := $(VENV)/bin/python -m build
 
-.PHONY: setup clean build test-upload upload check
+.PHONY: setup clean build test-upload upload check lint lint-fix format
 
 ## First-time dev setup (run once after apt packages are installed)
 setup:
@@ -34,3 +34,15 @@ test-upload: check
 ## Upload to real PyPI
 upload: check
 	@. ./.env && TWINE_PASSWORD=$$PYPI_API_TOKEN $(TWINE) upload dist/*
+
+## Lint with ruff (matches NetBox conventions)
+lint:
+	ruff check netbox_map/
+
+## Lint and auto-fix
+lint-fix:
+	ruff check --fix netbox_map/
+
+## Format with ruff
+format:
+	ruff format netbox_map/

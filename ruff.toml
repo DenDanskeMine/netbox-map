@@ -1,0 +1,50 @@
+# Ruff configuration — aligned with NetBox's own ruff.toml
+
+exclude = [
+    ".eggs",
+    ".git",
+    ".ruff_cache",
+    ".venv",
+    "__pypackages__",
+    "build",
+    "dist",
+    "venv",
+]
+
+line-length = 120
+indent-width = 4
+respect-gitignore = true
+target-version = "py312"
+
+[lint]
+# Match NetBox's rule selection
+select = ["E4", "E7", "E9", "F"]
+extend-select = [
+    "E1",        # indentation
+    "E2",        # whitespace
+    "E3",        # blank lines
+    "E501",      # line too long
+    "W",         # pycodestyle warnings
+    "I",         # import sorting (isort)
+    "RET",       # return semantics
+    "UP",        # pyupgrade
+    "RUF022",    # sorted __all__
+]
+ignore = [
+    "F403",      # from ... import *
+    "F405",      # may be undefined from star imports
+    "RET504",    # unnecessary assignment before return
+    "UP032",     # prefer f-strings over .format()
+]
+preview = true
+
+[lint.isort]
+known-first-party = ["netbox_map"]
+
+[lint.per-file-ignores]
+"netbox_map/migrations/*.py" = ["E501"]
+
+[format]
+quote-style = "single"
+indent-style = "space"
+line-ending = "lf"

@@ -1,5 +1,6 @@
 from netbox.search import SearchIndex, register_search
-from .models import FloorPlan, FloorPlanTile, CustomMarkerType, MapMarker, CablePath
+
+from .models import CablePath, CustomMarkerType, FloorPlan, FloorPlanTile, MapMarker
 
 
 @register_search

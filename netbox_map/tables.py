@@ -1,11 +1,20 @@
 import django_tables2 as tables
 from django.utils.safestring import mark_safe
 from django.utils.translation import gettext_lazy as _
-
 from netbox.tables import NetBoxTable, columns
+
 from .models import (
-    FloorPlanTile, FloorPlan, CustomMarkerType, MapMarker, CablePath, TopologySavedView,
-    ApplicationGroup, ApplicationTemplate, Application, ApplicationDeployment, ApplicationDependency,
+    Application,
+    ApplicationDependency,
+    ApplicationDeployment,
+    ApplicationGroup,
+    ApplicationTemplate,
+    CablePath,
+    CustomMarkerType,
+    FloorPlan,
+    FloorPlanTile,
+    MapMarker,
+    TopologySavedView,
 )
 
 

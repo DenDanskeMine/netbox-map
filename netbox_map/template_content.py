@@ -1,7 +1,7 @@
-from django.contrib.contenttypes.models import ContentType
-
 from dcim.models import Rack
+from django.contrib.contenttypes.models import ContentType
 from netbox.plugins import PluginTemplateExtension
+
 from .models import FloorPlan, FloorPlanTile
 
 
@@ -60,8 +60,9 @@ class DeviceApplicationPanel(PluginTemplateExtension):
     def left_page(self):
         device = self.context['object']
         device_ct = ContentType.objects.get_for_model(device)
-        from .models import ApplicationDeployment
         from django.urls import reverse
+
+        from .models import ApplicationDeployment
         all_deployments = list(
             ApplicationDeployment.objects
             .filter(host_type=device_ct, host_id=device.pk)
@@ -89,8 +90,9 @@ class VMApplicationPanel(PluginTemplateExtension):
     def left_page(self):
         vm = self.context['object']
         vm_ct = ContentType.objects.get_for_model(vm)
-        from .models import ApplicationDeployment
         from django.urls import reverse
+
+        from .models import ApplicationDeployment
         all_deployments = list(
             ApplicationDeployment.objects
             .filter(host_type=vm_ct, host_id=vm.pk)

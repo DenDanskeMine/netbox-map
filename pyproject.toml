@@ -20,10 +20,16 @@ classifiers = [
 ]
 dependencies = []
 
+[project.optional-dependencies]
+dev = ["ruff"]
+test = ["coverage"]
+
 [project.urls]
 Homepage = "https://github.com/DenDanskeMine/netbox-map"
 Repository = "https://github.com/DenDanskeMine/netbox-map"
 Issues = "https://github.com/DenDanskeMine/netbox-map/issues"
+Documentation = "https://dendanskemine.github.io/netbox-map/"
+Changelog = "https://github.com/DenDanskeMine/netbox-map/blob/main/CHANGELOG.md"
 
 [tool.setuptools.packages.find]
 include = ["netbox_map*"]
@@ -34,3 +40,10 @@ netbox_map = [
     "static/**/*",
     "migrations/*",
 ]
+
+[tool.coverage.run]
+source = ["netbox_map"]
+omit = ["netbox_map/migrations/*"]
+
+[tool.coverage.report]
+show_missing = true

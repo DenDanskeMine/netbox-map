@@ -1,21 +1,26 @@
+from dcim.choices import CableTypeChoices
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import ValidationError
+from django.core.validators import MaxValueValidator, MinValueValidator, RegexValidator
 from django.db import models
 from django.urls import reverse
-from django.core.validators import MinValueValidator, MaxValueValidator, RegexValidator
 from django.utils.text import slugify
 from django.utils.translation import gettext_lazy as _
-
 from netbox.models import NetBoxModel
-from dcim.choices import CableTypeChoices
+
 from .choices import (
-    FloorPlanTileStatusChoices, FloorPlanTileTypeChoices,
+    BUILTIN_TYPE_SLUGS,
+    ApplicationCriticalityChoices,
+    ApplicationEnvironmentChoices,
+    ApplicationStatusChoices,
     CablePathStatusChoices,
-    ApplicationStatusChoices, ApplicationCriticalityChoices,
-    ApplicationEnvironmentChoices, DependencyTypeChoices,
-    DependencyProtocolChoices, DeploymentRoleChoices,
-    BUILTIN_TYPE_SLUGS, get_tile_type_display,
+    DependencyProtocolChoices,
+    DependencyTypeChoices,
+    DeploymentRoleChoices,
+    FloorPlanTileStatusChoices,
+    FloorPlanTileTypeChoices,
+    get_tile_type_display,
 )
 
 # Object types that can be linked to floor plan tiles

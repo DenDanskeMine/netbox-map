@@ -1,6 +1,5 @@
 from django.db import migrations, models
 
-
 ALL_TILE_TYPES = [
     'rack', 'aisle', 'wall', 'column', 'door',
     'cooling', 'power', 'empty', 'reserved',

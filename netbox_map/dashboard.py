@@ -1,9 +1,8 @@
 from django import forms
 from django.template.loader import render_to_string
 from django.utils.translation import gettext_lazy as _
-
-from extras.dashboard.widgets import DashboardWidget, WidgetConfigForm
 from extras.dashboard.utils import register_widget
+from extras.dashboard.widgets import DashboardWidget, WidgetConfigForm
 
 
 @register_widget
@@ -22,9 +21,10 @@ class AppHealthWidget(DashboardWidget):
         )
 
     def render(self, request):
-        from .models import Application, ApplicationDeployment
-        from django.contrib.contenttypes.models import ContentType
         from dcim.models import Device
+        from django.contrib.contenttypes.models import ContentType
+
+        from .models import Application, ApplicationDeployment
 
         # Count apps by deployment health
         device_ct = ContentType.objects.get_for_model(Device)

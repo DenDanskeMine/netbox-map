@@ -1,0 +1,61 @@
+site_name: NetBox Map
+site_url: https://dendanskemine.github.io/netbox-map/
+site_description: Interactive floor plan visualization, topology maps, and application mapping for NetBox
+repo_url: https://github.com/DenDanskeMine/netbox-map
+repo_name: DenDanskeMine/netbox-map
+
+theme:
+  name: material
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: blue
+      accent: blue
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: blue
+      accent: blue
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  icon:
+    repo: fontawesome/brands/github
+  features:
+    - navigation.sections
+    - navigation.expand
+    - content.code.copy
+    - toc.integrate
+
+nav:
+  - Home: index.md
+  - Getting Started:
+    - Installation: getting-started/installation.md
+    - Configuration: getting-started/configuration.md
+  - Features:
+    - Floor Plans: features/floor-plans.md
+    - Topology View: features/topology.md
+    - Application Mapping: features/applications.md
+    - Site Map: features/site-map.md
+    - Cable Tracing: features/cable-tracing.md
+  - REST API: api.md
+  - Development:
+    - Contributing: development/contributing.md
+    - Changelog: changelog.md
+
+markdown_extensions:
+  - admonition
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - toc:
+      permalink: true
+  - tables
+  - attr_list
+
+plugins:
+  - search

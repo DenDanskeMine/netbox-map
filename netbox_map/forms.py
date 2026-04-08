@@ -1,33 +1,60 @@
+from dcim.choices import CableTypeChoices, SiteStatusChoices
+from dcim.models import (
+    Device,
+    DeviceRole,
+    FrontPort,
+    Location,
+    PowerFeed,
+    PowerPanel,
+    Rack,
+    RearPort,
+    Region,
+    Site,
+    SiteGroup,
+)
 from django import forms
 from django.contrib.contenttypes.models import ContentType
 from django.utils.translation import gettext_lazy as _
-
-from dcim.models import Site, Location, Rack, Device, DeviceRole, PowerPanel, PowerFeed, RearPort, FrontPort, Region, SiteGroup
 from ipam.models import IPAddress, Service
+from netbox.forms import NetBoxModelBulkEditForm, NetBoxModelFilterSetForm, NetBoxModelForm, NetBoxModelImportForm
 from tenancy.models import Tenant
-from netbox.forms import NetBoxModelForm, NetBoxModelFilterSetForm, NetBoxModelBulkEditForm, NetBoxModelImportForm
 from utilities.forms.fields import (
+    CommentField,
     ContentTypeChoiceField,
     CSVChoiceField,
     CSVModelChoiceField,
     DynamicModelChoiceField,
     DynamicModelMultipleChoiceField,
-    CommentField,
     SlugField,
 )
 from utilities.forms.rendering import FieldSet
-from .models import (
-    FloorPlan, FloorPlanTile, CustomMarkerType, MapMarker, MapSettings, CablePath, TopologySavedView, ASSIGNABLE_MODELS,
-    ApplicationGroup, ApplicationTemplate, Application, ApplicationDeployment, ApplicationDependency,
-)
-from dcim.choices import CableTypeChoices, SiteStatusChoices
+
 from .choices import (
-    FloorPlanTileTypeChoices, FloorPlanTileStatusChoices,
+    ApplicationCriticalityChoices,
+    ApplicationEnvironmentChoices,
+    ApplicationStatusChoices,
     CablePathStatusChoices,
-    ApplicationStatusChoices, ApplicationCriticalityChoices,
-    ApplicationEnvironmentChoices, DependencyTypeChoices,
-    DependencyProtocolChoices, DeploymentRoleChoices,
-    get_all_tile_type_choices, get_all_type_configs,
+    DependencyProtocolChoices,
+    DependencyTypeChoices,
+    DeploymentRoleChoices,
+    FloorPlanTileStatusChoices,
+    FloorPlanTileTypeChoices,
+    get_all_tile_type_choices,
+    get_all_type_configs,
+)
+from .models import (
+    Application,
+    ApplicationDependency,
+    ApplicationDeployment,
+    ApplicationGroup,
+    ApplicationTemplate,
+    CablePath,
+    CustomMarkerType,
+    FloorPlan,
+    FloorPlanTile,
+    MapMarker,
+    MapSettings,
+    TopologySavedView,
 )
 
 
@@ -998,6 +1025,7 @@ POPOVER_FIELD_CHOICES = [
     ('cable_trace_full', _('Cable Trace (Full)')),
 ]
 
+
 def _get_tile_type_info():
     """Return [(slug, label), ...] for all types (built-in + custom)."""
     return [(tc['slug'], tc['name']) for tc in get_all_type_configs()]
@@ -1051,8 +1079,8 @@ class MapSettingsForm(forms.ModelForm):
         # Dynamically discover NetBox custom fields for assignable object types.
         all_cf_choices = []
         try:
-            from extras.models import CustomField
             from django.contrib.contenttypes.models import ContentType
+            from extras.models import CustomField
 
             ct_ids = list(ContentType.objects.filter(
                 app_label='dcim',
@@ -1098,7 +1126,7 @@ class MapSettingsForm(forms.ModelForm):
 
         # Reconstruct tile_popover_config dict from per-type form fields
         config = {}
-        for type_key, _ in self._tile_type_info:
+        for type_key, _label in self._tile_type_info:
             field_name = f'{type_key}_popover_fields'
             config[type_key] = self.cleaned_data.get(field_name, [])
         instance.tile_popover_config = config
