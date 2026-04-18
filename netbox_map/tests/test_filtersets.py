@@ -75,7 +75,10 @@ class ApplicationFilterSetTest(TestCase):
     @classmethod
     def setUpTestData(cls):
         cls.site = Site.objects.create(name='Site 1', slug='site-1')
-        Application.objects.create(name='Web App', status='active', criticality='high', environment='production', site=cls.site)
+        Application.objects.create(
+            name='Web App', status='active', criticality='high',
+            environment='production', site=cls.site,
+        )
         Application.objects.create(name='DB Service', status='planned', criticality='critical', environment='staging')
         Application.objects.create(name='Cache', status='active', criticality='low', environment='production')
 

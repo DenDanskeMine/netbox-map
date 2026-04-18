@@ -230,7 +230,10 @@ class TopologyDataView(LoginRequiredMixin, View):
                 'role_slug': device.role.slug if device.role else '',
                 'role_color': f'#{device.role.color}' if device.role and device.role.color else '#6c757d',
                 'device_type': str(device.device_type) if device.device_type else '',
-                'manufacturer': device.device_type.manufacturer.name if device.device_type and device.device_type.manufacturer else '',
+                'manufacturer': (
+                    device.device_type.manufacturer.name
+                    if device.device_type and device.device_type.manufacturer else ''
+                ),
                 'site': device.site.name if device.site else '',
                 'location': device.location.name if device.location else '',
                 'rack': device.rack.name if device.rack else '',
@@ -2318,7 +2321,10 @@ class MarkerDetailView(LoginRequiredMixin, View):
 
         # Cable traces
         try:
-            interfaces = self._get_cable_traces(obj, object_type) if object_type in ('device', 'rearport', 'frontport') else []
+            if object_type in ('device', 'rearport', 'frontport'):
+                interfaces = self._get_cable_traces(obj, object_type)
+            else:
+                interfaces = []
         except Exception:
             interfaces = []
 
@@ -2351,7 +2357,6 @@ class MarkerDetailView(LoginRequiredMixin, View):
             # RearPort → Cable → Switch:GigabitEthernet.
             own_hops = self._trace_through_panels(obj)
             peer_hops = []
-            peer_name = None
             try:
                 from dcim.models import PortMapping
                 if object_type == 'rearport':

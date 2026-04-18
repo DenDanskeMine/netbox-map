@@ -48,7 +48,9 @@ class CustomMarkerType(NetBoxModel):
         validators=[
             RegexValidator(
                 regex=r'^custom_[a-z0-9_]+$',
-                message=_('Slug must start with "custom_" and contain only lowercase letters, numbers, and underscores.'),
+                message=_(
+                    'Slug must start with "custom_" and contain only lowercase letters, numbers, and underscores.'
+                ),
             ),
         ],
         help_text=_('Auto-prefixed with "custom_". Used as tile_type/marker_type value.'),
@@ -873,7 +875,9 @@ class Application(NetBoxModel):
     comments = models.TextField(blank=True)
     external_url = models.URLField(max_length=500, blank=True, help_text=_('URL to docs, dashboard, or entry point'))
     default_port = models.IntegerField(null=True, blank=True, help_text=_('Default port this application listens on'))
-    default_protocol = models.CharField(max_length=50, blank=True, help_text=_('Default protocol (e.g., HTTP, TCP, gRPC)'))
+    default_protocol = models.CharField(
+        max_length=50, blank=True, help_text=_('Default protocol (e.g., HTTP, TCP, gRPC)'),
+    )
     group = models.ForeignKey(
         'netbox_map.ApplicationGroup', on_delete=models.SET_NULL,
         related_name='applications', blank=True, null=True,
@@ -893,14 +897,20 @@ class Application(NetBoxModel):
         help_text=_('Primary IP address for this application'),
     )
 
-    clone_fields = ('status', 'criticality', 'environment', 'group', 'tenant', 'site', 'default_port', 'default_protocol')
+    clone_fields = (
+        'status', 'criticality', 'environment', 'group', 'tenant', 'site',
+        'default_port', 'default_protocol',
+    )
 
     class Meta:
         ordering = ('name',)
         verbose_name = _('application')
         verbose_name_plural = _('applications')
         constraints = [
-            models.UniqueConstraint(fields=('name', 'environment', 'tenant'), name='%(app_label)s_%(class)s_unique_name_env_tenant'),
+            models.UniqueConstraint(
+                fields=('name', 'environment', 'tenant'),
+                name='%(app_label)s_%(class)s_unique_name_env_tenant',
+            ),
         ]
 
     def __str__(self):
@@ -928,7 +938,9 @@ class ApplicationDeployment(NetBoxModel):
         max_length=30, choices=DeploymentRoleChoices,
         default=DeploymentRoleChoices.ROLE_PRIMARY,
     )
-    port = models.PositiveIntegerField(blank=True, null=True, validators=[MinValueValidator(1), MaxValueValidator(65535)])
+    port = models.PositiveIntegerField(
+        blank=True, null=True, validators=[MinValueValidator(1), MaxValueValidator(65535)],
+    )
     protocol = models.CharField(max_length=50, blank=True)
     ip_address = models.ForeignKey(
         'ipam.IPAddress', on_delete=models.SET_NULL,
@@ -951,7 +963,10 @@ class ApplicationDeployment(NetBoxModel):
         verbose_name = _('application deployment')
         verbose_name_plural = _('application deployments')
         constraints = [
-            models.UniqueConstraint(fields=('application', 'host_type', 'host_id'), name='%(app_label)s_%(class)s_unique_app_host'),
+            models.UniqueConstraint(
+                fields=('application', 'host_type', 'host_id'),
+                name='%(app_label)s_%(class)s_unique_app_host',
+            ),
         ]
         indexes = [
             models.Index(fields=['host_type', 'host_id']),
@@ -981,7 +996,9 @@ class ApplicationDependency(NetBoxModel):
     protocol = models.CharField(
         max_length=30, choices=DependencyProtocolChoices, blank=True, default='',
     )
-    port = models.PositiveIntegerField(blank=True, null=True, validators=[MinValueValidator(1), MaxValueValidator(65535)])
+    port = models.PositiveIntegerField(
+        blank=True, null=True, validators=[MinValueValidator(1), MaxValueValidator(65535)],
+    )
     status = models.CharField(
         max_length=30, choices=ApplicationStatusChoices,
         default=ApplicationStatusChoices.STATUS_ACTIVE,
@@ -995,7 +1012,10 @@ class ApplicationDependency(NetBoxModel):
         verbose_name = _('application dependency')
         verbose_name_plural = _('application dependencies')
         constraints = [
-            models.UniqueConstraint(fields=('source_application', 'target_application'), name='%(app_label)s_%(class)s_unique_dep'),
+            models.UniqueConstraint(
+                fields=('source_application', 'target_application'),
+                name='%(app_label)s_%(class)s_unique_dep',
+            ),
         ]
 
     def __str__(self):

@@ -365,7 +365,11 @@ class ApplicationTemplateTable(NetBoxTable):
 
     class Meta(NetBoxTable.Meta):
         model = ApplicationTemplate
-        fields = ('pk', 'name', 'group', 'default_status', 'default_criticality', 'default_environment', 'default_port', 'default_protocol', 'default_role', 'name_format')
+        fields = (
+            'pk', 'name', 'group', 'default_status', 'default_criticality',
+            'default_environment', 'default_port', 'default_protocol',
+            'default_role', 'name_format',
+        )
         default_columns = ('pk', 'name', 'group', 'default_criticality', 'default_port', 'default_role')
 
 
@@ -405,7 +409,8 @@ class ApplicationTable(NetBoxTable):
         model = Application
         fields = (
             'pk', 'id', 'name', 'status', 'criticality', 'environment',
-            'version', 'default_port', 'default_protocol', 'primary_ip', 'group', 'site', 'tenant', 'description', 'tags', 'actions',
+            'version', 'default_port', 'default_protocol', 'primary_ip',
+            'group', 'site', 'tenant', 'description', 'tags', 'actions',
         )
         default_columns = (
             'pk', 'name', 'status', 'criticality', 'environment', 'group', 'site', 'tenant',

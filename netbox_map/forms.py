@@ -234,7 +234,9 @@ class CustomMarkerTypeForm(NetBoxModelForm):
         super().__init__(*args, **kwargs)
         if not self.instance.pk:
             self.fields['slug'].required = False
-            self.fields['slug'].help_text = _('Leave blank to auto-generate from name. Will be prefixed with "custom_".')
+            self.fields['slug'].help_text = _(
+                'Leave blank to auto-generate from name. Will be prefixed with "custom_".'
+            )
 
 
 class CustomMarkerTypeBulkEditForm(NetBoxModelBulkEditForm):
@@ -1309,20 +1311,30 @@ class ApplicationTemplateForm(NetBoxModelForm):
 
     fieldsets = (
         FieldSet('name', 'slug', 'description', 'group', 'tags', name=_('Template')),
-        FieldSet('default_status', 'default_criticality', 'default_environment', 'default_version', name=_('Application Defaults')),
+        FieldSet(
+            'default_status', 'default_criticality', 'default_environment', 'default_version',
+            name=_('Application Defaults'),
+        ),
         FieldSet('default_role', 'default_port', 'default_protocol', name=_('Deployment Defaults')),
         FieldSet('name_format', name=_('Instance Naming')),
     )
 
     class Meta:
         model = ApplicationTemplate
-        fields = ['name', 'slug', 'description', 'group', 'default_status', 'default_criticality', 'default_environment', 'default_version', 'default_role', 'default_port', 'default_protocol', 'name_format', 'tags']
+        fields = [
+            'name', 'slug', 'description', 'group', 'default_status',
+            'default_criticality', 'default_environment', 'default_version',
+            'default_role', 'default_port', 'default_protocol',
+            'name_format', 'tags',
+        ]
 
 
 class ApplicationTemplateFilterForm(NetBoxModelFilterSetForm):
     model = ApplicationTemplate
     group_id = DynamicModelChoiceField(queryset=ApplicationGroup.objects.all(), required=False, label=_('Group'))
-    default_criticality = forms.MultipleChoiceField(choices=ApplicationCriticalityChoices, required=False, label=_('Criticality'))
+    default_criticality = forms.MultipleChoiceField(
+        choices=ApplicationCriticalityChoices, required=False, label=_('Criticality'),
+    )
 
     fieldsets = (FieldSet('group_id', 'default_criticality'),)
 

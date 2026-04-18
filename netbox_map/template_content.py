@@ -155,4 +155,7 @@ class ServiceApplicationPanel(PluginTemplateExtension):
         )
 
 
-template_extensions = [SiteFloorPlanLink, DeviceFloorPlanLink, DeviceApplicationPanel, VMApplicationPanel, IPAddressApplicationPanel, ServiceApplicationPanel]
+template_extensions = [
+    SiteFloorPlanLink, DeviceFloorPlanLink, DeviceApplicationPanel,
+    VMApplicationPanel, IPAddressApplicationPanel, ServiceApplicationPanel,
+]
