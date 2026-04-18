@@ -1334,6 +1334,14 @@ span.topo-iface-dot.empty {
     background: rgba(231, 76, 60, 0.1);
 }
 
+.ctx-success {
+    color: #2ecc71;
+}
+
+.ctx-success:hover {
+    background: rgba(46, 204, 113, 0.1);
+}
+
 /* ===== Detail Actions ===== */
 
 .topo-detail-actions {

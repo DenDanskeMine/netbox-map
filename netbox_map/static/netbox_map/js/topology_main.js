@@ -345,12 +345,11 @@
     function applyModeUI(mode) {
         setModeActive(mode === 'apps' ? modeApps : mode === 'mixed' ? modeMixed : modeNetwork);
 
-        // Switch footer legend
+        // Switch footer legend — mixed mode shows both
         var legendNetwork = document.getElementById('legend-network');
         var legendApps = document.getElementById('legend-apps');
-        var isAppish = mode === 'apps' || mode === 'mixed';
-        if (legendNetwork) legendNetwork.classList.toggle('d-none', isAppish);
-        if (legendApps) legendApps.classList.toggle('d-none', !isAppish);
+        if (legendNetwork) legendNetwork.classList.toggle('d-none', mode === 'apps');
+        if (legendApps) legendApps.classList.toggle('d-none', mode === 'network');
 
         // Update toolbar visibility for network-only controls
         var networkOnlyBtns = ['topo-add-devices', 'topo-edit-hierarchy', 'topo-auto-sort',

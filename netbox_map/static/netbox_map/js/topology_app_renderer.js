@@ -1516,7 +1516,7 @@
             m.append('div').attr('class', 'ctx-item ctx-danger').text('Simulate failure')
                 .on('click', function() { self.simulateFailure(d.id); m.remove(); });
         } else {
-            m.append('div').attr('class', 'ctx-item').text('Clear simulation')
+            m.append('div').attr('class', 'ctx-item ctx-success').text('Clear simulation')
                 .on('click', function() { self.clearSimulation(); m.remove(); });
         }
 
