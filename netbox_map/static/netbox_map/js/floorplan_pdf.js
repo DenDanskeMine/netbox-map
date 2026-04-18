@@ -74,16 +74,24 @@
         var renderScale = Math.min(scaleX, scaleY);
         offCtx.scale(renderScale, renderScale);
 
+        // Detect theme
+        var el = document.documentElement;
+        var isDark = !el || el.getAttribute('data-bs-theme') !== 'light';
+        var gridBg = isDark ? '#16192b' : '#dfe1e8';
+        var gridLine = isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.08)';
+        var gridLineImg = isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.15)';
+        var tileBorder = isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.15)';
+
         // Background
         if (this.renderer.bgImg) {
             offCtx.drawImage(this.renderer.bgImg, 0, 0, s.worldWidth, s.worldHeight);
         } else {
-            offCtx.fillStyle = '#16192b';
+            offCtx.fillStyle = gridBg;
             offCtx.fillRect(0, 0, s.worldWidth, s.worldHeight);
         }
 
         // Grid lines
-        offCtx.strokeStyle = this.renderer.bgImg ? 'rgba(255, 255, 255, 0.12)' : 'rgba(255, 255, 255, 0.06)';
+        offCtx.strokeStyle = this.renderer.bgImg ? gridLineImg : gridLine;
         offCtx.lineWidth = 1 / renderScale;
         for (var gx = 0; gx <= s.gridWidth; gx++) {
             offCtx.beginPath();
@@ -159,13 +167,13 @@
             offCtx.closePath();
             offCtx.fillStyle = fillColor;
             offCtx.fill();
-            offCtx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
+            offCtx.strokeStyle = tileBorder;
             offCtx.lineWidth = 1 / renderScale;
             offCtx.stroke();
 
             // Label text with auto-sizing
             var textColor = App.getTextColor(fillColor);
-            if (fillColor.startsWith('hsl')) textColor = '#e8e8f0';
+            if (fillColor.startsWith('hsl')) textColor = isDark ? '#e8e8f0' : '#1a1a2e';
             offCtx.fillStyle = textColor;
 
             var label = tile.label || '';
@@ -246,33 +254,50 @@
             format: landscape ? [pageH, pageW] : [pageW, pageH]
         });
 
-        // Title
-        var fpName = document.title || 'Floor Plan';
+        // Page background for dark mode
+        if (isDark) {
+            pdf.setFillColor(13, 15, 26);
+            pdf.rect(0, 0, landscape ? pageH : pageW, landscape ? pageW : pageH, 'F');
+        }
+
+        // Title — strip " | NetBox" suffix
+        var fpName = (document.title || 'Floor Plan').replace(/\s*\|\s*NetBox\s*$/, '');
         pdf.setFontSize(10);
-        pdf.setTextColor(60, 60, 60);
+        pdf.setTextColor(isDark ? 200 : 60, isDark ? 200 : 60, isDark ? 210 : 60);
+        var maxTitleW = pageW - margin * 2 - 50;
+        while (pdf.getTextWidth(fpName) > maxTitleW && fpName.length > 10) {
+            fpName = fpName.substring(0, fpName.length - 4) + '...';
+        }
         pdf.text(fpName, margin, margin + 5);
 
         // Date
         pdf.setFontSize(7);
-        pdf.setTextColor(140, 140, 140);
+        pdf.setTextColor(isDark ? 140 : 140, isDark ? 140 : 140, isDark ? 150 : 140);
         pdf.text('Exported: ' + new Date().toLocaleString(), pageW - margin, margin + 5, { align: 'right' });
 
         // Image
         pdf.addImage(imgData, 'JPEG', margin, margin + headerH, contentW, contentH);
 
-        // Legend
+        // Legend — wrap long text to fit page width
         var legendY = margin + headerH + contentH + 2;
-        pdf.setFontSize(6);
-        pdf.setTextColor(120, 120, 120);
+        pdf.setFontSize(5.5);
+        pdf.setTextColor(isDark ? 140 : 120, isDark ? 140 : 120, isDark ? 150 : 120);
+        var tileCount = s.tiles.filter(function(t) { return s.visibleTypes.has(t.type); }).length;
+        var statsLine = 'Tiles: ' + tileCount + '/' + s.tiles.length + '  |  Grid: ' + s.gridWidth + 'x' + s.gridHeight;
+        pdf.text(statsLine, pageW - margin, legendY + 3, { align: 'right' });
+
         var legendItems = [];
         for (var ti = 0; ti < s.allTypes.length; ti++) {
             if (s.visibleTypes.has(s.allTypes[ti])) {
                 legendItems.push(s.typeNameMap[s.allTypes[ti]] || s.allTypes[ti]);
             }
         }
-        pdf.text('Visible: ' + legendItems.join(', '), margin, legendY + 3);
-        pdf.text('Tiles: ' + s.tiles.filter(function(t) { return s.visibleTypes.has(t.type); }).length + ' / ' + s.tiles.length +
-                 '  |  Grid: ' + s.gridWidth + ' x ' + s.gridHeight, pageW - margin, legendY + 3, { align: 'right' });
+        var maxTextW = pageW - margin * 2 - pdf.getTextWidth(statsLine) - 5;
+        var visibleText = 'Visible: ' + legendItems.join(', ');
+        if (pdf.getTextWidth(visibleText) > maxTextW) {
+            visibleText = 'Showing ' + legendItems.length + ' of ' + s.allTypes.length + ' types';
+        }
+        pdf.text(visibleText, margin, legendY + 3);
 
         // Download
         var safeName = (fpName || 'floorplan').replace(/[^a-zA-Z0-9_\- ]/g, '').trim() || 'floorplan';
