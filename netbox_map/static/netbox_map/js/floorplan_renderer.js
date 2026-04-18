@@ -25,6 +25,17 @@
         events.on('tile:create', function() { self.render(); });
         events.on('tile:delete', function() { self.render(); });
         events.on('type:toggle', function() { self.render(); });
+
+        // Re-render when NetBox theme changes
+        var observer = new MutationObserver(function(mutations) {
+            for (var i = 0; i < mutations.length; i++) {
+                if (mutations[i].attributeName === 'data-bs-theme') {
+                    self.render();
+                    break;
+                }
+            }
+        });
+        observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-bs-theme'] });
     }
 
     Renderer.prototype.init = function(container, canvas) {
