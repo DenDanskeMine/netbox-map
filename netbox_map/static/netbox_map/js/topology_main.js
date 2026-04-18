@@ -352,12 +352,17 @@
         if (legendApps) legendApps.classList.toggle('d-none', mode === 'network');
 
         // Update toolbar visibility for network-only controls
+        // Hide network-only controls in apps mode; show in network + mixed
         var networkOnlyBtns = ['topo-add-devices', 'topo-edit-hierarchy', 'topo-auto-sort',
-            'topo-collapse-pp', 'cable-color-physical', 'cable-color-speed',
-            'topo-toggle-labels', 'view-stencil', 'view-node'];
+            'topo-collapse-pp', 'topo-toggle-labels', 'view-stencil', 'view-node'];
         networkOnlyBtns.forEach(function(id) {
             var el = document.getElementById(id);
-            if (el) el.style.display = isAppish ? 'none' : '';
+            if (el) el.style.display = (mode === 'apps') ? 'none' : '';
+        });
+        // Cable color toggles: visible in network + mixed, hidden in apps-only
+        ['cable-color-physical', 'cable-color-speed'].forEach(function(id) {
+            var el = document.getElementById(id);
+            if (el) el.style.display = (mode === 'apps') ? 'none' : '';
         });
 
         // Update stats labels
