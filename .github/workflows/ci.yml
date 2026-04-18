@@ -92,7 +92,7 @@ jobs:
           }
           SECRET_KEY = 'test-secret-key-not-for-production-use-1234567890abcdef'
           DEFAULT_PERMISSIONS = {}
-          API_TOKEN_PEPPERS = {1: 'test-pepper-value'}
+          API_TOKEN_PEPPERS = {1: 'abcdefghijklmnopqrstuvwxyz-ABCDEFGHIJKLMNOPQRSTUVWXYZ'}
           CONF
 
       - name: Run migrations
