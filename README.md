@@ -8,7 +8,7 @@
 
 A NetBox plugin for interactive floor plan visualization, site maps, rack utilization, and cable tracing.
 
-**Other plugins:** [NetBox Ping](https://github.com/DenDanskeMine/netbox-ping) | [Website](https://www.danbyte.net/) | [Demo](https://demo.danbyte.net/)
+**Links:** [Documentation](https://dendanskemine.github.io/netbox-map/) | [NetBox Ping](https://github.com/DenDanskeMine/netbox-ping) | [Website](https://www.danbyte.net/) | [Demo](https://demo.danbyte.net/)
 
 <img width="2116" height="914" alt="netbox-map-banner" src="https://github.com/user-attachments/assets/855cb70e-f90a-4300-896e-208b2ab6ab13" />
 
