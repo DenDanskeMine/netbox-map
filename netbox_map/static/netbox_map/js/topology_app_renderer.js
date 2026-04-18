@@ -1418,6 +1418,25 @@
                 return 0.08;
             });
 
+        // Add simulation border overlay ON TOP of card content (above accent bar)
+        this._cards.each(function(d) {
+            d3.select(this).selectAll('.sim-border').remove();
+            var color = null;
+            if (d.id === nodeId) color = '#f85149';
+            else if (down.has(d.id)) color = '#d29922';
+            else if (degraded.has(d.id)) color = '#e3b341';
+            if (color) {
+                d3.select(this).append('rect')
+                    .attr('class', 'sim-border')
+                    .attr('width', CARD_W).attr('height', d._h)
+                    .attr('rx', CARD_R)
+                    .attr('fill', 'none')
+                    .attr('stroke', color)
+                    .attr('stroke-width', 2)
+                    .attr('pointer-events', 'none');
+            }
+        });
+
         // Edge highlighting
         var affected = new Set([nodeId]);
         down.forEach(function(id) { affected.add(id); });
@@ -1444,6 +1463,7 @@
                 .classed('failure-impacted', false)
                 .classed('failure-degraded', false)
                 .style('opacity', null);
+            this._cards.selectAll('.sim-border').remove();
         }
         if (this._lines) {
             this._lines.style('stroke-opacity', null);
