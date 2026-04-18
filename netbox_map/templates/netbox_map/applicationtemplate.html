@@ -1,0 +1,80 @@
+{% extends 'generic/object.html' %}
+{% load helpers %}
+{% load i18n %}
+
+{% block content %}
+{% include 'netbox_map/inc/beta_banner.html' %}
+<div class="row mb-3">
+  <div class="col-md-6">
+    <div class="card">
+      <h5 class="card-header">{% trans "Template" %}</h5>
+      <table class="table table-hover attr-table">
+        <tr><th>{% trans "Name" %}</th><td>{{ object.name }}</td></tr>
+        <tr><th>{% trans "Group" %}</th><td>{% if object.group %}<a href="{{ object.group.get_absolute_url }}">{{ object.group }}</a>{% else %}&mdash;{% endif %}</td></tr>
+        <tr><th>{% trans "Description" %}</th><td>{{ object.description|placeholder }}</td></tr>
+        <tr><th>{% trans "Name Format" %}</th><td><code>{{ object.name_format }}</code></td></tr>
+      </table>
+    </div>
+    <div class="card">
+      <h5 class="card-header d-flex justify-content-between align-items-center">
+        {% trans "Deploy" %}
+        <a href="{% url 'plugins:netbox_map:applicationtemplate_deploy' pk=object.pk %}" class="btn btn-sm btn-primary">
+          <i class="mdi mdi-rocket-launch"></i> {% trans "Deploy to Hosts" %}
+        </a>
+      </h5>
+      <div class="card-body">
+        <p class="text-muted small mb-0">
+          {% trans "Deploy this template to one or more devices. A new application instance will be created for each host using the template defaults." %}
+        </p>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-6">
+    <div class="card">
+      <h5 class="card-header d-flex justify-content-between align-items-center">
+        {% trans "Deployed Instances" %}
+        <span class="badge bg-primary">{{ deployments|length }}</span>
+      </h5>
+      {% if deployments %}
+      <div class="table-responsive">
+        <table class="table table-hover mb-0">
+          <thead>
+            <tr>
+              <th>{% trans "Application" %}</th>
+              <th>{% trans "Host" %}</th>
+              <th>{% trans "Role" %}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for dep in deployments %}
+            <tr>
+              <td><a href="{{ dep.application.get_absolute_url }}">{{ dep.application }}</a></td>
+              <td>{% if dep.host %}<a href="{{ dep.host.get_absolute_url }}">{{ dep.host }}</a>{% else %}&mdash;{% endif %}</td>
+              <td>{{ dep.get_role_display }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="card-body text-muted text-center small">
+        {% trans "No instances deployed yet." %}
+      </div>
+      {% endif %}
+    </div>
+    <div class="card">
+      <h5 class="card-header">{% trans "Defaults" %}</h5>
+      <table class="table table-hover attr-table">
+        <tr><th>{% trans "Status" %}</th><td>{{ object.get_default_status_display }}</td></tr>
+        <tr><th>{% trans "Criticality" %}</th><td>{{ object.get_default_criticality_display }}</td></tr>
+        <tr><th>{% trans "Environment" %}</th><td>{{ object.get_default_environment_display }}</td></tr>
+        <tr><th>{% trans "Version" %}</th><td>{{ object.default_version|placeholder }}</td></tr>
+        <tr><th>{% trans "Role" %}</th><td>{{ object.get_default_role_display }}</td></tr>
+        <tr><th>{% trans "Port" %}</th><td>{{ object.default_port|placeholder }}</td></tr>
+        <tr><th>{% trans "Protocol" %}</th><td>{{ object.default_protocol|placeholder }}</td></tr>
+      </table>
+    </div>
+    {% include 'inc/panels/tags.html' %}
+  </div>
+</div>
+{% endblock %}

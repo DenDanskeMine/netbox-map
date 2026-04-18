@@ -1,0 +1,73 @@
+{% extends 'generic/object.html' %}
+{% load helpers %}
+{% load i18n %}
+{% load form_helpers %}
+
+{% block title %}{% trans "Bulk Deploy" %}: {{ object }}{% endblock %}
+
+{% block content %}
+<div class="row mb-3">
+  <div class="col-md-9 col-lg-7">
+    <div class="card">
+      <h5 class="card-header">
+        {% trans "Deploy" %} <strong>{{ object.name }}</strong> {% trans "to hosts" %}
+      </h5>
+      <div class="card-body">
+        <form method="post">
+          {% csrf_token %}
+
+          <h6 class="text-muted mb-2">{% trans "Deploy Mode" %}</h6>
+          {% render_field form.mode %}
+
+          <hr>
+          <h6 class="text-muted mb-2">{% trans "Select Hosts" %}</h6>
+          {% render_field form.devices %}
+          {% if form.virtual_machines %}
+            {% render_field form.virtual_machines %}
+          {% endif %}
+
+          <hr>
+          <h6 class="text-muted mb-2">{% trans "Deployment Settings" %}</h6>
+          <div class="row">
+            <div class="col-md-4">{% render_field form.role %}</div>
+            <div class="col-md-4">{% render_field form.port %}</div>
+            <div class="col-md-4">{% render_field form.protocol %}</div>
+          </div>
+
+          <div id="name-format-section">
+            {% render_field form.name_format %}
+          </div>
+
+          <div class="text-end mt-3">
+            <a href="{{ object.get_absolute_url }}" class="btn btn-outline-secondary">{% trans "Cancel" %}</a>
+            <button type="submit" class="btn btn-primary">
+              <i class="mdi mdi-rocket-launch"></i> {% trans "Deploy" %}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3 col-lg-5">
+    <div class="card">
+      <h5 class="card-header">{% trans "Template Source" %}</h5>
+      <table class="table table-hover attr-table mb-0">
+        <tr><th>{% trans "Name" %}</th><td>{{ object.name }}</td></tr>
+        <tr><th>{% trans "Status" %}</th><td>{{ object.get_status_display }}</td></tr>
+        <tr><th>{% trans "Criticality" %}</th><td>{{ object.get_criticality_display }}</td></tr>
+        <tr><th>{% trans "Environment" %}</th><td>{{ object.get_environment_display }}</td></tr>
+        {% if object.group %}<tr><th>{% trans "Group" %}</th><td>{{ object.group }}</td></tr>{% endif %}
+        {% if object.version %}<tr><th>{% trans "Version" %}</th><td>{{ object.version }}</td></tr>{% endif %}
+      </table>
+      <div class="card-body">
+        <p class="text-muted small mb-0">
+          <strong>{% trans "Instances mode" %}:</strong> {% trans "Creates a new application per host, copying these settings. Each instance has independent status — if one host goes down, only its instance is impacted." %}
+        </p>
+        <p class="text-muted small mt-2 mb-0">
+          <strong>{% trans "Shared mode" %}:</strong> {% trans "Links this single application to all selected hosts. One card on the topology connected to multiple devices." %}
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

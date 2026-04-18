@@ -1,0 +1,120 @@
+{% extends 'generic/object.html' %}
+{% load helpers %}
+{% load i18n %}
+
+{% block content %}
+  {% include 'netbox_map/inc/beta_banner.html' %}
+  <div class="row mb-3">
+    <div class="col-md-6">
+      <div class="card">
+        <h5 class="card-header">{% trans "Application" %}</h5>
+        <table class="table table-hover attr-table">
+          <tr>
+            <th scope="row">{% trans "Name" %}</th>
+            <td>{{ object.name }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Status" %}</th>
+            <td>{% badge object.get_status_display bg_color=object.get_status_color %}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Criticality" %}</th>
+            <td>{% badge object.get_criticality_display bg_color=object.get_criticality_color %}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Environment" %}</th>
+            <td>{% badge object.get_environment_display bg_color=object.get_environment_color %}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Version" %}</th>
+            <td>{{ object.version|placeholder }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Group" %}</th>
+            <td>{% if object.group %}<a href="{{ object.group.get_absolute_url }}">{{ object.group }}</a>{% else %}&mdash;{% endif %}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Site" %}</th>
+            <td>{% if object.site %}<a href="{{ object.site.get_absolute_url }}">{{ object.site }}</a>{% else %}&mdash;{% endif %}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Tenant" %}</th>
+            <td>{% if object.tenant %}<a href="{{ object.tenant.get_absolute_url }}">{{ object.tenant }}</a>{% else %}&mdash;{% endif %}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Port" %}</th>
+            <td>{{ object.default_port|placeholder }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Protocol" %}</th>
+            <td>{{ object.default_protocol|placeholder }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Primary IP" %}</th>
+            <td>{% if object.primary_ip %}<a href="{{ object.primary_ip.get_absolute_url }}">{{ object.primary_ip }}</a>{% else %}&mdash;{% endif %}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Description" %}</th>
+            <td>{{ object.description|placeholder }}</td>
+          </tr>
+          {% if object.external_url %}
+          <tr>
+            <th scope="row">{% trans "External URL" %}</th>
+            <td><a href="{{ object.external_url }}" target="_blank">{{ object.external_url }}</a></td>
+          </tr>
+          {% endif %}
+        </table>
+      </div>
+    </div>
+    <div class="col-md-6">
+      <div class="card">
+        <h5 class="card-header d-flex justify-content-between align-items-center">
+          {% trans "Deployed Hosts" %}
+          <span class="badge bg-primary">{{ deployments|length }}</span>
+        </h5>
+        {% if deployments %}
+        <div class="table-responsive">
+          <table class="table table-hover mb-0">
+            <thead>
+              <tr>
+                <th>{% trans "Host" %}</th>
+                <th>{% trans "Role" %}</th>
+                <th>{% trans "Port" %}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for dep in deployments %}
+              <tr>
+                <td>{% if dep.host %}<a href="{{ dep.host.get_absolute_url }}">{{ dep.host }}</a>{% else %}&mdash;{% endif %}</td>
+                <td>{{ dep.get_role_display }}</td>
+                <td>{{ dep.port|default:"—" }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <div class="card-body text-muted text-center small">
+          {% trans "Not deployed to any hosts." %}
+        </div>
+        {% endif %}
+      </div>
+
+      {% include 'inc/panels/tags.html' %}
+      <div class="card">
+        <h5 class="card-header">{% trans "Actions" %}</h5>
+        <div class="card-body d-flex gap-2 flex-wrap">
+          <a href="{% url 'plugins:netbox_map:topology' %}?mode=apps&app_ids={{ object.pk }}" class="btn btn-primary">
+            <i class="mdi mdi-sitemap"></i> {% trans "View in Topology" %}
+          </a>
+          <a href="{% url 'plugins:netbox_map:topology' %}?mode=apps&focus_app={{ object.pk }}" class="btn btn-info">
+            <i class="mdi mdi-graph-outline"></i> {% trans "View Dependencies" %}
+          </a>
+          <a href="{% url 'plugins:netbox_map:application_bulk_deploy' pk=object.pk %}" class="btn btn-success">
+            <i class="mdi mdi-rocket-launch"></i> {% trans "Bulk Deploy to Hosts" %}
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}

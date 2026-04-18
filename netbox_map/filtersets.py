@@ -1,12 +1,38 @@
 import django_filters
-from django.contrib.contenttypes.models import ContentType
-from django.utils.translation import gettext_lazy as _
-
-from dcim.models import Site, Location
-from netbox.filtersets import NetBoxModelFilterSet
 from dcim.choices import CableTypeChoices
-from .models import FloorPlan, FloorPlanTile, CustomMarkerType, MapMarker, TilePortAssignment, CablePath, TopologySavedView
-from .choices import FloorPlanTileStatusChoices, CablePathStatusChoices, get_all_tile_type_choices
+from dcim.models import Location, Site
+from django.contrib.contenttypes.models import ContentType
+from django.db import models
+from django.utils.translation import gettext_lazy as _
+from netbox.filtersets import NetBoxModelFilterSet
+from tenancy.models import Tenant
+
+from .choices import (
+    ApplicationCriticalityChoices,
+    ApplicationEnvironmentChoices,
+    ApplicationStatusChoices,
+    CablePathStatusChoices,
+    DependencyProtocolChoices,
+    DependencyTypeChoices,
+    DeploymentRoleChoices,
+    FloorPlanTileStatusChoices,
+    get_all_tile_type_choices,
+)
+from .models import (
+    Application,
+    ApplicationDependency,
+    ApplicationDeployment,
+    ApplicationGroup,
+    ApplicationTemplate,
+    CablePath,
+    CustomMarkerType,
+    FloorPlan,
+    FloorPlanTile,
+    LocationCoordinates,
+    MapMarker,
+    TilePortAssignment,
+    TopologySavedView,
+)
 
 
 class FloorPlanFilterSet(NetBoxModelFilterSet):
@@ -74,6 +100,25 @@ class CustomMarkerTypeFilterSet(NetBoxModelFilterSet):
 
     def search(self, queryset, name, value):
         return queryset.filter(name__icontains=value)
+
+
+class LocationCoordinatesFilterSet(NetBoxModelFilterSet):
+    location_id = django_filters.ModelMultipleChoiceFilter(
+        queryset=Location.objects.all(),
+        label=_('Location (ID)'),
+    )
+    site_id = django_filters.ModelMultipleChoiceFilter(
+        field_name='location__site',
+        queryset=Site.objects.all(),
+        label=_('Site (ID)'),
+    )
+
+    class Meta:
+        model = LocationCoordinates
+        fields = ['id', 'location_id', 'site_id']
+
+    def search(self, queryset, name, value):
+        return queryset.filter(location__name__icontains=value)
 
 
 class TilePortAssignmentFilterSet(NetBoxModelFilterSet):
@@ -163,3 +208,108 @@ class TopologySavedViewFilterSet(NetBoxModelFilterSet):
 
     def search(self, queryset, name, value):
         return queryset.filter(name__icontains=value)
+
+
+class ApplicationGroupFilterSet(NetBoxModelFilterSet):
+    class Meta:
+        model = ApplicationGroup
+        fields = ['id', 'name', 'slug']
+
+    def search(self, queryset, name, value):
+        return queryset.filter(name__icontains=value)
+
+
+class ApplicationTemplateFilterSet(NetBoxModelFilterSet):
+    group_id = django_filters.ModelMultipleChoiceFilter(queryset=ApplicationGroup.objects.all())
+
+    class Meta:
+        model = ApplicationTemplate
+        fields = ['id', 'name', 'default_status', 'default_criticality', 'default_environment', 'group_id']
+
+    def search(self, queryset, name, value):
+        return queryset.filter(name__icontains=value)
+
+
+class ApplicationFilterSet(NetBoxModelFilterSet):
+    status = django_filters.MultipleChoiceFilter(
+        choices=ApplicationStatusChoices,
+        label=_('Status'),
+    )
+    criticality = django_filters.MultipleChoiceFilter(
+        choices=ApplicationCriticalityChoices,
+        label=_('Criticality'),
+    )
+    environment = django_filters.MultipleChoiceFilter(
+        choices=ApplicationEnvironmentChoices,
+        label=_('Environment'),
+    )
+    site_id = django_filters.ModelMultipleChoiceFilter(
+        queryset=Site.objects.all(),
+        label=_('Site (ID)'),
+    )
+    tenant_id = django_filters.ModelMultipleChoiceFilter(
+        queryset=Tenant.objects.all(),
+        label=_('Tenant (ID)'),
+    )
+    group_id = django_filters.ModelMultipleChoiceFilter(
+        queryset=ApplicationGroup.objects.all(),
+        label=_('Group (ID)'),
+    )
+
+    class Meta:
+        model = Application
+        fields = ['id', 'name', 'status', 'criticality', 'environment', 'site_id', 'tenant_id', 'group_id']
+
+    def search(self, queryset, name, value):
+        return queryset.filter(name__icontains=value)
+
+
+class ApplicationDeploymentFilterSet(NetBoxModelFilterSet):
+    application_id = django_filters.ModelMultipleChoiceFilter(
+        queryset=Application.objects.all(),
+        label=_('Application (ID)'),
+    )
+    role = django_filters.MultipleChoiceFilter(
+        choices=DeploymentRoleChoices,
+        label=_('Role'),
+    )
+
+    class Meta:
+        model = ApplicationDeployment
+        fields = ['id', 'application_id', 'role', 'service']
+
+    def search(self, queryset, name, value):
+        return queryset.filter(application__name__icontains=value)
+
+
+class ApplicationDependencyFilterSet(NetBoxModelFilterSet):
+    source_application_id = django_filters.ModelMultipleChoiceFilter(
+        queryset=Application.objects.all(),
+        label=_('Source Application (ID)'),
+    )
+    target_application_id = django_filters.ModelMultipleChoiceFilter(
+        queryset=Application.objects.all(),
+        label=_('Target Application (ID)'),
+    )
+    dependency_type = django_filters.MultipleChoiceFilter(
+        choices=DependencyTypeChoices,
+        label=_('Dependency Type'),
+    )
+    protocol = django_filters.MultipleChoiceFilter(
+        choices=DependencyProtocolChoices,
+        label=_('Protocol'),
+    )
+    status = django_filters.MultipleChoiceFilter(
+        choices=ApplicationStatusChoices,
+        label=_('Status'),
+    )
+
+    class Meta:
+        model = ApplicationDependency
+        fields = ['id', 'source_application_id', 'target_application_id', 'dependency_type', 'protocol', 'status']
+
+    def search(self, queryset, name, value):
+        return queryset.filter(
+            models.Q(source_application__name__icontains=value) |
+            models.Q(target_application__name__icontains=value)
+        )

@@ -142,6 +142,59 @@
         return layers;
     }
 
+    /**
+     * Topological layering for directed dependency graphs.
+     * Edge convention: source DEPENDS ON target (source→target arrow).
+     * Providers (no outgoing deps) go to layer 0 (leftmost).
+     * Consumers go to higher layers (rightward).
+     * Uses longest-path algorithm to ensure connected nodes are never
+     * in the same column.
+     */
+    function computeAppLayers(appNodes, depEdges) {
+        var nodeIds = {};
+        appNodes.forEach(function(n) { nodeIds[n.id] = n; });
+
+        // outEdges: what each node depends on (targets)
+        var outEdges = {};
+        appNodes.forEach(function(n) { outEdges[n.id] = []; });
+        depEdges.forEach(function(e) {
+            var s = typeof e.source === 'object' ? e.source.id : e.source;
+            var t = typeof e.target === 'object' ? e.target.id : e.target;
+            if (outEdges[s] && nodeIds[t]) outEdges[s].push(t);
+        });
+
+        // Longest-path layer assignment (recursive with cycle protection)
+        var layerOf = {};
+        var computing = {};
+
+        function getLayer(id) {
+            if (layerOf[id] !== undefined) return layerOf[id];
+            if (computing[id]) return 0; // cycle
+            computing[id] = true;
+            var targets = outEdges[id] || [];
+            var maxL = -1;
+            targets.forEach(function(tid) {
+                if (nodeIds[tid]) maxL = Math.max(maxL, getLayer(tid));
+            });
+            layerOf[id] = maxL + 1; // providers get 0, their dependents get 1+
+            delete computing[id];
+            return layerOf[id];
+        }
+
+        appNodes.forEach(function(n) { getLayer(n.id); });
+
+        // Build layers object
+        var layers = {};
+        appNodes.forEach(function(n) {
+            var lk = layerOf[n.id] || 0;
+            n._layer = lk;
+            if (!layers[lk]) layers[lk] = [];
+            layers[lk].push(n);
+        });
+
+        return layers;
+    }
+
     function Renderer(state, events) {
         this.state = state;
         this.events = events;
@@ -155,6 +208,9 @@
         this.height = 0;
         this._stencilNodeData = null;
         this._stencilPortPos = null;
+        this._simulationActive = false;
+        this._simulationSourceId = null;
+        this._simulationImpacted = new Set();
     }
 
     Renderer.prototype.init = function() {
@@ -162,8 +218,10 @@
         this.svg = d3.select('#topology-svg');
         this._updateSize();
         this.g = this.svg.append('g');
-        this.g.append('g').attr('class', 'edge-layer');
-        this.g.append('g').attr('class', 'node-layer');
+        this.g.append('g').attr('class', 'edge-layer');       // all edges (cables + app) — behind cards
+        this.g.append('g').attr('class', 'node-layer');       // device cards
+        this.g.append('g').attr('class', 'overlay-node-layer'); // app cards — above device cards
+        this.g.append('g').attr('class', 'highlight-layer');  // hover-highlighted edges — topmost
 
         this.zoom = d3.zoom().scaleExtent([0.02, 5])
             .on('zoom', function(ev) { self.g.attr('transform', ev.transform); });
@@ -174,6 +232,25 @@
                 self._deselectAll(); self.events.emit('node:deselect');
             }
         });
+
+        // Arrow markers — sleek chevron style, dynamically created per color
+        var defs = this.svg.append('defs');
+        this._arrowDefs = defs;
+        this._arrowColors = {};
+        this._ensureArrow = function(hex) {
+            hex = hex.replace('#', '');
+            if (this._arrowColors[hex]) return;
+            this._arrowColors[hex] = true;
+            this._arrowDefs.append('marker').attr('id', 'arrow-' + hex)
+                .attr('viewBox', '0 -4 8 8').attr('refX', 8).attr('refY', 0)
+                .attr('markerWidth', 8).attr('markerHeight', 8).attr('orient', 'auto')
+                .append('path').attr('d', 'M0,-3L8,0L0,3').attr('fill', 'none')
+                .attr('stroke', '#' + hex).attr('stroke-width', 1.5)
+                .attr('stroke-linejoin', 'round');
+        };
+        // Pre-create common ones
+        var self2 = this;
+        ['e74c3c','e67e22','f39c12','3498db','6c757d','5a6080'].forEach(function(hex) { self2._ensureArrow(hex); });
     };
 
     Renderer.prototype._updateSize = function() {
@@ -184,8 +261,12 @@
 
     Renderer.prototype.render = function(nodes, edges, skipFit) {
         this._skipFit = !!skipFit;
-        if (this.state.viewMode === 'stencil') this._renderStencil(nodes, edges);
-        else this._renderNodes(nodes, edges);
+        // All modes use _renderStencil — it handles both device and app nodes
+        if (this.state.viewMode === 'stencil' || this.state.topologyMode === 'apps') {
+            this._renderStencil(nodes, edges);
+        } else {
+            this._renderNodes(nodes, edges);
+        }
     };
 
     /* ================================================================
@@ -195,7 +276,7 @@
     Renderer.prototype._renderStencil = function(nodes, edges) {
         var self = this;
         this._updateSize();
-        this.g.selectAll('.edge-layer > *, .node-layer > *').remove();
+        this.g.selectAll('.edge-layer > *, .node-layer > *, .overlay-node-layer > *, .highlight-layer > *').remove();
         if (this.simulation) { this.simulation.stop(); this.simulation = null; }
         if (nodes.length === 0) return;
 
@@ -206,92 +287,145 @@
 
         // Compute card heights
         nodeData.forEach(function(nd) {
-            var portCount = nd.ports.length;
-            nd._cardH = HEADER_H + portCount * (PORT_H + PORT_GAP) + CARD_PAD;
-            if (portCount === 0) nd._cardH = HEADER_H + CARD_PAD;
+            if (nd.node_type === 'application') {
+                nd.ports = nd.ports || [];
+                var portCount = nd.ports.length;
+                var appInfoH = 18; // compact info line
+                // Section headers are now port rows — no extra height needed
+                nd._cardH = HEADER_H + appInfoH + portCount * (PORT_H + PORT_GAP) + CARD_PAD;
+                if (portCount === 0) nd._cardH = HEADER_H + appInfoH + CARD_PAD;
+                nd._appInfoH = appInfoH;
+            } else {
+                var portCount = (nd.ports || []).length;
+                nd._cardH = HEADER_H + portCount * (PORT_H + PORT_GAP) + CARD_PAD;
+                if (portCount === 0) nd._cardH = HEADER_H + CARD_PAD;
+            }
         });
 
-        // Hierarchical layout — use custom hierarchy if set, otherwise auto-detect
-        var layers;
-        if (self.state.customHierarchy && Object.keys(self.state.customHierarchy).length > 0) {
-            layers = {};
-            nodeData.forEach(function(n) {
-                var l = self.state.customHierarchy[n.role_slug];
-                if (l === undefined) l = 99;
-                if (!layers[l]) layers[l] = [];
-                layers[l].push(n);
-                n._layer = l;
-            });
-        } else {
-            layers = computeLayers(nodeData, edgeData);
-        }
-        var layerKeys = Object.keys(layers).map(Number).sort(function(a, b) { return a - b; });
+        // ── Layout ──
+        var hasApps = nodeData.some(function(n) { return n.node_type === 'application'; });
+        var hasDevices = nodeData.some(function(n) { return n.node_type !== 'application'; });
 
-        // Build node lookup early (needed by layout)
+        // Build node lookup
         var nodeById = {};
         nodeData.forEach(function(n) { nodeById[n.id] = n; });
 
-        // Build adjacency for layout optimization
-        var adjList = {};
-        nodeData.forEach(function(n) { adjList[n.id] = []; });
-        edgeData.forEach(function(e) {
-            var s = typeof e.source === 'object' ? e.source.id : e.source;
-            var t = typeof e.target === 'object' ? e.target.id : e.target;
-            if (adjList[s]) adjList[s].push(t);
-            if (adjList[t]) adjList[t].push(s);
-        });
+        if (hasApps && typeof dagre !== 'undefined') {
+            // ── Dagre layout — ALL nodes (apps + devices) in one graph ──
+            // Dagre handles layer assignment, crossing minimization, and coordinate
+            // assignment — producing a clean left-to-right hierarchical layout.
+            var g = new dagre.graphlib.Graph();
+            g.setGraph({
+                rankdir: 'LR',
+                ranksep: Math.max(LAYER_GAP_X - CARD_W, 120),
+                nodesep: 40,
+                marginx: 60,
+                marginy: 60,
+                ranker: 'network-simplex',
+            });
+            g.setDefaultEdgeLabel(function() { return {}; });
 
-        // Pass 1: Place first column, then subsequent columns aligned to connections
-        layerKeys.forEach(function(lk, col) {
-            var group = layers[lk];
+            // Add ALL nodes
+            nodeData.forEach(function(n) {
+                g.setNode(n.id, { width: CARD_W, height: n._cardH });
+            });
 
-            // Set X for all nodes in this column
-            group.forEach(function(n) { n.x = 100 + col * LAYER_GAP_X; });
+            // Add dependency edges (reversed so providers rank left)
+            edgeData.forEach(function(e) {
+                if (e.edge_type !== 'dependency' && e.edge_type !== 'deployed_on') return;
+                var s = typeof e.source === 'object' ? e.source.id : e.source;
+                var t = typeof e.target === 'object' ? e.target.id : e.target;
+                if (!g.hasNode(s) || !g.hasNode(t)) return;
+                if (e.edge_type === 'dependency') {
+                    // source DEPENDS ON target → reverse for dagre (target ranked left)
+                    g.setEdge(t, s);
+                } else {
+                    // deployed_on: source=app, target=device → device ranked left
+                    g.setEdge(t, s);
+                }
+            });
 
-            if (col === 0) {
-                // First column: just stack vertically
-                group.sort(function(a, b) { return (a.name || '').localeCompare(b.name || ''); });
-                var curY = 80;
-                group.forEach(function(n) {
-                    n.y = curY;
-                    curY += n._cardH + NODE_GAP_Y;
+            dagre.layout(g);
+
+            // Apply dagre positions (dagre gives center coords → convert to top-left)
+            g.nodes().forEach(function(id) {
+                var n = nodeById[id];
+                var pos = g.node(id);
+                if (n && pos) {
+                    n.x = pos.x - CARD_W / 2;
+                    n.y = pos.y - (n._cardH || 60) / 2;
+                }
+            });
+
+        } else {
+            // ── Device-only: use existing computeLayers ──
+            var layers;
+            if (self.state.customHierarchy && Object.keys(self.state.customHierarchy).length > 0) {
+                layers = {};
+                nodeData.forEach(function(n) {
+                    var l = self.state.customHierarchy[n.role_slug];
+                    if (l === undefined) l = 99;
+                    if (!layers[l]) layers[l] = [];
+                    layers[l].push(n);
+                    n._layer = l;
                 });
             } else {
-                // Subsequent columns: place each device at the average Y of its
-                // connected devices in previous columns (connection-aligned layout)
-                group.forEach(function(n) {
-                    var neighbors = adjList[n.id] || [];
-                    var sumY = 0, countY = 0;
-                    neighbors.forEach(function(nid) {
-                        var nb = nodeById[nid];
-                        if (nb && nb.y !== undefined && nb.x < n.x) {
-                            sumY += nb.y + (nb._cardH || 60) / 2;
-                            countY++;
-                        }
-                    });
-                    n._targetY = countY > 0 ? sumY / countY - (n._cardH || 60) / 2 : 99999;
-                });
-
-                // Sort by target Y
-                group.sort(function(a, b) { return a._targetY - b._targetY; });
-
-                // Place with minimum gaps, trying to honor target positions
-                var placed = [];
-                group.forEach(function(n) {
-                    var idealY = n._targetY;
-                    if (idealY === 99999) idealY = placed.length > 0 ? placed[placed.length - 1].y + placed[placed.length - 1]._cardH + NODE_GAP_Y : 80;
-
-                    // Ensure no overlap with previously placed nodes
-                    var minY = 80;
-                    if (placed.length > 0) {
-                        var last = placed[placed.length - 1];
-                        minY = last.y + last._cardH + NODE_GAP_Y;
-                    }
-                    n.y = Math.max(idealY, minY);
-                    placed.push(n);
-                });
+                layers = computeLayers(nodeData, edgeData);
             }
-        });
+            var layerKeys = Object.keys(layers).map(Number).sort(function(a, b) { return a - b; });
+
+            // Build adjacency for layout optimization
+            var adjList = {};
+            nodeData.forEach(function(n) { adjList[n.id] = []; });
+            edgeData.forEach(function(e) {
+                var s = typeof e.source === 'object' ? e.source.id : e.source;
+                var t = typeof e.target === 'object' ? e.target.id : e.target;
+                if (adjList[s]) adjList[s].push(t);
+                if (adjList[t]) adjList[t].push(s);
+            });
+
+            // X coordinates
+            layerKeys.forEach(function(lk, col) {
+                layers[lk].forEach(function(n) { n.x = 100 + col * LAYER_GAP_X; });
+            });
+
+            // Y coordinates: first column alphabetical, rest aligned to connections
+            layerKeys.forEach(function(lk, col) {
+                var group = layers[lk];
+                if (col === 0) {
+                    group.sort(function(a, b) { return (a.name || '').localeCompare(b.name || ''); });
+                    var curY = 80;
+                    group.forEach(function(n) { n.y = curY; curY += n._cardH + NODE_GAP_Y; });
+                } else {
+                    group.forEach(function(n) {
+                        var neighbors = adjList[n.id] || [];
+                        var sumY = 0, cntY = 0;
+                        neighbors.forEach(function(nid) {
+                            var nb = nodeById[nid];
+                            if (nb && nb.y !== undefined && nb.x < n.x) {
+                                sumY += nb.y + (nb._cardH || 60) / 2;
+                                cntY++;
+                            }
+                        });
+                        n._targetY = cntY > 0 ? sumY / cntY - (n._cardH || 60) / 2 : 99999;
+                    });
+                    group.sort(function(a, b) { return a._targetY - b._targetY; });
+                    var placed = [];
+                    group.forEach(function(n) {
+                        var idealY = n._targetY;
+                        if (idealY === 99999) idealY = placed.length > 0
+                            ? placed[placed.length - 1].y + placed[placed.length - 1]._cardH + NODE_GAP_Y : 80;
+                        var minY = 80;
+                        if (placed.length > 0) {
+                            var last = placed[placed.length - 1];
+                            minY = last.y + last._cardH + NODE_GAP_Y;
+                        }
+                        n.y = Math.max(idealY, minY);
+                        placed.push(n);
+                    });
+                }
+            });
+        }
 
         // Apply saved positions
         var savedLayout = self.state.savedLayout;
@@ -314,8 +448,9 @@
             if (e.target_port) portTargetDevice[e.target_port] = s;
         });
 
-        // Sort ports on each device card
+        // Sort ports on each device card (skip app nodes — their order is set by backend)
         nodeData.forEach(function(nd) {
+            if (nd.node_type === 'application') return; // app port order is pre-sorted with section headers
             if (self.state.autoSortPorts) {
                 // Smart sort: by target device Y position (minimizes cable crossings)
                 nd.ports.sort(function(a, b) {
@@ -342,7 +477,8 @@
 
         // Compute port Y positions (relative to card top)
         function portRelY(nd, portIdx) {
-            return HEADER_H + portIdx * (PORT_H + PORT_GAP) + PORT_H / 2;
+            var startY = nd._appInfoH ? HEADER_H + nd._appInfoH : HEADER_H;
+            return startY + portIdx * (PORT_H + PORT_GAP) + PORT_H / 2;
         }
 
         // Port position: cable attaches at port container edge (flush with card)
@@ -427,12 +563,27 @@
             });
         }
 
+        // Edge position for portless nodes (apps) — attaches at card edge midpoint
+        function getNodeEdgePos(nd, otherNd) {
+            if (!nd) return null;
+            var side = 'right';
+            if (otherNd && otherNd.x < nd.x) side = 'left';
+            return {
+                x: side === 'right' ? nd.x + CARD_W : nd.x,
+                y: nd.y + (nd._cardH || 60) / 2,
+                side: side,
+            };
+        }
+
         // Cable path generator
         function cablePath(d) {
             var srcNode = typeof d.source === 'object' ? d.source : nodeById[d.source];
             var tgtNode = typeof d.target === 'object' ? d.target : nodeById[d.target];
             var sp = getPortPos(d.source_port, typeof d.target === 'object' ? d.target.id : d.target);
             var tp = getPortPos(d.target_port, typeof d.source === 'object' ? d.source.id : d.source);
+            // Fallback for portless nodes (apps): use card edge midpoint
+            if (!sp) sp = getNodeEdgePos(srcNode, tgtNode);
+            if (!tp) tp = getNodeEdgePos(tgtNode, srcNode);
             if (!sp || !tp) {
                 if (!srcNode || !tgtNode) return '';
                 return 'M' + (srcNode.x + CARD_W/2) + ',' + (srcNode.y + (srcNode._cardH||40)/2)
@@ -525,12 +676,40 @@
                 return c;
             })
             .attr('stroke', function(d) { return getCableColor(d); })
-            .attr('stroke-width', 2).attr('fill', 'none')
+            .attr('stroke-width', function(d) {
+                if (d.edge_type === 'deployed_on') return 1;
+                if (d.directed) return 1.5;
+                return 1.5;
+            })
+            .attr('stroke-opacity', function(d) {
+                if (d.edge_type === 'deployed_on') return 0.2;
+                return 0.7;
+            })
+            .attr('stroke-dasharray', function(d) {
+                if (d.dependency_type === 'soft') return '12,4,3,4';  // long-dash-dot
+                if (d.edge_type === 'deployed_on') return '2,5';
+                return null;  // hard deps = solid
+            })
+            .attr('stroke-linecap', 'round')
+            .attr('fill', 'none')
             .attr('d', cablePath)
+            .attr('marker-end', function(d) {
+                if (!d.directed) return null;
+                var color = getCableColor(d).replace('#', '');
+                self._ensureArrow(color);
+                return 'url(#arrow-' + color + ')';
+            })
             .on('click', function(ev, d) { ev.stopPropagation(); if (d.url) window.open(d.url, '_blank'); });
 
         this.edgeElements.append('title').text(function(d) {
-            return [d.source_port_name, '\u2192', d.target_port_name, '|', d.cable_label, d.cable_type].join(' ');
+            if (d.edge_type === 'deployed_on') return 'Deployed on: ' + (d.label || '');
+            if (d.edge_type === 'dependency') {
+                var parts = [d.source_port_name, '\u2192', d.target_port_name];
+                if (d.dependency_type) parts.push('(' + d.dependency_type + ')');
+                if (d.cable_type) parts.push(d.cable_type);
+                return parts.filter(Boolean).join(' ');
+            }
+            return [d.source_port_name, '\u2192', d.target_port_name, d.cable_type].filter(Boolean).join(' ');
         });
 
         // Give each cable path an ID for textPath reference
@@ -607,25 +786,30 @@
             }
         });
         edgeData.forEach(function(d) {
+            if (d.edge_type === 'deployed_on') return; // no dots on deployed-on lines
             var sp = getPortPos(d.source_port, typeof d.target === 'object' ? d.target.id : d.target);
             var tp = getPortPos(d.target_port, typeof d.source === 'object' ? d.source.id : d.source);
             var dColor = getCableColor(d);
             if (sp) connectorDots.append('circle').attr('class', 'connector-dot')
-                .attr('cx', sp.x).attr('cy', sp.y).attr('r', 3.5)
-                .attr('fill', dColor);
+                .attr('cx', sp.x).attr('cy', sp.y).attr('r', 2.5)
+                .attr('fill', dColor).attr('opacity', 0.8);
             if (tp) connectorDots.append('circle').attr('class', 'connector-dot')
-                .attr('cx', tp.x).attr('cy', tp.y).attr('r', 3.5)
-                .attr('fill', dColor);
+                .attr('cx', tp.x).attr('cy', tp.y).attr('r', 2.5)
+                .attr('fill', dColor).attr('opacity', 0.8);
         });
 
-        // Show cable labels on cable hover
+        // Cable hover: show label + highlight, dim others
         this.edgeElements.on('mouseenter', function(ev, d) {
-            // Find matching label
             cableLabels.each(function(ld) {
                 if (ld.cable_id === d.cable_id) d3.select(this).classed('visible', true);
             });
+            d3.select(this).attr('stroke-opacity', 1).attr('stroke-width', 2.5);
+            self.edgeElements.filter(function(e) { return e !== d; }).attr('stroke-opacity', 0.12);
         }).on('mouseleave', function() {
             cableLabels.classed('visible', false);
+            self.edgeElements
+                .attr('stroke-opacity', function(d) { return d.edge_type === 'deployed_on' ? 0.2 : 0.7; })
+                .attr('stroke-width', function(d) { return d.edge_type === 'deployed_on' ? 1 : 1.5; });
         });
 
         // === Draw device cards ===
@@ -688,22 +872,100 @@
                 }
             });
 
+        // Device status dot (top-right corner, shows offline/failed/decommissioning)
+        cards.filter(function(d) { return d.node_type !== 'application'; }).each(function(d) {
+            var sc = App.statusColor(d.status_value);
+            d3.select(this).append('circle')
+                .attr('cx', CARD_W - 10).attr('cy', 10)
+                .attr('r', 4).attr('fill', sc)
+                .append('title').text(d.status || '');
+        });
+
         // Separator
         cards.append('line')
             .attr('x1', 4).attr('x2', CARD_W - 4)
             .attr('y1', HEADER_H - 1).attr('y2', HEADER_H - 1)
             .attr('stroke', 'rgba(255,255,255,0.08)');
 
-        // Draw ports
-        cards.each(function(d) {
+        // App cards: clean professional design — no garish colors
+        cards.filter(function(d) { return d.node_type === 'application'; }).each(function(d) {
             var g = d3.select(this);
+
+            // Thin criticality stripe at top
+            var critColor = d.criticality_color || '#6c757d';
+            g.selectAll('rect').filter(function() {
+                var h = d3.select(this).attr('height');
+                return h == '3' || h == '4';
+            }).attr('fill', critColor);
+
+            // Status indicator: ⚠ icon for host-down, dot for normal
+            if (d.host_down) {
+                g.append('text')
+                    .attr('x', CARD_W - 12).attr('y', 22)
+                    .attr('text-anchor', 'middle').attr('fill', '#e74c3c')
+                    .attr('font-size', '12px').attr('cursor', 'default')
+                    .text('\u26A0');
+            } else {
+                var statusColor = App.statusColor(d.status_value);
+                g.append('circle').attr('cx', CARD_W - 12).attr('cy', 18)
+                    .attr('r', 3.5).attr('fill', statusColor);
+            }
+
+            // Host-down: show reason text below header instead of group·env
+            if (d.host_down && d.host_down_reasons) {
+                var reasons = d.host_down_reasons;
+                var reasonText = reasons.length === 1
+                    ? reasons[0] + ' is down'
+                    : reasons.length + ' hosts down';
+                g.append('text')
+                    .attr('x', CARD_W / 2).attr('y', HEADER_H + 12)
+                    .attr('text-anchor', 'middle').attr('fill', '#e74c3c')
+                    .attr('font-size', '7.5px').attr('font-weight', '600')
+                    .text(reasonText.length > 28 ? reasonText.substring(0, 26) + '..' : reasonText);
+            } else {
+                // Info line: group · environment
+                var infoText = d.group || '';
+                if (d.environment) infoText += (infoText ? ' · ' : '') + d.environment;
+                if (infoText) {
+                    g.append('text')
+                        .attr('x', CARD_W / 2).attr('y', HEADER_H + 12)
+                        .attr('text-anchor', 'middle').attr('fill', '#585e70')
+                        .attr('font-size', '8px')
+                        .text(infoText);
+                }
+            }
+        });
+
+        // Draw ports / service slots
+        cards.each(function(d) {
+            if (!d.ports || d.ports.length === 0) return;
+            var g = d3.select(this);
+            var portStartY = d._appInfoH ? HEADER_H + d._appInfoH : HEADER_H;
+            var isApp = d.node_type === 'application';
+
             d.ports.forEach(function(p, i) {
-                var py = HEADER_H + i * (PORT_H + PORT_GAP);
+                var py = portStartY + i * (PORT_H + PORT_GAP);
                 var color = p.speed ? App.speedColor(p.speed) : '#556';
                 if (p.port_class === 'front-port') color = '#ff9800';
                 if (p.port_class === 'rear-port') color = '#795548';
+                if (p.port_class === 'dep-outgoing') color = '#4a5568';
+                if (p.port_class === 'dep-incoming') color = '#4a5568';
 
                 var pg = g.append('g').attr('class', 'port-container');
+
+                // Section header rows (DEPENDS ON / NEEDED BY)
+                if (p.port_class === 'section-header') {
+                    pg.append('line')
+                        .attr('x1', 6).attr('x2', CARD_W - 6)
+                        .attr('y1', py + 2).attr('y2', py + 2)
+                        .attr('stroke', 'rgba(255,255,255,0.06)');
+                    pg.append('text')
+                        .attr('x', 8).attr('y', py + PORT_H / 2 + 3)
+                        .attr('fill', '#505868').attr('font-size', '8px')
+                        .attr('font-weight', '600').attr('letter-spacing', '0.6px')
+                        .text(p.name);
+                    return; // skip port rendering for headers
+                }
 
                 // Port row background (alternating subtle shade)
                 pg.append('rect')
@@ -794,6 +1056,16 @@
 
             menu.append('div').attr('class', 'ctx-divider');
 
+            // --- View Apps on this device ---
+            if (d.device_id) {
+                menu.append('div').attr('class', 'ctx-item')
+                    .html('<i class="mdi mdi-graph-outline"></i> View Apps on Device')
+                    .on('click', function() {
+                        window.location.href = '/plugins/map/topology/?mode=apps&device_ids=' + d.device_id + '&highlight_device=' + d.device_id;
+                        menu.remove();
+                    });
+            }
+
             // --- Isolate (show only this device + neighbors) ---
             menu.append('div').attr('class', 'ctx-item')
                 .html('<i class="mdi mdi-focus-field"></i> Isolate connections')
@@ -808,6 +1080,25 @@
                     self.filterNodes(connectedIds);
                     menu.remove();
                 });
+
+            // --- Simulate failure (app and device nodes) ---
+            if (d.node_type === 'application' || d.node_type === 'device') {
+                if (!self._simulationActive) {
+                    menu.append('div').attr('class', 'ctx-item ctx-danger')
+                        .html('<i class="mdi mdi-alert-circle"></i> Simulate failure')
+                        .on('click', function() {
+                            self.simulateFailure(d.id);
+                            menu.remove();
+                        });
+                } else {
+                    menu.append('div').attr('class', 'ctx-item')
+                        .html('<i class="mdi mdi-close-circle-outline"></i> Clear simulation')
+                        .on('click', function() {
+                            self.clearSimulation();
+                            menu.remove();
+                        });
+                }
+            }
 
             // --- Show all (reset isolation) ---
             menu.append('div').attr('class', 'ctx-item')
@@ -935,6 +1226,11 @@
                 var orig = self.state.nodes.find(function(n) { return n.id === d.id; });
                 if (orig) { orig.x = d.x; orig.y = d.y; }
 
+                // Notify app renderer overlay so deployed-on edges follow
+                if (self.state.topologyMode === 'mixed') {
+                    self.events.emit('device:drag', { id: d.id, x: d.x, y: d.y });
+                }
+
                 // Redraw cables
                 self.edgeElements.attr('d', cablePath);
 
@@ -959,7 +1255,7 @@
             .on('end', function(ev, d) {
                 // Only re-sort if device actually moved (not just a click)
                 var moved = Math.abs(d.x - d._dragStartX) > 2 || Math.abs(d.y - d._dragStartY) > 2;
-                if (moved && self.state.autoSortPorts) {
+                if (moved && self.state.autoSortPorts && self.state.topologyMode !== 'mixed') {
                     // Sync all positions to state.nodes first
                     nodeData.forEach(function(nd) {
                         var orig = self.state.nodes.find(function(n) { return n.id === nd.id; });
@@ -987,13 +1283,373 @@
     };
 
     /* ================================================================
+       APP STENCIL VIEW — Application cards with dependency edges
+       ================================================================ */
+
+    var APP_CARD_W = 200;
+    var APP_CARD_H = 80;
+    var APP_CARD_R = 12;
+    var APP_BAR_W = 6;
+
+    // Returns the edge midpoint {x, y, side} for connecting a bezier to a card edge
+    function getNodeEdgePos(nd, otherNd) {
+        if (!nd) return null;
+        var cx = nd.x + APP_CARD_W / 2;
+        var cy = nd.y + APP_CARD_H / 2;
+        var ox = otherNd ? otherNd.x + APP_CARD_W / 2 : cx + 1;
+        var oy = otherNd ? otherNd.y + APP_CARD_H / 2 : cy;
+        var dx = ox - cx;
+        var dy = oy - cy;
+        // Determine which side the edge exits from
+        if (Math.abs(dx) * APP_CARD_H > Math.abs(dy) * APP_CARD_W) {
+            // Left or right
+            if (dx > 0) return { x: nd.x + APP_CARD_W, y: cy, side: 'right' };
+            else return { x: nd.x, y: cy, side: 'left' };
+        } else {
+            // Top or bottom
+            if (dy > 0) return { x: cx, y: nd.y + APP_CARD_H, side: 'bottom' };
+            else return { x: cx, y: nd.y, side: 'top' };
+        }
+    }
+
+    Renderer.prototype._renderAppStencil = function(nodes, edges) {
+        var self = this;
+        this._updateSize();
+        this.g.selectAll('.edge-layer > *, .node-layer > *, .overlay-node-layer > *, .highlight-layer > *').remove();
+        if (this.simulation) { this.simulation.stop(); this.simulation = null; }
+        if (nodes.length === 0) return;
+
+        var nodeData = nodes.map(function(n) {
+            return Object.assign({}, n, { _cardW: APP_CARD_W, _cardH: APP_CARD_H });
+        });
+        var edgeData = edges.map(function(e) { return Object.assign({}, e); });
+
+        var nodeById = {};
+        nodeData.forEach(function(n) { nodeById[n.id] = n; });
+
+        // Apply saved positions
+        var savedLayout = self.state.savedLayout;
+        if (savedLayout && typeof savedLayout === 'object') {
+            nodeData.forEach(function(n) {
+                var saved = savedLayout[n.id];
+                if (saved && saved.x !== undefined) {
+                    n.x = saved.x;
+                    n.y = saved.y;
+                    n.fx = saved.x;
+                    n.fy = saved.y;
+                }
+            });
+        }
+
+        // Store for external access
+        this._stencilNodeData = nodeData;
+
+        // Dependency edge bezier path
+        function depPath(d) {
+            var srcNode = typeof d.source === 'object' ? d.source : nodeById[d.source];
+            var tgtNode = typeof d.target === 'object' ? d.target : nodeById[d.target];
+            if (!srcNode || !tgtNode) return '';
+            var sp = getNodeEdgePos(srcNode, tgtNode);
+            var tp = getNodeEdgePos(tgtNode, srcNode);
+            if (!sp || !tp) return '';
+            var dx = Math.abs(sp.x - tp.x);
+            var cp = Math.max(dx * 0.4, 60);
+            var sDir = sp.side === 'right' ? 1 : (sp.side === 'left' ? -1 : 0);
+            var tDir = tp.side === 'right' ? 1 : (tp.side === 'left' ? -1 : 0);
+            var sdy = sp.side === 'bottom' ? 1 : (sp.side === 'top' ? -1 : 0);
+            var tdy = tp.side === 'bottom' ? 1 : (tp.side === 'top' ? -1 : 0);
+            return 'M' + sp.x + ',' + sp.y
+                + ' C' + (sp.x + cp * sDir) + ',' + (sp.y + cp * sdy)
+                + ' ' + (tp.x + cp * tDir) + ',' + (tp.y + cp * tdy)
+                + ' ' + tp.x + ',' + tp.y;
+        }
+
+        // Get arrow marker ID from edge color
+        function arrowId(color) {
+            var hex = (color || '#6c757d').replace('#', '');
+            return 'arrow-' + hex;
+        }
+
+        // === Draw dependency edges ===
+        this.edgeElements = this.g.select('.edge-layer')
+            .selectAll('path').data(edgeData).enter().append('path')
+            .attr('class', function(d) {
+                var c = 'topo-edge topo-dep-edge';
+                if (d.dependency_type === 'soft') c += ' soft';
+                return c;
+            })
+            .attr('stroke', function(d) { return d.color || '#6c757d'; })
+            .attr('stroke-width', 2)
+            .attr('fill', 'none')
+            .attr('marker-end', function(d) { return 'url(#' + arrowId(d.color) + ')'; })
+            .attr('d', depPath);
+
+        this.edgeElements.append('title').text(function(d) {
+            var parts = [d.dependency_type];
+            if (d.label) parts.push(d.label);
+            return parts.join(' | ');
+        });
+
+        // === Draw app cards ===
+        var cards = this.g.select('.node-layer')
+            .selectAll('g').data(nodeData).enter().append('g')
+            .attr('class', 'topo-stencil-node topo-stencil-app')
+            .attr('transform', function(d) { return 'translate(' + (d.x || 0) + ',' + (d.y || 0) + ')'; });
+
+        this.nodeElements = cards;
+
+        // Card shadow
+        cards.append('rect').attr('class', 'stencil-shadow')
+            .attr('x', 2).attr('y', 2)
+            .attr('width', APP_CARD_W).attr('height', APP_CARD_H)
+            .attr('rx', APP_CARD_R).attr('ry', APP_CARD_R)
+            .attr('fill', 'rgba(0,0,0,0.15)');
+
+        // Card body
+        cards.append('rect').attr('class', 'stencil-bg')
+            .attr('width', APP_CARD_W).attr('height', APP_CARD_H)
+            .attr('rx', APP_CARD_R).attr('ry', APP_CARD_R);
+
+        // Left color bar (clipped to rounded corners)
+        cards.append('clipPath')
+            .attr('id', function(d) { return 'appclip-' + d.id; })
+            .append('rect')
+            .attr('width', APP_CARD_W).attr('height', APP_CARD_H)
+            .attr('rx', APP_CARD_R).attr('ry', APP_CARD_R);
+
+        cards.append('rect').attr('class', 'app-left-bar')
+            .attr('width', APP_BAR_W).attr('height', APP_CARD_H)
+            .attr('clip-path', function(d) { return 'url(#appclip-' + d.id + ')'; })
+            .attr('fill', function(d) { return d.category_color || d.role_color || '#6c757d'; });
+
+        // App name — auto-fits
+        var maxTextW = APP_CARD_W - APP_BAR_W - 16;
+        cards.append('text').attr('class', 'app-name stencil-name')
+            .attr('x', APP_BAR_W + 10).attr('y', 24)
+            .text(function(d) { return d.name || ''; })
+            .each(function() {
+                var textW = this.getComputedTextLength();
+                if (textW > maxTextW) {
+                    d3.select(this)
+                        .attr('textLength', maxTextW)
+                        .attr('lengthAdjust', 'spacingAndGlyphs');
+                }
+            });
+
+        // Environment/type subtitle
+        cards.append('text').attr('class', 'app-type stencil-type')
+            .attr('x', APP_BAR_W + 10).attr('y', 38)
+            .text(function(d) {
+                var parts = [];
+                if (d.environment) parts.push(d.environment);
+                if (d.group) parts.push(d.group);
+                return parts.join(' \u2022 ') || '';
+            })
+            .each(function() {
+                var textW = this.getComputedTextLength();
+                if (textW > maxTextW) {
+                    d3.select(this)
+                        .attr('textLength', maxTextW)
+                        .attr('lengthAdjust', 'spacingAndGlyphs');
+                }
+            });
+
+        // Status dot
+        cards.append('circle').attr('class', 'app-status')
+            .attr('cx', APP_BAR_W + 14).attr('cy', 56)
+            .attr('r', 4)
+            .attr('fill', function(d) { return App.statusColor(d.status_value); });
+
+        // Status text
+        cards.append('text').attr('class', 'app-status')
+            .attr('x', APP_BAR_W + 22).attr('y', 59)
+            .attr('font-size', '9px').attr('fill', '#a0a8c0')
+            .text(function(d) { return d.status || ''; });
+
+        // Criticality badge
+        cards.append('text').attr('class', 'app-criticality')
+            .attr('x', APP_CARD_W - 10).attr('y', 59)
+            .attr('text-anchor', 'end')
+            .attr('fill', function(d) { return d.criticality_color || '#6c757d'; })
+            .text(function(d) {
+                return d.criticality ? d.criticality.toUpperCase() : '';
+            });
+
+        // Separator line
+        cards.append('line')
+            .attr('x1', APP_BAR_W + 4).attr('x2', APP_CARD_W - 4)
+            .attr('y1', APP_CARD_H - 18).attr('y2', APP_CARD_H - 18)
+            .attr('stroke', 'rgba(255,255,255,0.06)');
+
+        // Owner / deploy count
+        cards.append('text')
+            .attr('x', APP_BAR_W + 10).attr('y', APP_CARD_H - 5)
+            .attr('font-size', '8px').attr('fill', '#6070a0')
+            .text(function(d) {
+                var parts = [];
+                if (d.owner) parts.push(d.owner);
+                if (d.deploy_count) parts.push(d.deploy_count + ' hosts');
+                return parts.join(' \u2022 ');
+            });
+
+        // Click to select
+        cards.on('click', function(ev, d) {
+            ev.stopPropagation(); self._deselectAll();
+            d3.select(this).classed('selected', true);
+            self.state.selectedNode = d; self.events.emit('node:select', d);
+        });
+
+        // Right-click context menu
+        cards.on('contextmenu', function(ev, d) {
+            ev.preventDefault();
+            ev.stopPropagation();
+            d3.selectAll('.topo-context-menu').remove();
+
+            var menu = d3.select('body').append('div')
+                .attr('class', 'topo-context-menu')
+                .style('left', ev.pageX + 'px')
+                .style('top', ev.pageY + 'px');
+
+            menu.append('div').attr('class', 'ctx-header')
+                .html('<span class="ctx-dot" style="background:' + (d.category_color || '#6c757d') + '"></span> '
+                    + '<strong>' + App.escapeHtml(d.name) + '</strong>');
+
+            menu.append('div').attr('class', 'ctx-divider');
+
+            menu.append('div').attr('class', 'ctx-item')
+                .html('<i class="mdi mdi-open-in-new"></i> Open in NetBox')
+                .on('click', function() { window.open(d.url, '_blank'); menu.remove(); });
+
+            menu.append('div').attr('class', 'ctx-item')
+                .html('<i class="mdi mdi-content-copy"></i> Copy name')
+                .on('click', function() {
+                    navigator.clipboard.writeText(d.name || '');
+                    menu.remove();
+                });
+
+            menu.append('div').attr('class', 'ctx-divider');
+
+            // --- Simulate failure ---
+            if (!self._simulationActive) {
+                menu.append('div').attr('class', 'ctx-item ctx-danger')
+                    .html('<i class="mdi mdi-alert-circle"></i> Simulate failure')
+                    .on('click', function() {
+                        self.simulateFailure(d.id);
+                        menu.remove();
+                    });
+            } else {
+                menu.append('div').attr('class', 'ctx-item')
+                    .html('<i class="mdi mdi-close-circle-outline"></i> Clear simulation')
+                    .on('click', function() {
+                        self.clearSimulation();
+                        menu.remove();
+                    });
+            }
+
+            menu.append('div').attr('class', 'ctx-divider');
+
+            menu.append('div').attr('class', 'ctx-item')
+                .html('<i class="mdi mdi-crosshairs-gps"></i> Center on app')
+                .on('click', function() {
+                    var cx = d.x + APP_CARD_W / 2;
+                    var cy = d.y + APP_CARD_H / 2;
+                    var w = self.width, h = self.height;
+                    self.svg.transition().duration(400).call(
+                        self.zoom.transform,
+                        d3.zoomIdentity.translate(w/2 - cx, h/2 - cy).scale(1)
+                    );
+                    menu.remove();
+                });
+
+            // Pin/Unpin
+            var isPinned = d._pinned;
+            menu.append('div').attr('class', 'ctx-item')
+                .html('<i class="mdi mdi-pin' + (isPinned ? '-off' : '') + '-outline"></i> '
+                    + (isPinned ? 'Unpin position' : 'Pin position'))
+                .on('click', function() {
+                    d._pinned = !d._pinned;
+                    if (d._pinned) {
+                        d.fx = d.x; d.fy = d.y;
+                    } else {
+                        d.fx = null; d.fy = null;
+                        if (self.simulation) self.simulation.alpha(0.3).restart();
+                    }
+                    menu.remove();
+                });
+
+            setTimeout(function() {
+                d3.select('body').on('click.ctx', function() {
+                    d3.selectAll('.topo-context-menu').remove();
+                    d3.select('body').on('click.ctx', null);
+                });
+            }, 10);
+        });
+
+        // Hover: highlight connected edges
+        cards.on('mouseenter', function(ev, d) {
+            self.edgeElements.attr('stroke-opacity', function(e) {
+                var s = typeof e.source === 'object' ? e.source.id : e.source;
+                var t = typeof e.target === 'object' ? e.target.id : e.target;
+                return (s === d.id || t === d.id) ? 1 : 0.08;
+            }).attr('stroke-width', function(e) {
+                var s = typeof e.source === 'object' ? e.source.id : e.source;
+                var t = typeof e.target === 'object' ? e.target.id : e.target;
+                return (s === d.id || t === d.id) ? 3 : 1.5;
+            });
+        });
+        cards.on('mouseleave', function() {
+            self.edgeElements.attr('stroke-opacity', null).attr('stroke-width', 2);
+        });
+
+        // Force-directed layout
+        this.simulation = d3.forceSimulation(nodeData)
+            .force('link', d3.forceLink(edgeData).id(function(d) { return d.id; }).distance(250).strength(0.5))
+            .force('charge', d3.forceManyBody().strength(-500).distanceMax(800))
+            .force('center', d3.forceCenter(this.width / 2, this.height / 2))
+            .force('collision', d3.forceCollide().radius(110))
+            .alphaDecay(0.03)
+            .on('tick', function() {
+                cards.attr('transform', function(d) { return 'translate(' + d.x + ',' + d.y + ')'; });
+                self.edgeElements.attr('d', depPath);
+            });
+        this.simulation.on('end', function() {
+            if (!self._skipFit) self.fitToView();
+        });
+
+        // Drag with force sim
+        cards.call(d3.drag()
+            .on('start', function(ev, d) {
+                if (!ev.active && self.simulation) self.simulation.alphaTarget(0.1).restart();
+                d.fx = d.x; d.fy = d.y;
+            })
+            .on('drag', function(ev, d) {
+                d.fx = ev.x; d.fy = ev.y;
+            })
+            .on('end', function(ev, d) {
+                if (!ev.active && self.simulation) self.simulation.alphaTarget(0);
+                if (!d._pinned) { d.fx = null; d.fy = null; }
+            })
+        );
+
+        // Sync positions to state
+        nodeData.forEach(function(d) {
+            var orig = self.state.nodes.find(function(n) { return n.id === d.id; });
+            if (orig) { orig.x = d.x; orig.y = d.y; }
+        });
+
+        if (!self._skipFit) {
+            setTimeout(function() { self.fitToView(); }, 50);
+        }
+    };
+
+    /* ================================================================
        NODE VIEW
        ================================================================ */
 
     Renderer.prototype._renderNodes = function(nodes, edges) {
         var self = this;
         this._updateSize();
-        this.g.selectAll('.edge-layer > *, .node-layer > *').remove();
+        this.g.selectAll('.edge-layer > *, .node-layer > *, .overlay-node-layer > *, .highlight-layer > *').remove();
         if (this.simulation) this.simulation.stop();
         if (nodes.length === 0) return;
 
@@ -1032,9 +1688,14 @@
         ng.append('text').attr('class', 'node-icon').text(function(d) { return App.roleIcon(d.role_slug); });
         ng.append('circle').attr('class', 'status-dot').attr('r', 4)
             .attr('cx', function(d) { return nr(d) - 2; }).attr('cy', function(d) { return -(nr(d) - 2); })
-            .attr('fill', function(d) { return App.statusColor(d.status_value); });
+            .attr('fill', function(d) { return d.host_down ? '#e74c3c' : App.statusColor(d.status_value); });
         ng.append('text').attr('class', 'node-label').attr('dy', function(d) { return nr(d) + 14; })
             .text(function(d) { var n = d.name || ''; return n.length > 20 ? n.substring(0, 18) + '\u2026' : n; });
+        ng.filter(function(d) { return d.host_down; }).append('title')
+            .text(function(d) {
+                var r = d.host_down_reasons || [];
+                return r.length === 1 ? r[0] + ' is down' : r.join(', ') + ' are down';
+            });
 
         ng.on('click', function(ev, d) {
             ev.stopPropagation(); self._deselectAll();
@@ -1086,6 +1747,47 @@
         if (this.nodeElements) this.nodeElements.each(function(d) { if (d.id === id) d3.select(this).classed('selected', true); });
     };
 
+    /**
+     * Pan + zoom to center a node on screen.  Works for both stencil (cards)
+     * and force-directed (circle) views.
+     */
+    Renderer.prototype.focusNode = function(id) {
+        var self = this;
+        if (!this.nodeElements) return;
+
+        // Find the node data
+        var target = null;
+        this.nodeElements.each(function(d) { if (d.id === id) target = d; });
+        if (!target) return;
+
+        this._updateSize();
+        var w = this.width, h = this.height;
+
+        // Compute node center (stencil cards use x/y as top-left; circles use x/y as center)
+        var cx, cy;
+        if (target._cardH !== undefined) {
+            // Stencil card — x/y is top-left corner
+            cx = target.x + CARD_W / 2;
+            cy = target.y + (target._cardH || 60) / 2;
+        } else {
+            // Force-directed — x/y is center
+            cx = target.x;
+            cy = target.y;
+        }
+
+        // Zoom to a comfortable scale (1.0 = 100%), clamped
+        var scale = 1.0;
+        self.svg.transition().duration(400).call(
+            self.zoom.transform,
+            d3.zoomIdentity.translate(w / 2 - cx * scale, h / 2 - cy * scale).scale(scale)
+        );
+
+        // Highlight + select
+        this.highlightNode(id);
+        this.state.selectedNode = target;
+        this.events.emit('node:select', target);
+    };
+
     Renderer.prototype.filterNodes = function(vis) {
         if (!this.nodeElements) return;
         this.nodeElements.style('opacity', function(d) { return vis === null || vis.has(d.id) ? 1 : 0.08; });
@@ -1110,6 +1812,143 @@
     Renderer.prototype._deselectAll = function() {
         if (this.nodeElements) this.nodeElements.classed('selected', false);
         this.state.selectedNode = null;
+    };
+
+    // === Impact Simulation ===
+
+    Renderer.prototype.simulateFailure = function(nodeId) {
+        var self = this;
+        if (!this.nodeElements || !this._stencilNodeData) return;
+
+        var edges = this.state.edges || [];
+
+        // Build reverse adjacency for dependency edges: source depends on target
+        // So dependents of X are sources of edges where target === X
+        var reverseAdj = {};
+        this._stencilNodeData.forEach(function(n) { reverseAdj[n.id] = []; });
+        edges.forEach(function(e) {
+            if (e.edge_type === 'deployed_on') return; // handled separately
+            var s = typeof e.source === 'object' ? e.source.id : e.source;
+            var t = typeof e.target === 'object' ? e.target.id : e.target;
+            if (reverseAdj[t]) reverseAdj[t].push(s);
+        });
+
+        // If failing a device node, find all apps deployed on it first
+        var srcNode = this._stencilNodeData.find(function(n) { return n.id === nodeId; });
+        var seedIds = [nodeId];
+        if (srcNode && srcNode.node_type === 'device') {
+            edges.forEach(function(e) {
+                if (e.edge_type !== 'deployed_on') return;
+                var s = typeof e.source === 'object' ? e.source.id : e.source;
+                var t = typeof e.target === 'object' ? e.target.id : e.target;
+                // deployed_on: source=app, target=device
+                if (t === nodeId) seedIds.push(s);
+            });
+        }
+
+        // BFS from seed nodes following reverse dependency edges
+        var visited = new Set(seedIds);
+        var queue = [];
+        var impacted = new Set();
+
+        // Mark all seeds (except the source device) as impacted
+        seedIds.forEach(function(id) {
+            queue.push({ id: id, depth: 0 });
+            if (id !== nodeId) impacted.add(id);
+        });
+
+        while (queue.length > 0) {
+            var item = queue.shift();
+            if (item.depth >= 50) continue;
+            var dependents = reverseAdj[item.id] || [];
+            dependents.forEach(function(depId) {
+                if (!visited.has(depId)) {
+                    visited.add(depId);
+                    impacted.add(depId);
+                    queue.push({ id: depId, depth: item.depth + 1 });
+                }
+            });
+        }
+
+        // Store simulation state
+        this._simulationActive = true;
+        this._simulationSourceId = nodeId;
+        this._simulationImpacted = impacted;
+        this.state.simulationActive = true;
+
+        // Apply visual classes
+        this.nodeElements
+            .classed('failure-source', function(d) { return d.id === nodeId; })
+            .classed('failure-impacted', function(d) { return impacted.has(d.id); })
+            .style('opacity', function(d) {
+                if (d.id === nodeId || impacted.has(d.id)) return 1;
+                return 0.15;
+            });
+
+        // Dim unrelated edges
+        if (this.edgeElements) {
+            this.edgeElements.style('opacity', function(e) {
+                var s = typeof e.source === 'object' ? e.source.id : e.source;
+                var t = typeof e.target === 'object' ? e.target.id : e.target;
+                var affected = new Set([nodeId]);
+                impacted.forEach(function(id) { affected.add(id); });
+                return (affected.has(s) && affected.has(t)) ? null : 0.08;
+            });
+        }
+
+        // Show toast
+        var srcNode = this._stencilNodeData.find(function(n) { return n.id === nodeId; });
+        var srcName = srcNode ? srcNode.name : nodeId;
+        self._showSimToast('Failure of ' + srcName + ' would impact ' + impacted.size + ' application' + (impacted.size !== 1 ? 's' : ''));
+
+        // Add floating clear button
+        this._addClearSimButton();
+    };
+
+    Renderer.prototype.clearSimulation = function() {
+        this._simulationActive = false;
+        this._simulationSourceId = null;
+        this._simulationImpacted = new Set();
+        this.state.simulationActive = false;
+
+        if (this.nodeElements) {
+            this.nodeElements
+                .classed('failure-source', false)
+                .classed('failure-impacted', false)
+                .style('opacity', null);
+        }
+        if (this.edgeElements) {
+            this.edgeElements.style('opacity', null);
+        }
+
+        // Remove clear button
+        var btn = document.getElementById('topo-clear-sim');
+        if (btn) btn.remove();
+    };
+
+    Renderer.prototype._showSimToast = function(msg) {
+        var el = document.createElement('div');
+        el.className = 'topo-toast';
+        el.textContent = msg;
+        document.body.appendChild(el);
+        setTimeout(function() { el.classList.add('visible'); }, 10);
+        setTimeout(function() { el.classList.remove('visible'); setTimeout(function() { el.remove(); }, 300); }, 3000);
+    };
+
+    Renderer.prototype._addClearSimButton = function() {
+        var self = this;
+        // Remove existing
+        var existing = document.getElementById('topo-clear-sim');
+        if (existing) existing.remove();
+
+        var btn = document.createElement('button');
+        btn.id = 'topo-clear-sim';
+        btn.className = 'topo-btn topo-btn-danger topo-sim-clear-btn';
+        btn.innerHTML = '<i class="mdi mdi-close-circle-outline"></i> Clear simulation';
+        btn.addEventListener('click', function() { self.clearSimulation(); });
+
+        var container = document.querySelector('.topology-graph-area');
+        if (container) container.appendChild(btn);
     };
 
     App.Renderer = Renderer;

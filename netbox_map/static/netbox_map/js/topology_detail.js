@@ -20,6 +20,11 @@
         if (!this.contentEl) return;
         var self = this;
 
+        if (node.node_type === 'application') {
+            this._renderAppInfo(node);
+            return;
+        }
+
         this._renderDeviceInfo(node);
 
         if (this.cache[node.device_id]) {
@@ -33,6 +38,185 @@
             self._renderInterfaces(data, node);
         }).catch(function() {
             self._appendError('Failed to load interfaces');
+        });
+    };
+
+    Detail.prototype._renderAppInfo = function(node) {
+        if (!this.contentEl) return;
+        var self = this;
+        var esc = App.escapeHtml;
+        var hs = node.host_status || 'healthy';
+        var critColor = node.criticality_color || '#6c757d';
+        var statusColor = hs === 'down' ? '#e74c3c' : hs === 'degraded' ? '#e67e22' : App.statusColor(node.status_value);
+        var html = '';
+
+        // ── Header card ──
+        html += '<div class="adp-header">';
+        html += '<div class="adp-name-row">';
+        html += '<span class="adp-status-dot" style="background:' + statusColor + ';"></span>';
+        html += '<a href="' + esc(node.url) + '" class="adp-name" target="_blank">' + esc(node.name) + '</a>';
+        html += '</div>';
+
+        // Tags row: env, group (with color), version
+        var groupColor = node.category_color || node.role_color || '';
+        html += '<div class="adp-tags">';
+        if (node.environment) html += '<span class="adp-tag">' + esc(node.environment) + '</span>';
+        if (node.group) {
+            if (groupColor) {
+                html += '<span class="adp-tag" style="border-color:' + esc(groupColor) + '44;color:' + esc(groupColor) + ';">' + esc(node.group) + '</span>';
+            } else {
+                html += '<span class="adp-tag">' + esc(node.group) + '</span>';
+            }
+        }
+        if (node.version) html += '<span class="adp-tag adp-tag-code">v' + esc(node.version) + '</span>';
+        if (node.primary_ip) html += '<span class="adp-tag adp-tag-code">' + esc(node.primary_ip) + '</span>';
+        html += '</div>';
+
+        // Criticality bar
+        html += '<div class="adp-crit" style="color:' + critColor + ';">'
+            + esc((node.criticality || '').toUpperCase()) + '</div>';
+
+        // On-device indicator
+        if (node.on_device && node.on_device_name) {
+            html += '<div class="adp-on-device">Runs on <strong>' + esc(node.on_device_name) + '</strong></div>';
+        }
+
+        html += '</div>'; // end header
+
+        // ── Status explanation ──
+        if (hs === 'down' || hs === 'degraded') {
+            var hostReasons = node.host_down_reasons || [];
+            var depReasons = node.dep_down_reasons || [];
+            var alertClass = hs === 'down' ? 'adp-alert-down' : 'adp-alert-degraded';
+            var label = hs === 'down' ? 'Down' : 'Degraded';
+
+            html += '<div class="adp-alert ' + alertClass + '">';
+            html += '<span class="adp-alert-label">' + label + '</span>';
+
+            // Show each cause separately
+            if (hostReasons.length > 0) {
+                var hostMsg = 'Host' + (hostReasons.length > 1 ? 's' : '') + ' offline: <strong>' + esc(hostReasons.join(', ')) + '</strong>';
+                if (hs === 'degraded') hostMsg += ' — running on standby';
+                html += '<div class="adp-alert-detail">' + hostMsg + '</div>';
+            }
+            if (depReasons.length > 0) {
+                html += '<div class="adp-alert-detail">Dependenc' + (depReasons.length > 1 ? 'ies' : 'y') + ' down: <strong>' + esc(depReasons.join(', ')) + '</strong></div>';
+            }
+
+            html += '</div>';
+        }
+
+        // ── Quick info (owner, site) — only if present ──
+        var infoParts = [];
+        if (node.owner) infoParts.push(node.owner);
+        if (node.site) infoParts.push(node.site);
+        if (infoParts.length > 0) {
+            html += '<div class="adp-info">' + esc(infoParts.join(' \u00B7 ')) + '</div>';
+        }
+
+        // ── Actions ──
+        html += '<div class="adp-actions">';
+        html += '<a href="' + esc(node.url) + '" target="_blank" class="adp-link">Open in NetBox \u2197</a>';
+        html += '<button class="adp-sim-btn" id="adp-simulate-btn" data-node-id="' + esc(node.id) + '">Simulate failure</button>';
+        html += '</div>';
+
+        // ── Dependencies (async) ──
+        html += '<div id="topo-app-deps-section">'
+            + '<div class="adp-loading"><div class="spinner-border spinner-border-sm"></div></div>'
+            + '</div>';
+
+        this.contentEl.innerHTML = html;
+
+        // Wire simulate button
+        var simBtn = document.getElementById('adp-simulate-btn');
+        if (simBtn) {
+            simBtn.addEventListener('click', function() {
+                var nid = this.getAttribute('data-node-id');
+                self.events.emit('app:simulate', nid);
+            });
+        }
+
+        // Load dependency details from API
+        var cacheKey = 'app-' + node.app_id;
+        if (this.cache[cacheKey]) {
+            this._renderAppDeps(this.cache[cacheKey]);
+            return;
+        }
+
+        var url = this.state.appDetailUrl + node.app_id + '/';
+        this.api.get(url).then(function(data) {
+            self.cache[cacheKey] = data;
+            self._renderAppDeps(data);
+        }).catch(function() {
+            var section = document.getElementById('topo-app-deps-section');
+            if (section) section.innerHTML = '<div class="px-3 py-3 text-danger small">Failed to load dependencies</div>';
+        });
+    };
+
+    Detail.prototype._renderAppDeps = function(data) {
+        var section = document.getElementById('topo-app-deps-section');
+        if (!section) return;
+        var self = this;
+        var esc = App.escapeHtml;
+        var html = '';
+
+        // Dep row: name + protocol:port + hard/soft badge
+        function depRow(dep) {
+            var proto = '';
+            if (dep.protocol) proto += dep.protocol;
+            if (dep.port) proto += (proto ? ':' : ':') + dep.port;
+            var isHard = dep.dependency_type === 'hard';
+            return '<a href="#" data-goto-app="' + dep.app_id + '" class="adp-dep-row">'
+                + '<span class="adp-dep-name">' + esc(dep.app_name) + '</span>'
+                + (proto ? '<span class="adp-dep-proto">' + esc(proto) + '</span>' : '')
+                + '<span class="adp-dep-type ' + (isHard ? 'dep-hard' : 'dep-soft') + '">'
+                + (isHard ? 'hard' : 'soft') + '</span>'
+                + '</a>';
+        }
+
+        // Host row: status dot + name + role
+        function hostRow(deploy) {
+            var hostUrl = '/dcim/devices/?q=' + encodeURIComponent(deploy.host_name);
+            var dotColor = App.statusColor(deploy.host_status || 'active');
+            return '<a class="adp-host-row" href="' + esc(hostUrl) + '" target="_blank">'
+                + '<span class="adp-host-dot" style="background:' + dotColor + ';"></span>'
+                + '<span class="adp-host-name">' + esc(deploy.host_name) + '</span>'
+                + (deploy.ip_address ? '<span class="adp-host-ip">' + esc(deploy.ip_address) + '</span>' : '')
+                + (deploy.service_name ? '<span class="adp-host-svc">' + esc(deploy.service_name) + '</span>' : '')
+                + '<span class="adp-host-role">' + esc(deploy.role) + '</span>'
+                + '</a>';
+        }
+
+        if (data.upstream && data.upstream.length > 0) {
+            html += '<div class="adp-section-hdr">Depends on <span>' + data.upstream.length + '</span></div>';
+            data.upstream.forEach(function(dep) { html += depRow(dep); });
+        }
+        if (data.downstream && data.downstream.length > 0) {
+            html += '<div class="adp-section-hdr">Needed by <span>' + data.downstream.length + '</span></div>';
+            data.downstream.forEach(function(dep) { html += depRow(dep); });
+        }
+        if (data.deployments && data.deployments.length > 0) {
+            html += '<div class="adp-section-hdr">Hosts <span>' + data.deployments.length + '</span></div>';
+            data.deployments.forEach(function(deploy) { html += hostRow(deploy); });
+        }
+        if (!data.upstream.length && !data.downstream.length && !data.deployments.length) {
+            html = '<div class="adp-empty">No dependencies or hosts</div>';
+        }
+
+        section.innerHTML = html;
+
+        // Wire click-to-focus
+        section.querySelectorAll('[data-goto-app]').forEach(function(link) {
+            link.addEventListener('click', function(e) {
+                e.preventDefault();
+                var nodeId = 'app-' + this.getAttribute('data-goto-app');
+                var node = self.state.nodes.find(function(n) { return n.id === nodeId; });
+                if (node) {
+                    self.state.selectedNode = node;
+                    self.events.emit('node:select', node);
+                    self.events.emit('renderer:highlight', nodeId);
+                }
+            });
         });
     };
 

@@ -1,9 +1,21 @@
 import django_tables2 as tables
 from django.utils.safestring import mark_safe
 from django.utils.translation import gettext_lazy as _
-
 from netbox.tables import NetBoxTable, columns
-from .models import FloorPlanTile, FloorPlan, CustomMarkerType, MapMarker, CablePath, TopologySavedView
+
+from .models import (
+    Application,
+    ApplicationDependency,
+    ApplicationDeployment,
+    ApplicationGroup,
+    ApplicationTemplate,
+    CablePath,
+    CustomMarkerType,
+    FloorPlan,
+    FloorPlanTile,
+    MapMarker,
+    TopologySavedView,
+)
 
 
 class FloorPlanTable(NetBoxTable):
@@ -309,3 +321,185 @@ class TopologySavedViewTable(NetBoxTable):
         model = TopologySavedView
         fields = ('pk', 'name', 'site', 'view_mode', 'description')
         default_columns = ('pk', 'name', 'site', 'view_mode', 'description')
+
+
+class ApplicationGroupTable(NetBoxTable):
+    name = tables.Column(
+        linkify=True,
+        verbose_name=_('Name')
+    )
+    slug = tables.Column(
+        verbose_name=_('Slug')
+    )
+    color = tables.Column(
+        verbose_name=_('Color'),
+        orderable=False,
+    )
+    tags = columns.TagColumn()
+
+    class Meta(NetBoxTable.Meta):
+        model = ApplicationGroup
+        fields = (
+            'pk', 'id', 'name', 'slug', 'color', 'description', 'tags', 'actions',
+        )
+        default_columns = (
+            'pk', 'name', 'slug', 'color', 'description',
+        )
+
+    def render_color(self, value):
+        return mark_safe(
+            f'<span style="display:inline-block;width:16px;height:16px;'
+            f'border-radius:3px;background:{value};border:1px solid #ccc;"'
+            f' title="{value}"></span> {value}'
+        )
+
+    def value_color(self, value):
+        return value
+
+
+class ApplicationTemplateTable(NetBoxTable):
+    name = tables.Column(linkify=True)
+    group = tables.Column(linkify=True)
+    default_port = tables.Column()
+    default_protocol = tables.Column()
+
+    class Meta(NetBoxTable.Meta):
+        model = ApplicationTemplate
+        fields = (
+            'pk', 'name', 'group', 'default_status', 'default_criticality',
+            'default_environment', 'default_port', 'default_protocol',
+            'default_role', 'name_format',
+        )
+        default_columns = ('pk', 'name', 'group', 'default_criticality', 'default_port', 'default_role')
+
+
+class ApplicationTable(NetBoxTable):
+    name = tables.Column(
+        linkify=True,
+        verbose_name=_('Name')
+    )
+    status = columns.ChoiceFieldColumn(
+        verbose_name=_('Status')
+    )
+    criticality = columns.ChoiceFieldColumn(
+        verbose_name=_('Criticality')
+    )
+    environment = columns.ChoiceFieldColumn(
+        verbose_name=_('Environment')
+    )
+    group = tables.Column(
+        linkify=True,
+        verbose_name=_('Group')
+    )
+    site = tables.Column(
+        linkify=True,
+        verbose_name=_('Site')
+    )
+    tenant = tables.Column(
+        linkify=True,
+        verbose_name=_('Tenant')
+    )
+    primary_ip = tables.Column(
+        linkify=True,
+        verbose_name=_('Primary IP')
+    )
+    tags = columns.TagColumn()
+
+    class Meta(NetBoxTable.Meta):
+        model = Application
+        fields = (
+            'pk', 'id', 'name', 'status', 'criticality', 'environment',
+            'version', 'default_port', 'default_protocol', 'primary_ip',
+            'group', 'site', 'tenant', 'description', 'tags', 'actions',
+        )
+        default_columns = (
+            'pk', 'name', 'status', 'criticality', 'environment', 'group', 'site', 'tenant',
+        )
+
+
+class ApplicationDeploymentTable(NetBoxTable):
+    application = tables.Column(
+        linkify=True,
+        verbose_name=_('Application')
+    )
+    host_type = tables.Column(
+        verbose_name=_('Host Type'),
+        accessor='host_type',
+        orderable=False,
+    )
+    host = tables.Column(
+        verbose_name=_('Host'),
+        accessor='host',
+        orderable=False,
+        linkify=False,
+    )
+    role = columns.ChoiceFieldColumn(
+        verbose_name=_('Role')
+    )
+    port = tables.Column(
+        verbose_name=_('Port')
+    )
+    ip_address = tables.Column(
+        linkify=True,
+        verbose_name=_('IP Address')
+    )
+    service = tables.Column(
+        linkify=True,
+        verbose_name=_('Service')
+    )
+    tags = columns.TagColumn()
+
+    class Meta(NetBoxTable.Meta):
+        model = ApplicationDeployment
+        fields = (
+            'pk', 'id', 'application', 'host_type', 'host', 'role',
+            'port', 'protocol', 'ip_address', 'service', 'description', 'tags', 'actions',
+        )
+        default_columns = (
+            'pk', 'application', 'host_type', 'host', 'role', 'port',
+        )
+
+    def render_host_type(self, value, record):
+        if value:
+            return value.model_class()._meta.verbose_name.title()
+        return '-'
+
+    def render_host(self, value, record):
+        if value:
+            return str(value)
+        return '-'
+
+
+class ApplicationDependencyTable(NetBoxTable):
+    source_application = tables.Column(
+        linkify=True,
+        verbose_name=_('Source')
+    )
+    target_application = tables.Column(
+        linkify=True,
+        verbose_name=_('Target')
+    )
+    dependency_type = columns.ChoiceFieldColumn(
+        verbose_name=_('Type')
+    )
+    protocol = columns.ChoiceFieldColumn(
+        verbose_name=_('Protocol')
+    )
+    status = columns.ChoiceFieldColumn(
+        verbose_name=_('Status')
+    )
+    port = tables.Column(
+        verbose_name=_('Port')
+    )
+    tags = columns.TagColumn()
+
+    class Meta(NetBoxTable.Meta):
+        model = ApplicationDependency
+        fields = (
+            'pk', 'id', 'source_application', 'target_application',
+            'dependency_type', 'protocol', 'port', 'status', 'description', 'tags', 'actions',
+        )
+        default_columns = (
+            'pk', 'source_application', 'target_application',
+            'dependency_type', 'protocol', 'port', 'status',
+        )

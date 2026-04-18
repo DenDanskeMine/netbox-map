@@ -1,6 +1,5 @@
 from django.db import migrations, models
 
-
 DEFAULT_POPOVER_FIELDS = ['label', 'object_info', 'primary_ip', 'utilization', 'position', 'size']
 
 

@@ -1,25 +1,60 @@
+from dcim.choices import CableTypeChoices, SiteStatusChoices
+from dcim.models import (
+    Device,
+    DeviceRole,
+    FrontPort,
+    Location,
+    PowerFeed,
+    PowerPanel,
+    Rack,
+    RearPort,
+    Region,
+    Site,
+    SiteGroup,
+)
 from django import forms
 from django.contrib.contenttypes.models import ContentType
 from django.utils.translation import gettext_lazy as _
-
-from dcim.models import Site, Location, Rack, Device, DeviceRole, PowerPanel, PowerFeed, RearPort, FrontPort, Region, SiteGroup
+from ipam.models import IPAddress, Service
+from netbox.forms import NetBoxModelBulkEditForm, NetBoxModelFilterSetForm, NetBoxModelForm, NetBoxModelImportForm
 from tenancy.models import Tenant
-from netbox.forms import NetBoxModelForm, NetBoxModelFilterSetForm, NetBoxModelBulkEditForm, NetBoxModelImportForm
 from utilities.forms.fields import (
+    CommentField,
     ContentTypeChoiceField,
     CSVChoiceField,
     CSVModelChoiceField,
     DynamicModelChoiceField,
     DynamicModelMultipleChoiceField,
-    CommentField,
+    SlugField,
 )
 from utilities.forms.rendering import FieldSet
-from .models import FloorPlan, FloorPlanTile, CustomMarkerType, MapMarker, MapSettings, CablePath, TopologySavedView, ASSIGNABLE_MODELS
-from dcim.choices import CableTypeChoices, SiteStatusChoices
+
 from .choices import (
-    FloorPlanTileTypeChoices, FloorPlanTileStatusChoices,
+    ApplicationCriticalityChoices,
+    ApplicationEnvironmentChoices,
+    ApplicationStatusChoices,
     CablePathStatusChoices,
-    get_all_tile_type_choices, get_all_type_configs,
+    DependencyProtocolChoices,
+    DependencyTypeChoices,
+    DeploymentRoleChoices,
+    FloorPlanTileStatusChoices,
+    FloorPlanTileTypeChoices,
+    get_all_tile_type_choices,
+    get_all_type_configs,
+)
+from .models import (
+    Application,
+    ApplicationDependency,
+    ApplicationDeployment,
+    ApplicationGroup,
+    ApplicationTemplate,
+    CablePath,
+    CustomMarkerType,
+    FloorPlan,
+    FloorPlanTile,
+    MapMarker,
+    MapSettings,
+    TopologySavedView,
 )
 
 
@@ -199,7 +234,9 @@ class CustomMarkerTypeForm(NetBoxModelForm):
         super().__init__(*args, **kwargs)
         if not self.instance.pk:
             self.fields['slug'].required = False
-            self.fields['slug'].help_text = _('Leave blank to auto-generate from name. Will be prefixed with "custom_".')
+            self.fields['slug'].help_text = _(
+                'Leave blank to auto-generate from name. Will be prefixed with "custom_".'
+            )
 
 
 class CustomMarkerTypeBulkEditForm(NetBoxModelBulkEditForm):
@@ -990,6 +1027,7 @@ POPOVER_FIELD_CHOICES = [
     ('cable_trace_full', _('Cable Trace (Full)')),
 ]
 
+
 def _get_tile_type_info():
     """Return [(slug, label), ...] for all types (built-in + custom)."""
     return [(tc['slug'], tc['name']) for tc in get_all_type_configs()]
@@ -1043,8 +1081,8 @@ class MapSettingsForm(forms.ModelForm):
         # Dynamically discover NetBox custom fields for assignable object types.
         all_cf_choices = []
         try:
-            from extras.models import CustomField
             from django.contrib.contenttypes.models import ContentType
+            from extras.models import CustomField
 
             ct_ids = list(ContentType.objects.filter(
                 app_label='dcim',
@@ -1090,7 +1128,7 @@ class MapSettingsForm(forms.ModelForm):
 
         # Reconstruct tile_popover_config dict from per-type form fields
         config = {}
-        for type_key, _ in self._tile_type_info:
+        for type_key, _label in self._tile_type_info:
             field_name = f'{type_key}_popover_fields'
             config[type_key] = self.cleaned_data.get(field_name, [])
         instance.tile_popover_config = config
@@ -1231,3 +1269,595 @@ class TopologySavedViewFilterForm(NetBoxModelFilterSetForm):
     fieldsets = (
         FieldSet('site_id'),
     )
+
+
+#
+# ApplicationGroup forms
+#
+
+class ApplicationGroupForm(NetBoxModelForm):
+    slug = SlugField()
+
+    fieldsets = (
+        FieldSet(
+            'name', 'slug', 'color', 'description', 'tags',
+            name=_('Application Group')
+        ),
+    )
+
+    class Meta:
+        model = ApplicationGroup
+        fields = ['name', 'slug', 'color', 'description', 'tags']
+        widgets = {
+            'color': forms.TextInput(attrs={'type': 'color'}),
+        }
+
+
+class ApplicationGroupFilterForm(NetBoxModelFilterSetForm):
+    model = ApplicationGroup
+
+    fieldsets = (
+        FieldSet('q'),
+    )
+
+
+#
+# ApplicationTemplate forms
+#
+
+class ApplicationTemplateForm(NetBoxModelForm):
+    slug = SlugField()
+    group = DynamicModelChoiceField(queryset=ApplicationGroup.objects.all(), required=False)
+
+    fieldsets = (
+        FieldSet('name', 'slug', 'description', 'group', 'tags', name=_('Template')),
+        FieldSet(
+            'default_status', 'default_criticality', 'default_environment', 'default_version',
+            name=_('Application Defaults'),
+        ),
+        FieldSet('default_role', 'default_port', 'default_protocol', name=_('Deployment Defaults')),
+        FieldSet('name_format', name=_('Instance Naming')),
+    )
+
+    class Meta:
+        model = ApplicationTemplate
+        fields = [
+            'name', 'slug', 'description', 'group', 'default_status',
+            'default_criticality', 'default_environment', 'default_version',
+            'default_role', 'default_port', 'default_protocol',
+            'name_format', 'tags',
+        ]
+
+
+class ApplicationTemplateFilterForm(NetBoxModelFilterSetForm):
+    model = ApplicationTemplate
+    group_id = DynamicModelChoiceField(queryset=ApplicationGroup.objects.all(), required=False, label=_('Group'))
+    default_criticality = forms.MultipleChoiceField(
+        choices=ApplicationCriticalityChoices, required=False, label=_('Criticality'),
+    )
+
+    fieldsets = (FieldSet('group_id', 'default_criticality'),)
+
+
+class ApplicationTemplateDeployForm(forms.Form):
+    """Deploy a template to multiple hosts — creates an Application per host."""
+    devices = DynamicModelMultipleChoiceField(
+        label=_('Devices'),
+        queryset=Device.objects.all(),
+        required=False,
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        try:
+            from virtualization.models import VirtualMachine
+            self.fields['virtual_machines'] = DynamicModelMultipleChoiceField(
+                label=_('Virtual Machines'),
+                queryset=VirtualMachine.objects.all(),
+                required=False,
+            )
+        except ImportError:
+            pass
+
+
+#
+# Application forms
+#
+
+class ApplicationForm(NetBoxModelForm):
+    site = DynamicModelChoiceField(
+        label=_('Site'),
+        queryset=Site.objects.all(),
+        required=False,
+    )
+    tenant = DynamicModelChoiceField(
+        label=_('Tenant'),
+        queryset=Tenant.objects.all(),
+        required=False,
+    )
+    group = DynamicModelChoiceField(
+        label=_('Group'),
+        queryset=ApplicationGroup.objects.all(),
+        required=False,
+    )
+    primary_ip = DynamicModelChoiceField(
+        label=_('Primary IP'),
+        queryset=IPAddress.objects.all(),
+        required=False,
+    )
+    comments = CommentField()
+
+    fieldsets = (
+        FieldSet(
+            'name', 'status', 'criticality', 'environment', 'version', 'description', 'tags',
+            name=_('Application')
+        ),
+        FieldSet(
+            'default_port', 'default_protocol', 'primary_ip',
+            name=_('Service Defaults')
+        ),
+        FieldSet(
+            'group', 'site', 'tenant',
+            name=_('Assignment')
+        ),
+        FieldSet(
+            'external_url',
+            name=_('Links')
+        ),
+    )
+
+    class Meta:
+        model = Application
+        fields = [
+            'name', 'status', 'criticality', 'environment', 'version',
+            'description', 'comments', 'external_url',
+            'default_port', 'default_protocol', 'primary_ip',
+            'group', 'site', 'tenant', 'tags',
+        ]
+
+
+class ApplicationFilterForm(NetBoxModelFilterSetForm):
+    model = Application
+    status = forms.MultipleChoiceField(
+        choices=ApplicationStatusChoices,
+        required=False,
+        label=_('Status')
+    )
+    criticality = forms.MultipleChoiceField(
+        choices=ApplicationCriticalityChoices,
+        required=False,
+        label=_('Criticality')
+    )
+    environment = forms.MultipleChoiceField(
+        choices=ApplicationEnvironmentChoices,
+        required=False,
+        label=_('Environment')
+    )
+    site_id = DynamicModelChoiceField(
+        queryset=Site.objects.all(),
+        required=False,
+        label=_('Site')
+    )
+    tenant_id = DynamicModelChoiceField(
+        queryset=Tenant.objects.all(),
+        required=False,
+        label=_('Tenant')
+    )
+    group_id = DynamicModelChoiceField(
+        queryset=ApplicationGroup.objects.all(),
+        required=False,
+        label=_('Group')
+    )
+
+    fieldsets = (
+        FieldSet('status', 'criticality', 'environment', 'site_id', 'tenant_id', 'group_id'),
+    )
+
+
+class ApplicationBulkEditForm(NetBoxModelBulkEditForm):
+    status = forms.ChoiceField(
+        choices=ApplicationStatusChoices,
+        required=False,
+        label=_('Status'),
+    )
+    criticality = forms.ChoiceField(
+        choices=ApplicationCriticalityChoices,
+        required=False,
+        label=_('Criticality'),
+    )
+    environment = forms.ChoiceField(
+        choices=ApplicationEnvironmentChoices,
+        required=False,
+        label=_('Environment'),
+    )
+    group = DynamicModelChoiceField(
+        queryset=ApplicationGroup.objects.all(),
+        required=False,
+        label=_('Group'),
+    )
+    site = DynamicModelChoiceField(
+        queryset=Site.objects.all(),
+        required=False,
+        label=_('Site'),
+    )
+    tenant = DynamicModelChoiceField(
+        queryset=Tenant.objects.all(),
+        required=False,
+        label=_('Tenant'),
+    )
+    description = forms.CharField(max_length=500, required=False)
+
+    model = Application
+    nullable_fields = ('group', 'site', 'tenant', 'description', 'version', 'external_url')
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['status'].choices = [('', '---------')] + list(ApplicationStatusChoices)
+        self.fields['criticality'].choices = [('', '---------')] + list(ApplicationCriticalityChoices)
+        self.fields['environment'].choices = [('', '---------')] + list(ApplicationEnvironmentChoices)
+
+
+class ApplicationImportForm(NetBoxModelImportForm):
+    status = CSVChoiceField(
+        choices=ApplicationStatusChoices,
+        help_text=_('Status'),
+    )
+    criticality = CSVChoiceField(
+        choices=ApplicationCriticalityChoices,
+        help_text=_('Criticality'),
+    )
+    environment = CSVChoiceField(
+        choices=ApplicationEnvironmentChoices,
+        help_text=_('Environment'),
+    )
+    site = CSVModelChoiceField(
+        queryset=Site.objects.all(),
+        to_field_name='name',
+        required=False,
+        help_text=_('Site name'),
+    )
+    tenant = CSVModelChoiceField(
+        queryset=Tenant.objects.all(),
+        to_field_name='name',
+        required=False,
+        help_text=_('Tenant name'),
+    )
+    group = CSVModelChoiceField(
+        queryset=ApplicationGroup.objects.all(),
+        to_field_name='name',
+        required=False,
+        help_text=_('Application group name'),
+    )
+
+    class Meta:
+        model = Application
+        fields = (
+            'name', 'status', 'criticality', 'environment', 'version',
+            'description', 'external_url', 'group', 'site', 'tenant',
+        )
+
+
+#
+# ApplicationDeployment forms
+#
+
+def get_host_content_types():
+    """Return a queryset of ContentTypes for host models (Device, VirtualMachine)."""
+    return ContentType.objects.filter(
+        app_label__in=['dcim', 'virtualization'],
+        model__in=['device', 'virtualmachine'],
+    ).order_by('model')
+
+
+class ApplicationDeploymentForm(NetBoxModelForm):
+    template = DynamicModelChoiceField(
+        label=_('From Template'),
+        queryset=ApplicationTemplate.objects.all(),
+        required=False,
+        help_text=_('Select a template to auto-create an application. Leave empty to use an existing application.'),
+    )
+    application = DynamicModelChoiceField(
+        label=_('Application'),
+        queryset=Application.objects.all(),
+        required=False,
+        quick_add=True,
+    )
+    host_type = ContentTypeChoiceField(
+        label=_('Host Type'),
+        queryset=get_host_content_types(),
+        help_text=_('Select Device or Virtual Machine'),
+    )
+    host_id = forms.IntegerField(
+        label=_('Host ID'),
+        widget=forms.HiddenInput(),
+        required=False,
+    )
+    device = DynamicModelChoiceField(
+        label=_('Device'),
+        queryset=Device.objects.all(),
+        required=False,
+    )
+    virtual_machine = DynamicModelChoiceField(
+        label=_('Virtual Machine'),
+        queryset=Device.objects.none(),
+        required=False,
+    )
+    ip_address = DynamicModelChoiceField(
+        label=_('IP Address'),
+        queryset=IPAddress.objects.all(),
+        required=False,
+    )
+    service = DynamicModelChoiceField(
+        label=_('Service'),
+        queryset=Service.objects.all(),
+        required=False,
+        help_text=_('Link to an existing NetBox application service'),
+    )
+
+    fieldsets = (
+        FieldSet(
+            'template', 'application', 'role', 'port', 'protocol', 'ip_address', 'service', 'description', 'tags',
+            name=_('Deployment')
+        ),
+        FieldSet(
+            'host_type', 'device', 'virtual_machine',
+            name=_('Host')
+        ),
+    )
+
+    class Meta:
+        model = ApplicationDeployment
+        fields = [
+            'application', 'host_type', 'host_id', 'role',
+            'port', 'protocol', 'ip_address', 'service', 'description', 'tags',
+        ]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        try:
+            from virtualization.models import VirtualMachine
+            self.fields['virtual_machine'] = DynamicModelChoiceField(
+                label=_('Virtual Machine'),
+                queryset=VirtualMachine.objects.all(),
+                required=False,
+            )
+        except ImportError:
+            pass
+
+        if self.instance.pk and self.instance.host_type:
+            model_name = self.instance.host_type.model
+            if model_name == 'device' and self.instance.host_id:
+                self.fields['device'].initial = self.instance.host_id
+            elif model_name == 'virtualmachine' and self.instance.host_id:
+                self.fields['virtual_machine'].initial = self.instance.host_id
+
+    def clean(self):
+        super().clean()
+
+        # Template logic: if template is provided, application is not required
+        template = self.cleaned_data.get('template')
+        if template and not self.cleaned_data.get('application'):
+            # Will create app from template in save()
+            pass
+        elif not template and not self.cleaned_data.get('application'):
+            raise forms.ValidationError({'application': 'Select an application or a template.'})
+
+        host_type = self.cleaned_data.get('host_type')
+        if host_type:
+            model_name = host_type.model
+            if model_name == 'device':
+                obj = self.cleaned_data.get('device')
+            elif model_name == 'virtualmachine':
+                obj = self.cleaned_data.get('virtual_machine')
+            else:
+                obj = None
+
+            if obj:
+                self.cleaned_data['host_id'] = obj.pk
+            else:
+                self.cleaned_data['host_id'] = None
+        return self.cleaned_data
+
+    def save(self, *args, **kwargs):
+        self.instance.host_type = self.cleaned_data.get('host_type')
+        self.instance.host_id = self.cleaned_data.get('host_id')
+
+        # If a template was selected, create an Application from it
+        template = self.cleaned_data.get('template')
+        if template and not self.instance.application_id:
+            # Get host name for the name format
+            host_obj = None
+            if self.cleaned_data.get('device'):
+                host_obj = self.cleaned_data['device']
+            elif self.cleaned_data.get('virtual_machine'):
+                host_obj = self.cleaned_data['virtual_machine']
+
+            host_name = str(host_obj) if host_obj else 'unknown'
+            app_name = template.name_format.replace('{app}', template.name).replace('{host}', host_name)
+
+            app = Application.objects.create(
+                name=app_name,
+                status=template.default_status,
+                criticality=template.default_criticality,
+                environment=template.default_environment,
+                version=template.default_version,
+                group=template.group,
+                description=template.description,
+            )
+            self.instance.application = app
+
+            # Pre-fill deployment fields from template if not set by user
+            if not self.instance.port and template.default_port:
+                self.instance.port = template.default_port
+            if not self.instance.protocol and template.default_protocol:
+                self.instance.protocol = template.default_protocol
+            if not self.cleaned_data.get('role') or self.cleaned_data['role'] == 'primary':
+                self.instance.role = template.default_role
+
+        return super().save(*args, **kwargs)
+
+
+class ApplicationDeploymentFilterForm(NetBoxModelFilterSetForm):
+    model = ApplicationDeployment
+    application_id = DynamicModelChoiceField(
+        queryset=Application.objects.all(),
+        required=False,
+        label=_('Application')
+    )
+    role = forms.MultipleChoiceField(
+        choices=DeploymentRoleChoices,
+        required=False,
+        label=_('Role')
+    )
+
+    fieldsets = (
+        FieldSet('application_id', 'role'),
+    )
+
+
+class ApplicationBulkDeployForm(forms.Form):
+    """Deploy an application to multiple devices at once."""
+
+    DEPLOY_MODE_CHOICES = [
+        ('instances', _('Separate instances (one app per host)')),
+        ('shared', _('Shared (one app, multiple hosts)')),
+    ]
+
+    mode = forms.ChoiceField(
+        label=_('Deploy Mode'),
+        choices=DEPLOY_MODE_CHOICES,
+        initial='instances',
+        help_text=_('Separate: creates a copy of this app for each host — independent status per host. '
+                    'Shared: links this single app to all selected hosts.'),
+    )
+    devices = DynamicModelMultipleChoiceField(
+        label=_('Devices'),
+        queryset=Device.objects.all(),
+        required=False,
+    )
+    role = forms.ChoiceField(
+        label=_('Role'),
+        choices=DeploymentRoleChoices,
+        initial='primary',
+    )
+    port = forms.IntegerField(
+        label=_('Port'),
+        required=False,
+    )
+    protocol = forms.CharField(
+        label=_('Protocol'),
+        max_length=50,
+        required=False,
+    )
+    name_format = forms.CharField(
+        label=_('Instance Name Format'),
+        initial='{app}',
+        required=False,
+        help_text=_('Name for each instance. Use {app} for app name, {host} for hostname. '
+                    'Example: "{app} ({host})" → "Redis (srv-db-01)". Leave as "{app}" to keep the original name.'),
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        try:
+            from virtualization.models import VirtualMachine
+            self.fields['virtual_machines'] = DynamicModelMultipleChoiceField(
+                label=_('Virtual Machines'),
+                queryset=VirtualMachine.objects.all(),
+                required=False,
+            )
+        except ImportError:
+            pass
+
+
+#
+# ApplicationDependency forms
+#
+
+class ApplicationDependencyForm(NetBoxModelForm):
+    source_application = DynamicModelChoiceField(
+        label=_('Source Application'),
+        queryset=Application.objects.all(),
+    )
+    target_application = DynamicModelChoiceField(
+        label=_('Target Application'),
+        queryset=Application.objects.all(),
+    )
+
+    fieldsets = (
+        FieldSet(
+            'source_application', 'target_application',
+            'dependency_type', 'protocol', 'port', 'status',
+            'description', 'tags',
+            name=_('Dependency')
+        ),
+    )
+
+    class Meta:
+        model = ApplicationDependency
+        fields = [
+            'source_application', 'target_application',
+            'dependency_type', 'protocol', 'port', 'status',
+            'description', 'tags',
+        ]
+
+
+class ApplicationDependencyFilterForm(NetBoxModelFilterSetForm):
+    model = ApplicationDependency
+    source_application_id = DynamicModelChoiceField(
+        queryset=Application.objects.all(),
+        required=False,
+        label=_('Source Application')
+    )
+    target_application_id = DynamicModelChoiceField(
+        queryset=Application.objects.all(),
+        required=False,
+        label=_('Target Application')
+    )
+    dependency_type = forms.MultipleChoiceField(
+        choices=DependencyTypeChoices,
+        required=False,
+        label=_('Dependency Type')
+    )
+    protocol = forms.MultipleChoiceField(
+        choices=DependencyProtocolChoices,
+        required=False,
+        label=_('Protocol')
+    )
+    status = forms.MultipleChoiceField(
+        choices=ApplicationStatusChoices,
+        required=False,
+        label=_('Status')
+    )
+
+    fieldsets = (
+        FieldSet('source_application_id', 'target_application_id', 'dependency_type', 'protocol', 'status'),
+    )
+
+
+class ApplicationDependencyBulkEditForm(NetBoxModelBulkEditForm):
+    dependency_type = forms.ChoiceField(
+        choices=DependencyTypeChoices,
+        required=False,
+        label=_('Dependency Type'),
+    )
+    protocol = forms.ChoiceField(
+        choices=DependencyProtocolChoices,
+        required=False,
+        label=_('Protocol'),
+    )
+    status = forms.ChoiceField(
+        choices=ApplicationStatusChoices,
+        required=False,
+        label=_('Status'),
+    )
+    description = forms.CharField(max_length=500, required=False)
+
+    model = ApplicationDependency
+    nullable_fields = ('protocol', 'port', 'description')
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['dependency_type'].choices = [('', '---------')] + list(DependencyTypeChoices)
+        self.fields['protocol'].choices = [('', '---------')] + list(DependencyProtocolChoices)
+        self.fields['status'].choices = [('', '---------')] + list(ApplicationStatusChoices)

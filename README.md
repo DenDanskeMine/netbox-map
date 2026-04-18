@@ -53,6 +53,19 @@ A NetBox plugin for interactive floor plan visualization, site maps, rack utiliz
 - Toggle MAC address display, custom fields, GPS sync
 - No file editing or restarts needed
 
+**Network Topology**
+- Interactive topology view with stencil device cards and interface ports
+- Hierarchical layout, orthogonal cable routing with obstacle avoidance
+- Saved views with position persistence and filters
+- PDF export, cable coloring by type or speed, pass-through collapse
+
+**Application Mapping** ![Beta](https://img.shields.io/badge/status-beta-orange.svg)
+- Model applications, deployments to devices/VMs, and inter-app dependencies
+- Application topology view with dependency edges and failure simulation
+- Mixed mode: devices + apps + deployed-on connections on one canvas
+- Templates for bulk application deployment
+- Device/VM detail page integration (Applications tab + panel)
+
 **Integration**
 - Site detail page panel with floor plan links
 - Device detail page "Map Locations" tab
@@ -126,17 +139,34 @@ Now clicking the Map button on any Site or Device opens the plugin's site map ce
 
 | Endpoint | Description |
 |----------|-------------|
-| `/api/plugins/netbox-map/floorplans/` | Floor plan CRUD |
-| `/api/plugins/netbox-map/floorplan-tiles/` | Tile CRUD |
-| `/api/plugins/netbox-map/location-coordinates/` | Location coordinates |
-| `/api/plugins/netbox-map/map-markers/` | Map marker CRUD |
+| `/api/plugins/map/floorplans/` | Floor plan CRUD |
+| `/api/plugins/map/floorplan-tiles/` | Tile CRUD |
+| `/api/plugins/map/tile-port-assignments/` | Tile port assignments |
+| `/api/plugins/map/location-coordinates/` | Location GPS coordinates |
+| `/api/plugins/map/map-markers/` | Map marker CRUD |
+| `/api/plugins/map/cable-paths/` | Fiber/cable paths |
+| `/api/plugins/map/custom-marker-types/` | Custom marker types |
+| `/api/plugins/map/map-settings/` | Plugin settings (singleton) |
+| `/api/plugins/map/topology-saved-views/` | Topology saved views |
+| `/api/plugins/map/applications/` | Application CRUD |
+| `/api/plugins/map/application-groups/` | Application groups |
+| `/api/plugins/map/application-templates/` | Application templates |
+| `/api/plugins/map/application-deployments/` | App-to-host deployments |
+| `/api/plugins/map/application-dependencies/` | App dependency edges |
 
 All endpoints support filtering, pagination, and brief mode.
 
-## Requirements
+## Compatibility
 
-- NetBox 4.5.0+
-- Python 3.12+
+| netbox-map | NetBox   | Python |
+|------------|----------|--------|
+| 0.9.x      | 4.5+    | 3.12+  |
+| 0.8.x      | 4.5+    | 3.12+  |
+| ≤ 0.7.x    | 4.5+    | 3.12+  |
+
+### Dependencies
+
+- No additional Python packages required (only NetBox itself)
 
 ## Development
 

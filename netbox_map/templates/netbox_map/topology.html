@@ -81,6 +81,15 @@
 
       <span class="topo-toolbar-divider"></span>
 
+      {# Topology mode #}
+      <div class="topo-btn-group">
+        <button id="mode-network" class="topo-btn active" type="button" title="{% trans 'Network Topology' %}"><i class="mdi mdi-lan"></i></button>
+        <button id="mode-apps" class="topo-btn" type="button" title="{% trans 'Application Map (Beta)' %}"><i class="mdi mdi-application-outline"></i> <span class="badge bg-warning text-dark" style="font-size:.55rem;vertical-align:top;margin-left:-2px">Beta</span></button>
+        <button id="mode-mixed" class="topo-btn" type="button" title="{% trans 'Mixed View (Beta)' %}"><i class="mdi mdi-layers-outline"></i> <span class="badge bg-warning text-dark" style="font-size:.55rem;vertical-align:top;margin-left:-2px">Beta</span></button>
+      </div>
+
+      <span class="topo-toolbar-divider"></span>
+
       {# View mode #}
       <div class="topo-btn-group">
         <button id="view-stencil" class="topo-btn active" type="button" title="{% trans 'Stencil View' %}"><i class="mdi mdi-card-outline"></i></button>
@@ -148,9 +157,13 @@
      data-device-detail-url="{% url 'plugins:netbox_map:topology_device_detail' device_id=0 %}"
      data-csrf-token="{{ csrf_token }}"
      data-save-url="{% url 'plugins:netbox_map:topology_save_layout' %}"
-     data-saved-view-id="{{ saved_view.pk|default:'' }}">
+     data-saved-view-id="{{ saved_view.pk|default:'' }}"
+     data-app-data-url="{% url 'plugins:netbox_map:topology_app_data' %}"
+     data-app-detail-url="{% url 'plugins:netbox_map:topology_app_detail' app_id=0 %}"
+     data-topology-mode="{{ topology_mode }}">
   <div class="topology-graph-area">
     <svg id="topology-svg"></svg>
+    <div id="topo-alerts" class="topo-alerts d-none"></div>
     <div id="topology-loading" class="topology-overlay d-none">
       <div class="spinner-border text-primary" role="status"></div>
       <span class="ms-2">{% trans "Loading topology..." %}</span>
@@ -238,8 +251,8 @@
 {{ initial_filters_json|json_script:"topo-initial-filters" }}
 {{ saved_view_data|json_script:"topo-saved-layout" }}
 
-{# ===== Footer legend ===== #}
-<div class="topo-footer">
+{# ===== Footer legend (switches based on topology mode) ===== #}
+<div class="topo-footer" id="legend-network">
   <div class="topo-legend">
     <span class="topo-legend-title">{% trans "Speed" %}</span>
     <span class="topo-legend-item"><span class="legend-dot" style="background:#f39c12;"></span>100M</span>
@@ -255,12 +268,34 @@
     <span class="topo-legend-item"><span class="legend-dot" style="background:#795548;"></span>{% trans "Rear" %}</span>
   </div>
 </div>
+<div class="topo-footer d-none" id="legend-apps">
+  <div class="topo-legend">
+    <span class="topo-legend-title">{% trans "Criticality" %}</span>
+    <span class="topo-legend-item"><span class="legend-dot" style="background:#e74c3c;"></span>{% trans "Critical" %}</span>
+    <span class="topo-legend-item"><span class="legend-dot" style="background:#e67e22;"></span>{% trans "High" %}</span>
+    <span class="topo-legend-item"><span class="legend-dot" style="background:#f39c12;"></span>{% trans "Medium" %}</span>
+    <span class="topo-legend-item"><span class="legend-dot" style="background:#3498db;"></span>{% trans "Low" %}</span>
+  </div>
+  <div class="topo-legend">
+    <span class="topo-legend-title">{% trans "Dependency" %}</span>
+    <span class="topo-legend-item"><span style="display:inline-block;width:20px;height:2px;background:#e74c3c;vertical-align:middle;margin-right:4px;"></span>{% trans "Hard" %}</span>
+    <span class="topo-legend-item"><span style="display:inline-block;width:20px;height:2px;background:#e67e22;vertical-align:middle;margin-right:4px;border-top:2px dashed #e67e22;height:0;"></span>{% trans "Soft" %}</span>
+    <span class="topo-legend-item"><span style="display:inline-block;width:20px;height:0;border-top:2px dotted #5a6080;vertical-align:middle;margin-right:4px;"></span>{% trans "Deployed on" %}</span>
+  </div>
+  <div class="topo-legend">
+    <span class="topo-legend-title">{% trans "Simulation" %}</span>
+    <span class="topo-legend-item"><span class="legend-dot" style="background:#e74c3c;"></span>{% trans "Failed" %}</span>
+    <span class="topo-legend-item"><span class="legend-dot" style="background:#e67e22;"></span>{% trans "Impacted" %}</span>
+  </div>
+</div>
 {% endblock %}
 
 {% block javascript %}
   <script src="{% static 'netbox_map/js/d3.v7.min.js' %}"></script>
+  <script src="{% static 'netbox_map/js/dagre.min.js' %}"></script>
   <script src="{% static 'netbox_map/js/topology_core.js' %}"></script>
   <script src="{% static 'netbox_map/js/topology_renderer.js' %}"></script>
+  <script src="{% static 'netbox_map/js/topology_app_renderer.js' %}"></script>
   <script src="{% static 'netbox_map/js/topology_sidebar.js' %}"></script>
   <script src="{% static 'netbox_map/js/topology_detail.js' %}"></script>
   <script src="{% static 'netbox_map/js/topology_main.js' %}"></script>

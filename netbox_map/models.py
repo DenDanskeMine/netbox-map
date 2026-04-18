@@ -1,18 +1,26 @@
+from dcim.choices import CableTypeChoices
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import ValidationError
+from django.core.validators import MaxValueValidator, MinValueValidator, RegexValidator
 from django.db import models
 from django.urls import reverse
-from django.core.validators import MinValueValidator, MaxValueValidator, RegexValidator
 from django.utils.text import slugify
 from django.utils.translation import gettext_lazy as _
-
 from netbox.models import NetBoxModel
-from dcim.choices import CableTypeChoices
+
 from .choices import (
-    FloorPlanTileStatusChoices, FloorPlanTileTypeChoices,
+    BUILTIN_TYPE_SLUGS,
+    ApplicationCriticalityChoices,
+    ApplicationEnvironmentChoices,
+    ApplicationStatusChoices,
     CablePathStatusChoices,
-    BUILTIN_TYPE_SLUGS, get_tile_type_display,
+    DependencyProtocolChoices,
+    DependencyTypeChoices,
+    DeploymentRoleChoices,
+    FloorPlanTileStatusChoices,
+    FloorPlanTileTypeChoices,
+    get_tile_type_display,
 )
 
 # Object types that can be linked to floor plan tiles
@@ -40,7 +48,9 @@ class CustomMarkerType(NetBoxModel):
         validators=[
             RegexValidator(
                 regex=r'^custom_[a-z0-9_]+$',
-                message=_('Slug must start with "custom_" and contain only lowercase letters, numbers, and underscores.'),
+                message=_(
+                    'Slug must start with "custom_" and contain only lowercase letters, numbers, and underscores.'
+                ),
             ),
         ],
         help_text=_('Auto-prefixed with "custom_". Used as tile_type/marker_type value.'),
@@ -770,3 +780,252 @@ class TopologySavedView(NetBoxModel):
 
     def get_absolute_url(self):
         return reverse('plugins:netbox_map:topologysavedview', args=[self.pk])
+
+
+#
+# Application models
+#
+
+class ApplicationGroup(NetBoxModel):
+    """Logical grouping of applications."""
+    name = models.CharField(max_length=100, unique=True)
+    slug = models.SlugField(max_length=100, unique=True)
+    color = models.CharField(
+        max_length=7, default='#3498db',
+        validators=[RegexValidator(regex=r'^#[0-9a-fA-F]{6}$', message=_('Enter a valid hex color.'))],
+    )
+    description = models.CharField(max_length=200, blank=True)
+
+    clone_fields = ('color',)
+
+    class Meta:
+        ordering = ('name',)
+        verbose_name = _('application group')
+        verbose_name_plural = _('application groups')
+
+    def __str__(self):
+        return self.name
+
+    def get_absolute_url(self):
+        return reverse('plugins:netbox_map:applicationgroup', args=[self.pk])
+
+
+class ApplicationTemplate(NetBoxModel):
+    """Blueprint for creating Application instances when deployed to a host."""
+    name = models.CharField(max_length=200)
+    slug = models.SlugField(max_length=200, unique=True)
+    description = models.TextField(blank=True)
+    default_status = models.CharField(
+        max_length=50, choices=ApplicationStatusChoices,
+        default=ApplicationStatusChoices.STATUS_ACTIVE,
+    )
+    default_criticality = models.CharField(
+        max_length=50, choices=ApplicationCriticalityChoices,
+        default=ApplicationCriticalityChoices.CRITICALITY_MEDIUM,
+    )
+    default_environment = models.CharField(
+        max_length=50, choices=ApplicationEnvironmentChoices,
+        default=ApplicationEnvironmentChoices.ENV_PRODUCTION,
+    )
+    default_version = models.CharField(max_length=100, blank=True)
+    default_port = models.IntegerField(null=True, blank=True)
+    default_protocol = models.CharField(max_length=50, blank=True)
+    default_role = models.CharField(
+        max_length=50, choices=DeploymentRoleChoices,
+        default=DeploymentRoleChoices.ROLE_PRIMARY,
+    )
+    group = models.ForeignKey(
+        'ApplicationGroup', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='templates',
+    )
+    name_format = models.CharField(
+        max_length=200, default='{app}',
+        help_text=_('Use {app} for template name, {host} for hostname'),
+    )
+
+    class Meta:
+        ordering = ['name']
+        verbose_name = _('application template')
+        verbose_name_plural = _('application templates')
+
+    def __str__(self):
+        return self.name
+
+    def get_absolute_url(self):
+        return reverse('plugins:netbox_map:applicationtemplate', args=[self.pk])
+
+
+class Application(NetBoxModel):
+    """An application or service deployed in the organization."""
+    name = models.CharField(max_length=200)
+    status = models.CharField(
+        max_length=30, choices=ApplicationStatusChoices,
+        default=ApplicationStatusChoices.STATUS_ACTIVE,
+    )
+    criticality = models.CharField(
+        max_length=30, choices=ApplicationCriticalityChoices,
+        default=ApplicationCriticalityChoices.CRITICALITY_MEDIUM,
+    )
+    environment = models.CharField(
+        max_length=30, choices=ApplicationEnvironmentChoices,
+        default=ApplicationEnvironmentChoices.ENV_PRODUCTION,
+    )
+    version = models.CharField(max_length=50, blank=True)
+    description = models.CharField(max_length=500, blank=True)
+    comments = models.TextField(blank=True)
+    external_url = models.URLField(max_length=500, blank=True, help_text=_('URL to docs, dashboard, or entry point'))
+    default_port = models.IntegerField(null=True, blank=True, help_text=_('Default port this application listens on'))
+    default_protocol = models.CharField(
+        max_length=50, blank=True, help_text=_('Default protocol (e.g., HTTP, TCP, gRPC)'),
+    )
+    group = models.ForeignKey(
+        'netbox_map.ApplicationGroup', on_delete=models.SET_NULL,
+        related_name='applications', blank=True, null=True,
+    )
+    tenant = models.ForeignKey(
+        'tenancy.Tenant', on_delete=models.SET_NULL,
+        related_name='+', blank=True, null=True,
+    )
+    site = models.ForeignKey(
+        'dcim.Site', on_delete=models.SET_NULL,
+        related_name='+', blank=True, null=True,
+    )
+    primary_ip = models.ForeignKey(
+        'ipam.IPAddress', on_delete=models.SET_NULL,
+        related_name='+', blank=True, null=True,
+        verbose_name=_('Primary IP'),
+        help_text=_('Primary IP address for this application'),
+    )
+
+    clone_fields = (
+        'status', 'criticality', 'environment', 'group', 'tenant', 'site',
+        'default_port', 'default_protocol',
+    )
+
+    class Meta:
+        ordering = ('name',)
+        verbose_name = _('application')
+        verbose_name_plural = _('applications')
+        constraints = [
+            models.UniqueConstraint(
+                fields=('name', 'environment', 'tenant'),
+                name='%(app_label)s_%(class)s_unique_name_env_tenant',
+            ),
+        ]
+
+    def __str__(self):
+        return self.name
+
+    def get_absolute_url(self):
+        return reverse('plugins:netbox_map:application', args=[self.pk])
+
+
+ASSIGNABLE_HOST_MODELS = ('dcim.device', 'virtualization.virtualmachine')
+
+
+class ApplicationDeployment(NetBoxModel):
+    """Links an Application to a Device or VirtualMachine it runs on."""
+    application = models.ForeignKey(
+        'netbox_map.Application', on_delete=models.CASCADE, related_name='deployments',
+    )
+    host_type = models.ForeignKey(
+        to='contenttypes.ContentType', on_delete=models.PROTECT, related_name='+',
+        limit_choices_to={'app_label__in': ['dcim', 'virtualization'], 'model__in': ['device', 'virtualmachine']},
+    )
+    host_id = models.PositiveBigIntegerField()
+    host = GenericForeignKey(ct_field='host_type', fk_field='host_id')
+    role = models.CharField(
+        max_length=30, choices=DeploymentRoleChoices,
+        default=DeploymentRoleChoices.ROLE_PRIMARY,
+    )
+    port = models.PositiveIntegerField(
+        blank=True, null=True, validators=[MinValueValidator(1), MaxValueValidator(65535)],
+    )
+    protocol = models.CharField(max_length=50, blank=True)
+    ip_address = models.ForeignKey(
+        'ipam.IPAddress', on_delete=models.SET_NULL,
+        related_name='+', blank=True, null=True,
+        verbose_name=_('IP Address'),
+        help_text=_('IP address this deployment listens on'),
+    )
+    service = models.ForeignKey(
+        'ipam.Service', on_delete=models.SET_NULL,
+        related_name='+', blank=True, null=True,
+        verbose_name=_('Service'),
+        help_text=_('NetBox application service linked to this deployment'),
+    )
+    description = models.CharField(max_length=200, blank=True)
+
+    clone_fields = ('application', 'role', 'port', 'protocol')
+
+    class Meta:
+        ordering = ('application', 'host_type', 'host_id')
+        verbose_name = _('application deployment')
+        verbose_name_plural = _('application deployments')
+        constraints = [
+            models.UniqueConstraint(
+                fields=('application', 'host_type', 'host_id'),
+                name='%(app_label)s_%(class)s_unique_app_host',
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['host_type', 'host_id']),
+        ]
+
+    def __str__(self):
+        return f'{self.application} on {self.host}'
+
+    def get_absolute_url(self):
+        return reverse('plugins:netbox_map:applicationdeployment', args=[self.pk])
+
+
+class ApplicationDependency(NetBoxModel):
+    """Directed dependency: source_application depends on target_application."""
+    source_application = models.ForeignKey(
+        'netbox_map.Application', on_delete=models.CASCADE, related_name='dependencies',
+        help_text=_('The application that depends on the target'),
+    )
+    target_application = models.ForeignKey(
+        'netbox_map.Application', on_delete=models.CASCADE, related_name='dependents',
+        help_text=_('The application being depended upon'),
+    )
+    dependency_type = models.CharField(
+        max_length=30, choices=DependencyTypeChoices,
+        default=DependencyTypeChoices.TYPE_HARD,
+    )
+    protocol = models.CharField(
+        max_length=30, choices=DependencyProtocolChoices, blank=True, default='',
+    )
+    port = models.PositiveIntegerField(
+        blank=True, null=True, validators=[MinValueValidator(1), MaxValueValidator(65535)],
+    )
+    status = models.CharField(
+        max_length=30, choices=ApplicationStatusChoices,
+        default=ApplicationStatusChoices.STATUS_ACTIVE,
+    )
+    description = models.CharField(max_length=500, blank=True)
+
+    clone_fields = ('dependency_type', 'protocol', 'port', 'status')
+
+    class Meta:
+        ordering = ('source_application', 'target_application')
+        verbose_name = _('application dependency')
+        verbose_name_plural = _('application dependencies')
+        constraints = [
+            models.UniqueConstraint(
+                fields=('source_application', 'target_application'),
+                name='%(app_label)s_%(class)s_unique_dep',
+            ),
+        ]
+
+    def __str__(self):
+        return f'{self.source_application} \u2192 {self.target_application}'
+
+    def get_absolute_url(self):
+        return reverse('plugins:netbox_map:applicationdependency', args=[self.pk])
+
+    def clean(self):
+        super().clean()
+        if self.source_application_id and self.target_application_id:
+            if self.source_application_id == self.target_application_id:
+                raise ValidationError(_('An application cannot depend on itself.'))

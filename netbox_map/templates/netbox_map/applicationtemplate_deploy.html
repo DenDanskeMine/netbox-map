@@ -1,0 +1,50 @@
+{% extends 'generic/object.html' %}
+{% load helpers %}
+{% load i18n %}
+{% load form_helpers %}
+
+{% block title %}{% trans "Deploy Template" %}: {{ object }}{% endblock %}
+
+{% block content %}
+<div class="row mb-3">
+  <div class="col-md-8 col-lg-6">
+    <div class="card">
+      <h5 class="card-header">
+        {% trans "Deploy" %} <strong>{{ object.name }}</strong> {% trans "to hosts" %}
+      </h5>
+      <div class="card-body">
+        <p class="text-muted small mb-3">
+          {% trans "Select devices to deploy this template to. A new application will be created for each host using the name format:" %}
+          <code>{{ object.name_format }}</code>
+        </p>
+        <form method="post">
+          {% csrf_token %}
+          {% render_field form.devices %}
+          {% if form.virtual_machines %}
+            {% render_field form.virtual_machines %}
+          {% endif %}
+          <div class="text-end mt-3">
+            <a href="{{ object.get_absolute_url }}" class="btn btn-outline-secondary">{% trans "Cancel" %}</a>
+            <button type="submit" class="btn btn-primary">
+              <i class="mdi mdi-rocket-launch"></i> {% trans "Deploy" %}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-4 col-lg-6">
+    <div class="card">
+      <h5 class="card-header">{% trans "Template Defaults" %}</h5>
+      <table class="table table-hover attr-table mb-0">
+        <tr><th>{% trans "Status" %}</th><td>{{ object.get_default_status_display }}</td></tr>
+        <tr><th>{% trans "Criticality" %}</th><td>{{ object.get_default_criticality_display }}</td></tr>
+        <tr><th>{% trans "Environment" %}</th><td>{{ object.get_default_environment_display }}</td></tr>
+        <tr><th>{% trans "Role" %}</th><td>{{ object.get_default_role_display }}</td></tr>
+        {% if object.default_port %}<tr><th>{% trans "Port" %}</th><td>{{ object.default_port }}</td></tr>{% endif %}
+        {% if object.default_protocol %}<tr><th>{% trans "Protocol" %}</th><td>{{ object.default_protocol }}</td></tr>{% endif %}
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -15,6 +15,8 @@
     var renderer = new App.Renderer(state, events);
     renderer.init();
 
+    var appRenderer = App.AppRenderer ? new App.AppRenderer(state, events, renderer) : null;
+
     // Expose events for inline handlers
     App._events = events;
 
@@ -43,12 +45,25 @@
             state.customHierarchy = layout._hierarchy;
         }
 
+        // Restore topology mode if saved
+        if (layout._topology_mode) {
+            state.topologyMode = layout._topology_mode;
+        }
+
+        // Merge mode-specific positions into the top level
+        var modeKey = '_pos_' + state.topologyMode;
+        if (layout[modeKey] && typeof layout[modeKey] === 'object') {
+            Object.keys(layout[modeKey]).forEach(function(nodeId) {
+                layout[nodeId] = Object.assign(layout[nodeId] || {}, layout[modeKey][nodeId]);
+            });
+        }
+
         for (var nodeId in layout) {
-            if (nodeId === '_hierarchy') continue;
+            if (nodeId.charAt(0) === '_') continue;  // skip metadata keys
             var data = layout[nodeId];
+            if (!data || typeof data !== 'object') continue;
             if (data.hidden) state.hiddenNodes.add(nodeId);
             if (data.pinned) {
-                // Mark node as pinned — will be applied after nodes are loaded
                 state._pinnedNodes = state._pinnedNodes || new Set();
                 state._pinnedNodes.add(nodeId);
             }
@@ -63,8 +78,28 @@
     // Collect current layout for saving — reads positions from renderer's actual data
     function collectLayout() {
         var layout = {};
-        // Use renderer's positioned data (has actual x,y from layout + drag)
-        var renderedNodes = renderer._stencilNodeData || state.nodes;
+
+        // Preserve ALL existing saved data (positions for other modes, metadata)
+        var existing = state.savedLayout || {};
+        Object.keys(existing).forEach(function(key) {
+            layout[key] = typeof existing[key] === 'object' && existing[key] !== null
+                ? Object.assign({}, existing[key]) : existing[key];
+        });
+
+        // Save current mode's positions under a mode-specific key
+        var modeKey = '_pos_' + state.topologyMode;
+        var modePositions = {};
+
+        var renderedNodes;
+        if (state.topologyMode === 'mixed') {
+            // Mixed mode: combine device positions (from network renderer) + app positions
+            renderedNodes = (renderer._stencilNodeData || []).concat(appRenderer && appRenderer._nodes ? appRenderer._nodes : []);
+        } else if (state.topologyMode !== 'network' && appRenderer && appRenderer._nodes) {
+            renderedNodes = appRenderer._nodes;
+        } else {
+            renderedNodes = renderer._stencilNodeData || state.nodes;
+        }
+
         renderedNodes.forEach(function(n) {
             var entry = { x: n.x || 0, y: n.y || 0 };
             if (state.hiddenNodes.has(n.id)) entry.hidden = true;
@@ -78,24 +113,36 @@
             });
             if (Object.keys(portOverrides).length > 0) entry.port_overrides = portOverrides;
 
+            modePositions[n.id] = entry;
+
+            // Also save at top level for backward compat
             layout[n.id] = entry;
         });
+
+        layout[modeKey] = modePositions;
+        if (state.topologyMode !== 'network') {
+            layout._topology_mode = state.topologyMode;
+        }
         return layout;
     }
 
     // Get current positions from renderer for preserving across re-renders
     function getCurrentPositions() {
         var positions = {};
-        var renderedNodes = renderer._stencilNodeData || [];
+        var renderedNodes = (appRenderer && appRenderer._nodes) || renderer._stencilNodeData || [];
         renderedNodes.forEach(function(n) {
             if (n.x !== undefined) positions[n.id] = { x: n.x, y: n.y };
         });
         return positions;
     }
 
-    // Wire renderer highlight from sidebar clicks
+    // Wire renderer focus from sidebar clicks — pan + zoom to node
     events.on('renderer:highlight', function(nodeId) {
-        renderer.highlightNode(nodeId);
+        if (state.topologyMode !== 'network' && appRenderer) {
+            appRenderer.focusNode(nodeId);
+        } else {
+            renderer.focusNode(nodeId);
+        }
     });
 
     // Wire filter visibility
@@ -106,6 +153,95 @@
     // Wire hide/show from sidebar
     events.on('node:hidden', function() {
         renderer.applyHiddenNodes(state.hiddenNodes);
+    });
+
+    // Wire simulate failure from detail panel
+    events.on('app:simulate', function(nodeId) {
+        if (appRenderer) appRenderer.simulateFailure(nodeId);
+    });
+
+    // ── Alert overlay for down/degraded services ──
+    var alertsEl = document.getElementById('topo-alerts');
+    events.on('data:loaded', function(data) {
+        if (!alertsEl) return;
+        var nodes = data.nodes || [];
+        var down = [], degraded = [];
+        nodes.forEach(function(n) {
+            if (n.node_type !== 'application') return;
+            var hs = n.host_status || 'healthy';
+            if (hs === 'down') down.push(n);
+            else if (hs === 'degraded') degraded.push(n);
+        });
+
+        if (down.length === 0 && degraded.length === 0) {
+            alertsEl.classList.add('d-none');
+            alertsEl.innerHTML = '';
+            return;
+        }
+
+        var html = '<div class="topo-alert-bar">';
+        html += '<div class="topo-alert-summary">';
+        if (down.length > 0) {
+            html += '<span class="topo-alert-count alert-down">' + down.length + ' down</span>';
+        }
+        if (degraded.length > 0) {
+            html += '<span class="topo-alert-count alert-degraded">' + degraded.length + ' degraded</span>';
+        }
+        html += '<button class="topo-alert-toggle" id="topo-alert-toggle">'
+            + '<i class="mdi mdi-chevron-down"></i></button>';
+        html += '<button class="topo-alert-dismiss" id="topo-alert-dismiss">'
+            + '<i class="mdi mdi-close"></i></button>';
+        html += '</div>';
+
+        // Expandable list
+        html += '<div class="topo-alert-list d-none" id="topo-alert-list">';
+        down.forEach(function(n) {
+            var reasons = (n.host_down_reasons || []).join(', ');
+            html += '<div class="topo-alert-item alert-down" data-node-id="' + App.escapeHtml(n.id) + '">'
+                + '<span class="topo-alert-dot" style="background:#e74c3c;"></span>'
+                + '<span class="topo-alert-name">' + App.escapeHtml(n.name) + '</span>'
+                + '<span class="topo-alert-reason">' + App.escapeHtml(reasons) + '</span>'
+                + '</div>';
+        });
+        degraded.forEach(function(n) {
+            var reasons = (n.host_down_reasons || []).join(', ');
+            html += '<div class="topo-alert-item alert-degraded" data-node-id="' + App.escapeHtml(n.id) + '">'
+                + '<span class="topo-alert-dot" style="background:#e67e22;"></span>'
+                + '<span class="topo-alert-name">' + App.escapeHtml(n.name) + '</span>'
+                + '<span class="topo-alert-reason">' + App.escapeHtml(reasons) + '</span>'
+                + '</div>';
+        });
+        html += '</div></div>';
+
+        alertsEl.innerHTML = html;
+        alertsEl.classList.remove('d-none');
+
+        // Toggle expand/collapse
+        var toggleBtn = document.getElementById('topo-alert-toggle');
+        var listEl = document.getElementById('topo-alert-list');
+        if (toggleBtn && listEl) {
+            toggleBtn.addEventListener('click', function() {
+                var hidden = listEl.classList.toggle('d-none');
+                toggleBtn.querySelector('i').className = 'mdi mdi-chevron-' + (hidden ? 'down' : 'up');
+            });
+        }
+
+        // Dismiss button
+        var dismissBtn = document.getElementById('topo-alert-dismiss');
+        if (dismissBtn) {
+            dismissBtn.addEventListener('click', function() {
+                alertsEl.classList.add('d-none');
+                alertsEl.innerHTML = '';
+            });
+        }
+
+        // Click item → focus on map
+        alertsEl.querySelectorAll('.topo-alert-item').forEach(function(el) {
+            el.addEventListener('click', function() {
+                var nodeId = this.getAttribute('data-node-id');
+                events.emit('renderer:highlight', nodeId);
+            });
+        });
     });
 
     // Load topology data
@@ -185,7 +321,7 @@
         });
     }
 
-    loadTopology();
+    // Initial load is deferred until after mode toggle declarations (see below)
 
     // Zoom controls
     var zoomIn = document.getElementById('topo-zoom-in');
@@ -194,6 +330,335 @@
     if (zoomIn) zoomIn.addEventListener('click', function() { renderer.zoomIn(); });
     if (zoomOut) zoomOut.addEventListener('click', function() { renderer.zoomOut(); });
     if (zoomFit) zoomFit.addEventListener('click', function() { renderer.fitToView(); });
+
+    // Topology mode toggle (network / apps / mixed)
+    var modeNetwork = document.getElementById('mode-network');
+    var modeApps = document.getElementById('mode-apps');
+    var modeMixed = document.getElementById('mode-mixed');
+
+    function setModeActive(btn) {
+        [modeNetwork, modeApps, modeMixed].forEach(function(b) { if (b) b.classList.remove('active'); });
+        if (btn) btn.classList.add('active');
+    }
+
+    // Set up mode-specific UI (toolbar, legend, stats labels)
+    function applyModeUI(mode) {
+        setModeActive(mode === 'apps' ? modeApps : mode === 'mixed' ? modeMixed : modeNetwork);
+
+        // Switch footer legend — mixed mode shows both
+        var legendNetwork = document.getElementById('legend-network');
+        var legendApps = document.getElementById('legend-apps');
+        if (legendNetwork) legendNetwork.classList.toggle('d-none', mode === 'apps');
+        if (legendApps) legendApps.classList.toggle('d-none', mode === 'network');
+
+        // Update toolbar visibility for network-only controls
+        // Hide network-only controls in apps mode; show in network + mixed
+        var networkOnlyBtns = ['topo-add-devices', 'topo-edit-hierarchy', 'topo-auto-sort',
+            'topo-collapse-pp', 'topo-toggle-labels', 'view-stencil', 'view-node'];
+        networkOnlyBtns.forEach(function(id) {
+            var el = document.getElementById(id);
+            if (el) el.style.display = (mode === 'apps') ? 'none' : '';
+        });
+        // Cable color toggles: visible in network + mixed, hidden in apps-only
+        ['cable-color-physical', 'cable-color-speed'].forEach(function(id) {
+            var el = document.getElementById(id);
+            if (el) el.style.display = (mode === 'apps') ? 'none' : '';
+        });
+
+        // Update stats labels
+        var statNodes = document.getElementById('stat-nodes');
+        var statEdges = document.getElementById('stat-edges');
+        if (statNodes && statNodes.nextSibling) {
+            var nodesLabel = statNodes.parentNode;
+            if (nodesLabel) {
+                var walker = document.createTreeWalker(nodesLabel, NodeFilter.SHOW_TEXT);
+                var textNode;
+                while (textNode = walker.nextNode()) {
+                    if (textNode.textContent.indexOf('devices') !== -1) {
+                        textNode.textContent = mode === 'apps' ? ' apps' : ' devices';
+                    }
+                    if (textNode.textContent.indexOf('cables') !== -1 || textNode.textContent.indexOf('deps') !== -1) {
+                        textNode.textContent = mode === 'apps' ? ' deps' : ' cables';
+                    }
+                }
+            }
+        }
+    }
+
+    function switchToMode(mode) {
+        state.topologyMode = mode;
+        applyModeUI(mode);
+
+        // Clear state and reload (user-triggered mode switch — discard old positions)
+        state.nodes = [];
+        state.edges = [];
+        state.savedLayout = {};
+        state.hiddenNodes.clear();
+        state.selectedNode = null;
+        events.emit('node:deselect');
+
+        if (mode === 'mixed') {
+            loadMixedTopology();
+        } else if (mode === 'apps') {
+            loadAppTopology();
+        } else {
+            loadTopology();
+        }
+        if (typeof updateURL === 'function') updateURL();
+    }
+
+    if (modeNetwork) modeNetwork.addEventListener('click', function() { switchToMode('network'); });
+    if (modeApps) modeApps.addEventListener('click', function() { switchToMode('apps'); });
+    if (modeMixed) modeMixed.addEventListener('click', function() { switchToMode('mixed'); });
+
+    // ── URL param reading — takes priority over saved layout ──
+    var urlMode = container.getAttribute('data-topology-mode');
+    if (!urlMode) {
+        var urlParams = new URLSearchParams(window.location.search);
+        urlMode = urlParams.get('mode') || '';
+    }
+
+    // Initial load — URL mode > saved layout mode > default
+    if (urlMode === 'apps' || urlMode === 'mixed') {
+        state.topologyMode = urlMode;
+    } else if (state.savedLayout && state.savedLayout._topology_mode) {
+        state.topologyMode = state.savedLayout._topology_mode;
+    }
+
+    if (state.topologyMode === 'apps' || state.topologyMode === 'mixed') {
+        // Initial load — set up UI but DON'T clear savedLayout (switchToMode wipes it)
+        applyModeUI(state.topologyMode);
+        if (state.topologyMode === 'mixed') {
+            loadMixedTopology();
+        } else {
+            loadAppTopology();
+        }
+    } else {
+        loadTopology();
+    }
+
+    // ── Shareable URL update ──
+    function updateURL() {
+        var url = new URL(window.location);
+        url.searchParams.set('mode', state.topologyMode);
+        if (state.savedViewId) url.searchParams.set('view_id', state.savedViewId);
+        else url.searchParams.delete('view_id');
+        window.history.replaceState(null, '', url.toString());
+    }
+
+    function loadAppTopology() {
+        if (loadingEl) loadingEl.classList.remove('d-none');
+        if (emptyEl) emptyEl.classList.add('d-none');
+
+        var params = new URLSearchParams();
+        Object.keys(state.initialFilters).forEach(function(key) {
+            var val = state.initialFilters[key];
+            if (Array.isArray(val)) {
+                val.forEach(function(v) { params.append(key, v); });
+            } else {
+                params.append(key, val);
+            }
+        });
+
+        // If we have device nodes from a saved view, scope apps to those devices
+        if (!params.has('app_ids') && !params.has('focus_app') && !params.has('device_ids')) {
+            // Check saved layout for device IDs
+            var layout = state.savedLayout;
+            if (layout && typeof layout === 'object') {
+                var deviceIds = [];
+                Object.keys(layout).forEach(function(key) {
+                    if (key.indexOf('device-') === 0) {
+                        deviceIds.push(key.replace('device-', ''));
+                    }
+                });
+                if (deviceIds.length > 0) {
+                    params.set('device_ids', deviceIds.join(','));
+                }
+            }
+            // Also check if we have loaded network nodes
+            if (!params.has('device_ids') && state.nodes && state.nodes.length > 0) {
+                var netDevIds = [];
+                state.nodes.forEach(function(n) {
+                    if (n.device_id) netDevIds.push(n.device_id);
+                });
+                if (netDevIds.length > 0) {
+                    params.set('device_ids', netDevIds.join(','));
+                }
+            }
+        }
+
+        var url = state.appDataUrl + (params.toString() ? '?' + params.toString() : '');
+
+        api.get(url).then(function(data) {
+            if (loadingEl) loadingEl.classList.add('d-none');
+
+            state.nodes = data.nodes;
+            state.edges = data.edges;
+
+            if (data.nodes.length === 0) {
+                if (emptyEl) {
+                    emptyEl.classList.remove('d-none');
+                    emptyEl.querySelector('p').textContent = 'No applications found. Create applications and dependencies to see the topology.';
+                }
+                if (sidebarEl) sidebarEl.classList.add('hidden');
+                return;
+            }
+
+            // Apply saved layout before rendering
+            applySavedLayout();
+
+            if (appRenderer) {
+                appRenderer.render(data.nodes, data.edges);
+            } else {
+                renderer.render(data.nodes, data.edges);
+            }
+            events.emit('data:loaded', data);
+
+            if (sidebarEl) sidebarEl.classList.remove('hidden');
+
+            // Auto-focus on the target app if focus_app or app_ids param was used
+            var focusId = state.initialFilters.focus_app || state.initialFilters.app_ids;
+            if (focusId && appRenderer) {
+                var targetId = 'app-' + String(focusId).split(',')[0];
+                setTimeout(function() { appRenderer.focusNode(targetId); }, 300);
+            }
+
+            var statNodes = document.getElementById('stat-nodes');
+            var statEdges = document.getElementById('stat-edges');
+            if (statNodes) statNodes.textContent = data.stats.node_count;
+            if (statEdges) statEdges.textContent = data.stats.edge_count;
+
+        }).catch(function(err) {
+            if (loadingEl) loadingEl.classList.add('d-none');
+            if (emptyEl) {
+                emptyEl.classList.remove('d-none');
+                emptyEl.querySelector('p').textContent = 'Error loading application topology data.';
+            }
+            console.error('App topology load error:', err);
+        });
+    }
+
+    // ── Mixed topology: fetch BOTH network + app data, merge, render ──
+    function loadMixedTopology() {
+        if (loadingEl) loadingEl.classList.remove('d-none');
+        if (emptyEl) emptyEl.classList.add('d-none');
+
+        // Build params for both endpoints
+        var netParams = new URLSearchParams();
+        var appParams = new URLSearchParams();
+        Object.keys(state.initialFilters).forEach(function(key) {
+            var val = state.initialFilters[key];
+            if (key === 'focus_app' || key === 'app_ids') {
+                appParams.set(key, val);
+            } else if (key === 'device_ids') {
+                // Network needs device_ids; app endpoint gets site_id instead
+                netParams.set(key, val);
+            } else {
+                if (Array.isArray(val)) val.forEach(function(v) { netParams.append(key, v); });
+                else netParams.set(key, val);
+                // Pass site_id to app endpoint for full dependency data
+                if (key === 'site_id') appParams.set(key, val);
+            }
+        });
+
+        // If no site_id for app endpoint, try to get it from saved view filters
+        if (!appParams.has('site_id') && !appParams.has('app_ids') && !appParams.has('focus_app')) {
+            // Fall back to device_ids for app scoping only if no site available
+            var devIdsVal = state.initialFilters.device_ids;
+            if (devIdsVal) appParams.set('device_ids', devIdsVal);
+        }
+
+        var netUrl = state.topologyUrl + (netParams.toString() ? '?' + netParams.toString() : '');
+        var appUrl = state.appDataUrl + (appParams.toString() ? '?' + appParams.toString() : '');
+
+        // Fetch both in parallel
+        Promise.all([api.get(netUrl), api.get(appUrl)]).then(function(results) {
+            if (loadingEl) loadingEl.classList.add('d-none');
+
+            var netData = results[0];
+            var appData = results[1];
+
+            // Merge: combine nodes + edges, avoid duplicate device nodes
+            var mergedNodes = [];
+            var seenIds = new Set();
+
+            // Network nodes first (full device cards with interfaces)
+            (netData.nodes || []).forEach(function(n) {
+                seenIds.add(n.id);
+                n._source = 'network';
+                mergedNodes.push(n);
+            });
+
+            // App nodes (skip devices already from network data)
+            (appData.nodes || []).forEach(function(n) {
+                if (!seenIds.has(n.id)) {
+                    n._source = 'app';
+                    mergedNodes.push(n);
+                }
+            });
+
+            // Merge edges
+            var mergedEdges = [];
+            var seenEdges = new Set();
+            (netData.edges || []).forEach(function(e) {
+                seenEdges.add(e.id);
+                mergedEdges.push(e);
+            });
+            (appData.edges || []).forEach(function(e) {
+                if (!seenEdges.has(e.id)) mergedEdges.push(e);
+            });
+
+            state.nodes = mergedNodes;
+            state.edges = mergedEdges;
+
+            if (mergedNodes.length === 0) {
+                if (emptyEl) {
+                    emptyEl.classList.remove('d-none');
+                    emptyEl.querySelector('p').textContent = 'No data found for mixed view.';
+                }
+                if (sidebarEl) sidebarEl.classList.add('hidden');
+                return;
+            }
+
+            applySavedLayout();
+
+            // Step 1: Render network devices + cables using the NETWORK renderer
+            // Force stencil mode for mixed view (full cards with interface ports)
+            state.viewMode = 'stencil';
+            var netNodes = mergedNodes.filter(function(n) { return n.node_type !== 'application'; });
+            var netEdges = mergedEdges.filter(function(e) { return e.edge_type !== 'dependency' && e.edge_type !== 'deployed_on'; });
+            renderer.render(netNodes, netEdges);
+
+            // Step 2: Overlay app cards + dependency/deployed-on edges
+            // Use POSITIONED device nodes from the network renderer (not the originals)
+            var positionedDevices = renderer._stencilNodeData || netNodes;
+            var appNodes = mergedNodes.filter(function(n) { return n.node_type === 'application'; });
+            var appEdges = mergedEdges.filter(function(e) { return e.edge_type === 'dependency' || e.edge_type === 'deployed_on'; });
+
+            if (appRenderer && appNodes.length > 0) {
+                appRenderer.renderOverlay(appNodes, appEdges, positionedDevices);
+            }
+
+            // Merge element selections for shared features
+            if (appRenderer && appRenderer._cards && renderer.nodeElements) {
+                var allCards = d3.selectAll('.topo-stencil-node, .acard, .dcard');
+                renderer.nodeElements = allCards;
+            }
+
+            events.emit('data:loaded', { nodes: mergedNodes, edges: mergedEdges });
+
+            if (sidebarEl) sidebarEl.classList.remove('hidden');
+
+            var statNodes = document.getElementById('stat-nodes');
+            var statEdges = document.getElementById('stat-edges');
+            if (statNodes) statNodes.textContent = mergedNodes.length;
+            if (statEdges) statEdges.textContent = mergedEdges.length;
+
+        }).catch(function(err) {
+            if (loadingEl) loadingEl.classList.add('d-none');
+            console.error('Mixed topology load error:', err);
+        });
+    }
 
     // View mode toggle
     var viewStencil = document.getElementById('view-stencil');
@@ -232,6 +697,7 @@
         if (deviceIds.length > 0) {
             filters.device_ids = deviceIds.join(',');
         }
+        filters.topology_mode = state.topologyMode;
 
         var payload = {
             layout_data: layoutData,
@@ -594,9 +1060,8 @@
         autoSortBtn.addEventListener('click', function() {
             state.autoSortPorts = !state.autoSortPorts;
             this.classList.toggle('active', state.autoSortPorts);
-            // Re-render to apply sort change (smart sort ON or natural order OFF)
-            var pos = getCurrentPositions();
-            state.savedLayout = pos;
+            // Clear saved positions so the layout algorithm can optimize freely
+            state.savedLayout = null;
             renderer.render(state.nodes, state.edges, true);
             events.emit('data:loaded', { nodes: state.nodes, edges: state.edges });
         });
@@ -612,6 +1077,13 @@
     }
 
     // Add connected devices (from right-click menu)
+    // Update app overlay edges when device is dragged in mixed mode
+    events.on('device:drag', function(data) {
+        if (appRenderer) {
+            appRenderer.updateDevicePosition(data.id, data.x, data.y);
+        }
+    });
+
     events.on('device:add-neighbors', function(node) {
         // Fetch the device's interfaces to find connected devices
         var url = state.deviceDetailUrl + node.device_id + '/';
@@ -704,7 +1176,13 @@
             delete state._origNodes;
             delete state._origEdges;
             delete state._allPositionsBeforePP;
-            renderer.render(state.nodes, state.edges);
+            if (state.topologyMode === 'mixed') {
+                loadMixedTopology();
+            } else if (state.topologyMode === 'apps' && appRenderer) {
+                appRenderer.render(state.nodes, state.edges);
+            } else {
+                renderer.render(state.nodes, state.edges);
+            }
             events.emit('data:loaded', { nodes: state.nodes, edges: state.edges });
         });
     }
@@ -834,11 +1312,21 @@
     var cableOrtho = document.getElementById('cable-ortho');
     if (cableCurve) cableCurve.addEventListener('click', function() {
         cableCurve.classList.add('active'); if (cableOrtho) cableOrtho.classList.remove('active');
-        renderer.switchCableStyle('curve');
+        state.cableStyle = 'curve';
+        if (state.topologyMode === 'apps' && appRenderer) {
+            appRenderer.switchEdgeStyle('curve');
+        } else {
+            renderer.switchCableStyle('curve');
+        }
     });
     if (cableOrtho) cableOrtho.addEventListener('click', function() {
         if (cableCurve) cableCurve.classList.remove('active'); cableOrtho.classList.add('active');
-        renderer.switchCableStyle('ortho');
+        state.cableStyle = 'ortho';
+        if (state.topologyMode === 'apps' && appRenderer) {
+            appRenderer.switchEdgeStyle('ortho');
+        } else {
+            renderer.switchCableStyle('ortho');
+        }
     });
 
     // Cable labels toggle

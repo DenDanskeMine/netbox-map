@@ -96,6 +96,14 @@
     }
 
     TopologyPDF.prototype.exportPDF = function() {
+        if (this.state.topologyMode === 'apps') {
+            this.exportAppPDF();
+            return;
+        }
+        this._exportNetworkPDF();
+    };
+
+    TopologyPDF.prototype._exportNetworkPDF = function() {
         var jsPDF = window.jspdf && window.jspdf.jsPDF;
         if (!jsPDF) { alert('jsPDF not loaded'); return; }
 
@@ -423,6 +431,275 @@
         // Save
         var title = 'Network_Topology';
         doc.save(title + '.pdf');
+    };
+
+    /* ===== App Topology PDF Export ===== */
+
+    var APP_W = 220, APP_HEADER = 40, APP_PORT_H = 16, APP_PORT_GAP = 1, APP_PORT_PAD = 4;
+
+    TopologyPDF.prototype.exportAppPDF = function() {
+        var jsPDF = window.jspdf && window.jspdf.jsPDF;
+        if (!jsPDF) { alert('jsPDF not loaded'); return; }
+
+        var state = this.state;
+        var nodeData = this.renderer._stencilNodeData;
+        if (!nodeData || nodeData.length === 0) { alert('No topology data to export'); return; }
+
+        // Filter to apps only
+        var nodes = nodeData.filter(function(n) {
+            return n.node_type === 'application' && !state.hiddenNodes.has(n.id);
+        });
+        var nodeIds = new Set(nodes.map(function(n) { return n.id; }));
+        var edges = (state.edges || []).filter(function(e) {
+            return e.edge_type === 'dependency' &&
+                nodeIds.has(edgeSourceId(e)) && nodeIds.has(edgeTargetId(e));
+        });
+
+        var nodeById = {};
+        nodes.forEach(function(n) { nodeById[n.id] = n; });
+
+        // Bounding box
+        var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        nodes.forEach(function(n) {
+            minX = Math.min(minX, n.x);
+            minY = Math.min(minY, n.y);
+            maxX = Math.max(maxX, n.x + APP_W);
+            maxY = Math.max(maxY, n.y + (n._h || n._cardH || 60));
+        });
+
+        // Page setup
+        var margin = 15, hdrH = 18, ftrH = 14;
+        var svgW = maxX - minX + 40;
+        var svgH = maxY - minY + 40;
+        var format = nodes.length > 25 ? 'a3' : 'a4';
+        var orientation = (svgW / Math.max(svgH, 1)) > 0.9 ? 'landscape' : 'portrait';
+
+        var doc = new jsPDF({ orientation: orientation, unit: 'mm', format: format });
+        var pageW = doc.internal.pageSize.getWidth();
+        var pageH = doc.internal.pageSize.getHeight();
+        var bodyW = pageW - margin * 2;
+        var bodyH = pageH - margin * 2 - hdrH - ftrH;
+        var scale = Math.min(bodyW / svgW, bodyH / svgH);
+        var offsetX = margin + (bodyW - svgW * scale) / 2;
+        var offsetY = margin + hdrH + (bodyH - svgH * scale) / 2;
+
+        function tx(x) { return offsetX + (x - minX + 20) * scale; }
+        function ty(y) { return offsetY + (y - minY + 20) * scale; }
+        function ts(v) { return v * scale; }
+        function fs(sz) { return Math.max(ts(sz) * 0.3, 2); }
+
+        // ── Header ──
+        doc.setFontSize(13);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(30, 30, 30);
+        doc.text('Application Topology', margin, margin + 10);
+
+        doc.setFontSize(7.5);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(130, 130, 130);
+        doc.text('Exported: ' + new Date().toLocaleString(), pageW - margin, margin + 6, { align: 'right' });
+        doc.text(nodes.length + ' apps  \u00B7  ' + edges.length + ' dependencies', pageW - margin, margin + 11, { align: 'right' });
+        doc.setDrawColor(210, 210, 210);
+        doc.setLineWidth(0.2);
+        doc.line(margin, margin + hdrH - 2, pageW - margin, margin + hdrH - 2);
+
+        // ── Edges (orthogonal) ──
+        edges.forEach(function(e) {
+            var sn = nodeById[edgeSourceId(e)];
+            var tn = nodeById[edgeTargetId(e)];
+            if (!sn || !tn) return;
+
+            var rgb = hexToRgb(e.color);
+            doc.setDrawColor(rgb.r, rgb.g, rgb.b);
+            doc.setLineWidth(Math.max(ts(e.dependency_type === 'soft' ? 0.8 : 1.2), 0.15));
+            if (e.dependency_type === 'soft') doc.setLineDashPattern([1.5, 1]);
+            else doc.setLineDashPattern([]);
+
+            // Bezier curves — each edge gets a unique path
+            var sx, stx, sDir, tDir;
+            if (sn.x + APP_W <= tn.x) {
+                sx = sn.x + APP_W; stx = tn.x; sDir = 1; tDir = -1;
+            } else if (tn.x + APP_W <= sn.x) {
+                sx = sn.x; stx = tn.x + APP_W; sDir = -1; tDir = 1;
+            } else {
+                sx = sn.x + APP_W; stx = tn.x; sDir = 1; tDir = -1;
+            }
+
+            // Use port Y if available, else card center
+            var sy = sn.y + (sn._h || 60) / 2;
+            var sty = tn.y + (tn._h || 60) / 2;
+            if (e.source_port && sn._portById && sn._portById[e.source_port]) {
+                sy = sn.y + sn._portById[e.source_port]._y;
+            }
+            if (e.target_port && tn._portById && tn._portById[e.target_port]) {
+                sty = tn.y + tn._portById[e.target_port]._y;
+            }
+
+            var dx = Math.abs(stx - sx);
+            var cp = Math.max(dx * 0.4, 40);
+            var pts = sampleBezier(sx, sy, sx + cp * sDir, sy, stx + cp * tDir, sty, stx, sty, 30);
+            for (var pi = 0; pi < pts.length - 1; pi++) {
+                doc.line(tx(pts[pi].x), ty(pts[pi].y), tx(pts[pi + 1].x), ty(pts[pi + 1].y));
+            }
+
+            // Arrow at target
+            var arrSize = Math.max(ts(4), 0.6);
+            doc.setFillColor(rgb.r, rgb.g, rgb.b);
+            if (e.dependency_type !== 'soft') {
+                doc.triangle(
+                    tx(stx), ty(sty),
+                    tx(stx) + arrSize * tDir, ty(sty) - arrSize * 0.5,
+                    tx(stx) + arrSize * tDir, ty(sty) + arrSize * 0.5,
+                    'F'
+                );
+            }
+            doc.setLineDashPattern([]);
+        });
+
+        // ── App Cards ──
+        nodes.forEach(function(n) {
+            var cx = tx(n.x), cy = ty(n.y);
+            var cw = ts(APP_W), ch = ts(n._h || n._cardH || 60);
+            var cr = Math.max(ts(4), 0.3);
+
+            // Card body
+            doc.setFillColor(255, 255, 255);
+            doc.setDrawColor(210, 210, 215);
+            doc.setLineWidth(0.12);
+            doc.roundedRect(cx, cy, cw, ch, cr, cr, 'FD');
+
+            // Left accent bar (group/criticality color)
+            var accentRgb = hexToRgb(n.category_color || n.role_color || n.criticality_color);
+            doc.setFillColor(accentRgb.r, accentRgb.g, accentRgb.b);
+            doc.rect(cx, cy + cr, Math.max(ts(3), 0.3), ch - cr * 2, 'F');
+
+            // Name
+            var name = n.name || '';
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(25, 25, 30);
+            var nameSize = Math.max(fs(12), 3);
+            doc.setFontSize(nameSize);
+            var maxNameW = cw - ts(12);
+            while (doc.getTextWidth(name) > maxNameW && name.length > 3) {
+                name = name.substring(0, name.length - 2) + '\u2026';
+            }
+            doc.text(name, cx + ts(8), cy + ts(15));
+
+            // Status pill
+            var hs = n.host_status || 'healthy';
+            if (hs === 'down' || hs === 'degraded') {
+                var pillText = hs === 'down' ? 'DOWN' : 'DEGRADED';
+                var pillColor = hs === 'down' ? hexToRgb('#ef4444') : hexToRgb('#f97316');
+                doc.setFontSize(Math.max(fs(7), 1.8));
+                doc.setFont('helvetica', 'bold');
+                var pw = doc.getTextWidth(pillText) + ts(4);
+                var px = cx + cw - pw - ts(4);
+                // Light tinted pill background
+                doc.setFillColor(
+                    Math.min(255, pillColor.r + 180),
+                    Math.min(255, pillColor.g + 180),
+                    Math.min(255, pillColor.b + 180)
+                );
+                doc.roundedRect(px, cy + ts(4), pw, ts(10), 1, 1, 'F');
+                doc.setTextColor(pillColor.r, pillColor.g, pillColor.b);
+                doc.text(pillText, px + pw / 2, cy + ts(11), { align: 'center' });
+            }
+
+            // Subtitle (group · env)
+            var sub = [n.group, n.environment].filter(Boolean).join(' \u00B7 ');
+            doc.setFontSize(Math.max(fs(8), 2));
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(130, 130, 145);
+            doc.text(sub, cx + ts(8), cy + ts(28));
+
+            // Separator
+            if (n._portsL && n._portsL.length > 0 || n._portsR && n._portsR.length > 0) {
+                doc.setDrawColor(230, 230, 235);
+                doc.setLineWidth(0.08);
+                doc.line(cx + ts(6), cy + ts(APP_HEADER), cx + cw - ts(6), cy + ts(APP_HEADER));
+
+                // Section headers
+                doc.setFontSize(Math.max(fs(7), 1.5));
+                doc.setFont('helvetica', 'bold');
+                doc.setTextColor(160, 160, 170);
+                if (n._portsL && n._portsL.length > 0) {
+                    doc.text('DEPENDS ON', cx + ts(6), cy + ts(APP_HEADER + 8));
+                }
+                if (n._portsR && n._portsR.length > 0) {
+                    doc.text('NEEDED BY', cx + cw - ts(6), cy + ts(APP_HEADER + 8), { align: 'right' });
+                }
+
+                // Port labels
+                doc.setFontSize(Math.max(fs(8), 1.8));
+                doc.setFont('helvetica', 'normal');
+                doc.setTextColor(80, 80, 90);
+
+                (n._portsL || []).forEach(function(p) {
+                    var portName = p.name || '';
+                    if (portName.length > 14) portName = portName.substring(0, 12) + '..';
+                    doc.text(portName, cx + ts(6), cy + ts(p._y + 3));
+                });
+                (n._portsR || []).forEach(function(p) {
+                    var portName = p.name || '';
+                    if (portName.length > 14) portName = portName.substring(0, 12) + '..';
+                    doc.text(portName, cx + cw - ts(6), cy + ts(p._y + 3), { align: 'right' });
+                });
+            }
+
+            // Footer (host count)
+            if (n.deploy_count > 0) {
+                var footerText = n.deploy_count + (n.deploy_count === 1 ? ' host' : ' hosts');
+                doc.setFontSize(Math.max(fs(7), 1.5));
+                doc.setFont('helvetica', 'normal');
+                doc.setTextColor(160, 160, 170);
+                doc.text(footerText, cx + cw / 2, cy + ch - ts(4), { align: 'center' });
+            }
+        });
+
+        // ── Footer Legend ──
+        var ly = pageH - margin - ftrH + 6;
+        doc.setDrawColor(210, 210, 210);
+        doc.setLineWidth(0.2);
+        doc.line(margin, ly - 4, pageW - margin, ly - 4);
+
+        var lx = margin;
+        doc.setFontSize(5.5);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(120, 120, 120);
+        doc.text('DEPENDENCY', lx, ly); lx += 22;
+
+        // Hard line
+        doc.setDrawColor(231, 76, 60);
+        doc.setLineWidth(0.3);
+        doc.setLineDashPattern([]);
+        doc.line(lx, ly - 1, lx + 8, ly - 1);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(80, 80, 80);
+        doc.text('Hard', lx + 10, ly); lx += 20;
+
+        // Soft line
+        doc.setDrawColor(230, 126, 34);
+        doc.setLineDashPattern([1, 0.8]);
+        doc.line(lx, ly - 1, lx + 8, ly - 1);
+        doc.setLineDashPattern([]);
+        doc.text('Soft', lx + 10, ly); lx += 20;
+
+        lx += 6;
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(120, 120, 120);
+        doc.text('STATUS', lx, ly); lx += 14;
+
+        [['Down','#ef4444'],['Degraded','#f97316'],['Active','#2ecc71']].forEach(function(s) {
+            var c = hexToRgb(s[1]);
+            doc.setFillColor(c.r, c.g, c.b);
+            doc.circle(lx, ly - 1, 1, 'F');
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(80, 80, 80);
+            doc.text(s[0], lx + 2.5, ly);
+            lx += doc.getTextWidth(s[0]) + 6;
+        });
+
+        doc.save('Application_Topology.pdf');
     };
 
     window.TopologyPDF = TopologyPDF;

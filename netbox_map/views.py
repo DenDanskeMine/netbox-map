@@ -1,5 +1,7 @@
 import json
 
+from dcim.filtersets import SiteFilterSet
+from dcim.models import Device, Location, Site
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 from django.contrib.contenttypes.models import ContentType
@@ -10,20 +12,31 @@ from django.utils.decorators import method_decorator
 from django.utils.translation import gettext_lazy as _
 from django.views import View
 from django.views.decorators.csrf import ensure_csrf_cookie
-
-from dcim.filtersets import SiteFilterSet
-from dcim.models import Device, Location, Site
 from netbox.views import generic
 from utilities.views import ViewTab, register_model_view
 
 from . import filtersets, forms, tables
 from .choices import get_all_type_configs
-from .models import FloorPlan, FloorPlanTile, CustomMarkerType, LocationCoordinates, MapMarker, MapSettings, TilePortAssignment, CablePath, TopologySavedView
-
+from .models import (
+    Application,
+    ApplicationDependency,
+    ApplicationDeployment,
+    ApplicationGroup,
+    ApplicationTemplate,
+    CablePath,
+    CustomMarkerType,
+    FloorPlan,
+    FloorPlanTile,
+    LocationCoordinates,
+    MapMarker,
+    MapSettings,
+    TopologySavedView,
+)
 
 #
 # Topology views
 #
+
 
 @method_decorator(ensure_csrf_cookie, name='dispatch')
 class TopologyView(LoginRequiredMixin, View):
@@ -41,6 +54,15 @@ class TopologyView(LoginRequiredMixin, View):
         role_ids = request.GET.getlist('role_id')
         if role_ids:
             initial_filters['role_id'] = role_ids
+
+        # App topology params
+        topology_mode = request.GET.get('mode', '')
+        app_ids = request.GET.getlist('app_ids')
+        if app_ids:
+            initial_filters['app_ids'] = ','.join(app_ids)
+        focus_app = request.GET.get('focus_app')
+        if focus_app:
+            initial_filters['focus_app'] = focus_app
 
         # Load saved view if requested
         saved_view = None
@@ -67,6 +89,7 @@ class TopologyView(LoginRequiredMixin, View):
             'saved_view_data': saved_view_data,
             'saved_views': list(saved_views),
             'saved_views_json': json.dumps(list(saved_views)),
+            'topology_mode': topology_mode or '',
         })
 
 
@@ -145,10 +168,16 @@ class TopologyDataView(LoginRequiredMixin, View):
 
     def get(self, request):
         from dcim.models import (
-            Device, Interface, Cable, FrontPort, RearPort,
-            ConsolePort, ConsoleServerPort, PowerPort, PowerOutlet,
+            CableTermination,
+            ConsolePort,
+            ConsoleServerPort,
+            Device,
+            FrontPort,
+            Interface,
+            PowerOutlet,
+            PowerPort,
+            RearPort,
         )
-        from dcim.models import CableTermination
 
         site_id = request.GET.get('site_id')
         tenant_id = request.GET.get('tenant_id')
@@ -201,7 +230,10 @@ class TopologyDataView(LoginRequiredMixin, View):
                 'role_slug': device.role.slug if device.role else '',
                 'role_color': f'#{device.role.color}' if device.role and device.role.color else '#6c757d',
                 'device_type': str(device.device_type) if device.device_type else '',
-                'manufacturer': device.device_type.manufacturer.name if device.device_type and device.device_type.manufacturer else '',
+                'manufacturer': (
+                    device.device_type.manufacturer.name
+                    if device.device_type and device.device_type.manufacturer else ''
+                ),
                 'site': device.site.name if device.site else '',
                 'location': device.location.name if device.location else '',
                 'rack': device.rack.name if device.rack else '',
@@ -225,7 +257,6 @@ class TopologyDataView(LoginRequiredMixin, View):
         # Get content types for all port models
         port_models = [Interface, FrontPort, RearPort, ConsolePort, ConsoleServerPort, PowerPort, PowerOutlet]
         port_cts = [ContentType.objects.get_for_model(m) for m in port_models]
-        port_ct_map = {ct.pk: model_cls for ct, model_cls in zip(port_cts, port_models)}
 
         # Build port-to-device mapping AND collect port details
         port_id_map = {}       # (ct_id, port_id) -> device_id
@@ -386,6 +417,208 @@ class TopologyDataView(LoginRequiredMixin, View):
                         'url': cable.get_absolute_url(),
                     })
 
+        # ── Circuit edges: trace through CircuitTerminations to far-side devices ──
+        try:
+            from circuits.models import CircuitTermination
+            circuit_ct = ContentType.objects.get_for_model(
+                CircuitTermination,
+            )
+
+            # Find CableTerminations pointing to CircuitTerminations
+            circuit_cable_terms = CableTermination.objects.filter(
+                termination_type=circuit_ct,
+            ).select_related('cable')
+
+            # Group by cable: cable_id → CircuitTermination id
+            cable_to_ct = {}
+            for cterm in circuit_cable_terms:
+                cable_to_ct.setdefault(cterm.cable_id, []).append(
+                    cterm.termination_id
+                )
+
+            # For each cable that has both a device port and a
+            # CircuitTermination, find the far-side device
+            circuit_term_ids = set()
+            for ct_ids in cable_to_ct.values():
+                circuit_term_ids.update(ct_ids)
+
+            if circuit_term_ids:
+                ct_objects = {
+                    ct.pk: ct
+                    for ct in CircuitTermination.objects.filter(
+                        pk__in=circuit_term_ids,
+                    ).select_related(
+                        'circuit__provider',
+                        'circuit__type',
+                    )
+                }
+
+                # Build: cable_id → (device_id, port_info) for cables
+                # that also touch a CircuitTermination
+                for cable_id, ct_ids in cable_to_ct.items():
+                    if cable_id not in cable_terms:
+                        continue
+                    # Find device port(s) on this cable
+                    dev_ports = []
+                    for ct_key in cable_terms.get(cable_id, []):
+                        dev_id = port_id_map.get(ct_key)
+                        if dev_id and dev_id in device_ids:
+                            port = port_info_map.get(ct_key)
+                            dev_ports.append((dev_id, port))
+
+                    if not dev_ports:
+                        continue
+
+                    for ct_id in ct_ids:
+                        ct_obj = ct_objects.get(ct_id)
+                        if not ct_obj:
+                            continue
+                        circuit = ct_obj.circuit
+                        # Find peer termination (opposite side)
+                        peer = (
+                            circuit.termination_z
+                            if ct_obj.term_side == 'A'
+                            else circuit.termination_a
+                        )
+                        if not peer or not peer.cable_id:
+                            continue
+
+                        # Find device on peer cable
+                        peer_cable_id = peer.cable_id
+                        peer_dev_ports = []
+                        for ct_key in cable_terms.get(
+                            peer_cable_id, []
+                        ):
+                            dev_id = port_id_map.get(ct_key)
+                            if dev_id and dev_id in device_ids:
+                                port = port_info_map.get(ct_key)
+                                peer_dev_ports.append(
+                                    (dev_id, port)
+                                )
+
+                        # Create circuit edges between device pairs
+                        for dev_a, port_a in dev_ports:
+                            for dev_b, port_b in peer_dev_ports:
+                                if dev_a == dev_b:
+                                    continue
+                                edge_id = (
+                                    f'circuit-{circuit.pk}'
+                                )
+                                # Consistent ordering
+                                if dev_a > dev_b:
+                                    dev_a, dev_b = dev_b, dev_a
+                                    port_a, port_b = port_b, port_a
+                                provider = str(
+                                    circuit.provider
+                                ) if circuit.provider else ''
+                                ctype = str(
+                                    circuit.type
+                                ) if circuit.type else ''
+                                commit = circuit.commit_rate
+                                label = (
+                                    f'{circuit.cid}'
+                                    f' ({provider})'
+                                    if provider
+                                    else circuit.cid
+                                )
+                                edges.append({
+                                    'id': edge_id,
+                                    'edge_type': 'circuit',
+                                    'source': f'device-{dev_a}',
+                                    'target': f'device-{dev_b}',
+                                    'source_port': (
+                                        port_a['id']
+                                        if port_a else None
+                                    ),
+                                    'target_port': (
+                                        port_b['id']
+                                        if port_b else None
+                                    ),
+                                    'source_port_name': (
+                                        port_a['name']
+                                        if port_a else ''
+                                    ),
+                                    'target_port_name': (
+                                        port_b['name']
+                                        if port_b else ''
+                                    ),
+                                    'source_port_speed': (
+                                        port_a['speed']
+                                        if port_a else None
+                                    ),
+                                    'target_port_speed': (
+                                        port_b['speed']
+                                        if port_b else None
+                                    ),
+                                    'cable_id': circuit.pk,
+                                    'cable_label': label,
+                                    'cable_type': ctype,
+                                    'cable_type_value': (
+                                        'circuit'
+                                    ),
+                                    'color': '#0ea5e9',
+                                    'status': (
+                                        circuit
+                                        .get_status_display()
+                                    ),
+                                    'status_value': (
+                                        circuit.status
+                                    ),
+                                    'length': '',
+                                    'length_unit': '',
+                                    'url': (
+                                        circuit
+                                        .get_absolute_url()
+                                    ),
+                                    'circuit_id': circuit.pk,
+                                    'circuit_cid': circuit.cid,
+                                    'circuit_provider': provider,
+                                    'circuit_type': ctype,
+                                    'circuit_commit_rate': (
+                                        commit
+                                    ),
+                                })
+        except ImportError:
+            pass  # circuits app not installed
+
+        # ── Add application deployment ports to device nodes (for mixed mode) ──
+        # Shows which apps run on each device as port-like rows on the card
+        device_ct = ContentType.objects.get_for_model(Device)
+        deployments = ApplicationDeployment.objects.filter(
+            host_type=device_ct, host_id__in=device_ids
+        ).select_related('application')
+
+        for dep in deployments:
+            dev_id = dep.host_id
+            if dev_id not in device_map:
+                continue
+            port_id = f'app-deploy-{dep.pk}'
+            device_map[dev_id]['ports'].append({
+                'id': port_id,
+                'name': dep.application.name,
+                'port_class': 'app-deploy',
+                'type': dep.get_role_display(),
+                'speed': None,
+                'cabled': True,  # so it renders as a port row
+            })
+            # Add deployed-on edge
+            edges.append({
+                'id': f'deploy-{dep.pk}',
+                'edge_type': 'deployed_on',
+                'source': f'app-{dep.application_id}',
+                'target': f'device-{dev_id}',
+                'source_port': None,
+                'target_port': port_id,
+                'source_port_name': dep.application.name,
+                'target_port_name': dep.application.name,
+                'directed': False,
+                'color': '#5a6080',
+                'cable_type': dep.get_role_display(),
+                'cable_id': f'dp{dep.pk}',
+                'status': '',
+                'status_value': '',
+            })
+
         return JsonResponse({
             'nodes': nodes,
             'edges': edges,
@@ -397,7 +630,7 @@ class TopologyDeviceDetailView(LoginRequiredMixin, View):
     """AJAX endpoint returning interfaces and ports for a device."""
 
     def get(self, request, device_id):
-        from dcim.models import Device, Interface, FrontPort, RearPort, CableTermination
+        from dcim.models import CableTermination, Device, FrontPort, Interface, RearPort
 
         try:
             device = Device.objects.get(pk=device_id)
@@ -1142,6 +1375,932 @@ class CablePathBulkDeleteView(generic.BulkDeleteView):
 
 
 #
+# ApplicationGroup views
+#
+
+class ApplicationGroupListView(generic.ObjectListView):
+    queryset = ApplicationGroup.objects.all()
+    filterset = filtersets.ApplicationGroupFilterSet
+    filterset_form = forms.ApplicationGroupFilterForm
+    table = tables.ApplicationGroupTable
+
+
+@register_model_view(ApplicationGroup)
+class ApplicationGroupView(generic.ObjectView):
+    queryset = ApplicationGroup.objects.all()
+
+
+@register_model_view(ApplicationGroup, 'edit')
+class ApplicationGroupEditView(generic.ObjectEditView):
+    queryset = ApplicationGroup.objects.all()
+    form = forms.ApplicationGroupForm
+
+
+@register_model_view(ApplicationGroup, 'delete')
+class ApplicationGroupDeleteView(generic.ObjectDeleteView):
+    queryset = ApplicationGroup.objects.all()
+
+
+class ApplicationGroupBulkEditView(generic.BulkEditView):
+    queryset = ApplicationGroup.objects.all()
+    filterset = filtersets.ApplicationGroupFilterSet
+    table = tables.ApplicationGroupTable
+    form = forms.ApplicationGroupFilterForm
+
+
+class ApplicationGroupBulkDeleteView(generic.BulkDeleteView):
+    queryset = ApplicationGroup.objects.all()
+    filterset = filtersets.ApplicationGroupFilterSet
+    table = tables.ApplicationGroupTable
+
+
+#
+# ApplicationTemplate views
+#
+
+class ApplicationTemplateListView(generic.ObjectListView):
+    queryset = ApplicationTemplate.objects.select_related('group')
+    filterset = filtersets.ApplicationTemplateFilterSet
+    filterset_form = forms.ApplicationTemplateFilterForm
+    table = tables.ApplicationTemplateTable
+
+
+@register_model_view(ApplicationTemplate)
+class ApplicationTemplateView(generic.ObjectView):
+    queryset = ApplicationTemplate.objects.select_related('group')
+
+    def get_extra_context(self, request, instance):
+        # Find deployments of apps that match this template's name pattern
+        # Apps created from template have names like "TemplateName (hostname)"
+        from django.db.models import Q
+        matching_apps = Application.objects.filter(
+            Q(name=instance.name) | Q(name__startswith=instance.name + ' (')
+        )
+        if instance.group:
+            matching_apps = matching_apps.filter(group=instance.group)
+        app_ids = list(matching_apps.values_list('pk', flat=True))
+        deployments = ApplicationDeployment.objects.filter(
+            application_id__in=app_ids
+        ).select_related('application', 'host_type')[:20]
+        return {'deployments': deployments}
+
+
+@register_model_view(ApplicationTemplate, 'edit')
+class ApplicationTemplateEditView(generic.ObjectEditView):
+    queryset = ApplicationTemplate.objects.all()
+    form = forms.ApplicationTemplateForm
+
+
+@register_model_view(ApplicationTemplate, 'delete')
+class ApplicationTemplateDeleteView(generic.ObjectDeleteView):
+    queryset = ApplicationTemplate.objects.all()
+
+
+class ApplicationTemplateBulkDeleteView(generic.BulkDeleteView):
+    queryset = ApplicationTemplate.objects.all()
+    filterset = filtersets.ApplicationTemplateFilterSet
+    table = tables.ApplicationTemplateTable
+
+
+class ApplicationTemplateDeployView(LoginRequiredMixin, PermissionRequiredMixin, View):
+    """Deploy a template to multiple hosts — creates an Application per host."""
+    permission_required = 'netbox_map.add_applicationdeployment'
+
+    def _get_template(self, request, pk):
+        from django.shortcuts import get_object_or_404
+        return get_object_or_404(ApplicationTemplate, pk=pk)
+
+    def get(self, request, pk):
+        template = self._get_template(request, pk)
+        form = forms.ApplicationTemplateDeployForm()
+        return render(request, 'netbox_map/applicationtemplate_deploy.html', {
+            'object': template,
+            'form': form,
+        })
+
+    def post(self, request, pk):
+        template = self._get_template(request, pk)
+        form = forms.ApplicationTemplateDeployForm(request.POST)
+
+        if form.is_valid():
+            created = 0
+            device_ct = ContentType.objects.get_for_model(Device)
+
+            hosts = []
+            for device in form.cleaned_data.get('devices', []):
+                hosts.append((device_ct, device))
+
+            vms = form.cleaned_data.get('virtual_machines', [])
+            if vms:
+                from virtualization.models import VirtualMachine
+                vm_ct = ContentType.objects.get_for_model(VirtualMachine)
+                for vm in vms:
+                    hosts.append((vm_ct, vm))
+
+            for ct, host in hosts:
+                host_name = host.name or str(host)
+                app_name = template.name_format.replace('{app}', template.name).replace('{host}', host_name)
+
+                app = Application.objects.create(
+                    name=app_name,
+                    status=template.default_status,
+                    criticality=template.default_criticality,
+                    environment=template.default_environment,
+                    version=template.default_version,
+                    group=template.group,
+                    description=template.description,
+                )
+                ApplicationDeployment.objects.create(
+                    application=app,
+                    host_type=ct,
+                    host_id=host.pk,
+                    role=template.default_role,
+                    port=template.default_port,
+                    protocol=template.default_protocol or '',
+                )
+                created += 1
+
+            messages.success(request, f'Deployed "{template.name}" to {created} host(s).')
+            return redirect(template.get_absolute_url())
+
+        return render(request, 'netbox_map/applicationtemplate_deploy.html', {
+            'object': template,
+            'form': form,
+        })
+
+
+#
+# Application views
+#
+
+class ApplicationListView(generic.ObjectListView):
+    queryset = Application.objects.select_related('group', 'site', 'tenant')
+    filterset = filtersets.ApplicationFilterSet
+    filterset_form = forms.ApplicationFilterForm
+    table = tables.ApplicationTable
+
+
+@register_model_view(Application)
+class ApplicationView(generic.ObjectView):
+    queryset = Application.objects.select_related('group', 'site', 'tenant')
+
+    def get_extra_context(self, request, instance):
+        deployments = ApplicationDeployment.objects.filter(
+            application=instance
+        ).select_related('host_type')[:20]
+        return {'deployments': deployments}
+
+
+@register_model_view(Application, 'edit')
+class ApplicationEditView(generic.ObjectEditView):
+    queryset = Application.objects.all()
+    form = forms.ApplicationForm
+
+
+@register_model_view(Application, 'delete')
+class ApplicationDeleteView(generic.ObjectDeleteView):
+    queryset = Application.objects.all()
+
+
+class ApplicationBulkEditView(generic.BulkEditView):
+    queryset = Application.objects.all()
+    filterset = filtersets.ApplicationFilterSet
+    table = tables.ApplicationTable
+    form = forms.ApplicationBulkEditForm
+
+
+class ApplicationBulkImportView(generic.BulkImportView):
+    queryset = Application.objects.all()
+    model_form = forms.ApplicationImportForm
+
+
+class ApplicationBulkDeleteView(generic.BulkDeleteView):
+    queryset = Application.objects.all()
+    filterset = filtersets.ApplicationFilterSet
+    table = tables.ApplicationTable
+
+
+#
+# Application Bulk Deploy
+#
+
+class ApplicationBulkDeployView(LoginRequiredMixin, PermissionRequiredMixin, View):
+    """Deploy an application to multiple devices/VMs at once."""
+    permission_required = 'netbox_map.add_applicationdeployment'
+
+    def _get_application(self, request, pk):
+        from django.shortcuts import get_object_or_404
+        return get_object_or_404(Application.objects.restrict(request.user, 'view'), pk=pk)
+
+    def get(self, request, pk):
+        application = self._get_application(request, pk)
+        form = forms.ApplicationBulkDeployForm()
+        return render(request, 'netbox_map/application_bulk_deploy.html', {
+            'object': application,
+            'form': form,
+        })
+
+    def _create_instance(self, template_app, host_name, name_format):
+        """Create a new Application instance copied from the template."""
+        name = name_format.replace('{app}', template_app.name).replace('{host}', host_name)
+        app = Application(
+            name=name,
+            status=template_app.status,
+            criticality=template_app.criticality,
+            environment=template_app.environment,
+            version=template_app.version,
+            description=template_app.description,
+            group=template_app.group,
+            tenant=template_app.tenant,
+            site=template_app.site,
+        )
+        app.save()
+        # Copy tags
+        app.tags.set(template_app.tags.all())
+        return app
+
+    def post(self, request, pk):
+        application = self._get_application(request, pk)
+        form = forms.ApplicationBulkDeployForm(request.POST)
+
+        if form.is_valid():
+            mode = form.cleaned_data['mode']
+            role = form.cleaned_data['role']
+            port = form.cleaned_data.get('port')
+            protocol = form.cleaned_data.get('protocol', '')
+            name_format = form.cleaned_data.get('name_format', '{app}') or '{app}'
+            created = 0
+
+            # Collect all hosts: (content_type, host_obj) pairs
+            hosts = []
+            device_ct = ContentType.objects.get_for_model(Device)
+            for device in form.cleaned_data.get('devices', []):
+                hosts.append((device_ct, device))
+
+            vms = form.cleaned_data.get('virtual_machines', [])
+            if vms:
+                from virtualization.models import VirtualMachine
+                vm_ct = ContentType.objects.get_for_model(VirtualMachine)
+                for vm in vms:
+                    hosts.append((vm_ct, vm))
+
+            if mode == 'instances':
+                # Create a SEPARATE Application per host (template/instance pattern)
+                for ct, host in hosts:
+                    host_name = host.name or str(host)
+                    app_instance = self._create_instance(application, host_name, name_format)
+                    ApplicationDeployment.objects.create(
+                        application=app_instance,
+                        host_type=ct,
+                        host_id=host.pk,
+                        role=role,
+                        port=port,
+                        protocol=protocol,
+                    )
+                    created += 1
+                messages.success(request, f'Created {created} instance(s) of "{application.name}".')
+            else:
+                # Shared mode: ONE application, multiple deployments
+                for ct, host in hosts:
+                    _, was_created = ApplicationDeployment.objects.get_or_create(
+                        application=application,
+                        host_type=ct,
+                        host_id=host.pk,
+                        defaults={'role': role, 'port': port, 'protocol': protocol},
+                    )
+                    if was_created:
+                        created += 1
+                messages.success(request, f'Deployed "{application.name}" to {created} host(s).')
+
+            return redirect(application.get_absolute_url())
+
+        return render(request, 'netbox_map/application_bulk_deploy.html', {
+            'object': application,
+            'form': form,
+        })
+
+
+#
+# ApplicationDeployment views
+#
+
+class ApplicationDeploymentListView(generic.ObjectListView):
+    queryset = ApplicationDeployment.objects.select_related('application', 'host_type')
+    filterset = filtersets.ApplicationDeploymentFilterSet
+    filterset_form = forms.ApplicationDeploymentFilterForm
+    table = tables.ApplicationDeploymentTable
+
+
+@register_model_view(ApplicationDeployment)
+class ApplicationDeploymentView(generic.ObjectView):
+    queryset = ApplicationDeployment.objects.select_related('application', 'host_type')
+
+
+@register_model_view(ApplicationDeployment, 'edit')
+class ApplicationDeploymentEditView(generic.ObjectEditView):
+    queryset = ApplicationDeployment.objects.all()
+    form = forms.ApplicationDeploymentForm
+
+
+@register_model_view(ApplicationDeployment, 'delete')
+class ApplicationDeploymentDeleteView(generic.ObjectDeleteView):
+    queryset = ApplicationDeployment.objects.all()
+
+
+class ApplicationDeploymentBulkDeleteView(generic.BulkDeleteView):
+    queryset = ApplicationDeployment.objects.all()
+    filterset = filtersets.ApplicationDeploymentFilterSet
+    table = tables.ApplicationDeploymentTable
+
+
+#
+# ApplicationDependency views
+#
+
+class ApplicationDependencyListView(generic.ObjectListView):
+    queryset = ApplicationDependency.objects.select_related('source_application', 'target_application')
+    filterset = filtersets.ApplicationDependencyFilterSet
+    filterset_form = forms.ApplicationDependencyFilterForm
+    table = tables.ApplicationDependencyTable
+
+
+@register_model_view(ApplicationDependency)
+class ApplicationDependencyView(generic.ObjectView):
+    queryset = ApplicationDependency.objects.select_related('source_application', 'target_application')
+
+
+@register_model_view(ApplicationDependency, 'edit')
+class ApplicationDependencyEditView(generic.ObjectEditView):
+    queryset = ApplicationDependency.objects.all()
+    form = forms.ApplicationDependencyForm
+
+
+@register_model_view(ApplicationDependency, 'delete')
+class ApplicationDependencyDeleteView(generic.ObjectDeleteView):
+    queryset = ApplicationDependency.objects.all()
+
+
+class ApplicationDependencyBulkEditView(generic.BulkEditView):
+    queryset = ApplicationDependency.objects.all()
+    filterset = filtersets.ApplicationDependencyFilterSet
+    table = tables.ApplicationDependencyTable
+    form = forms.ApplicationDependencyBulkEditForm
+
+
+class ApplicationDependencyBulkImportView(generic.BulkImportView):
+    queryset = ApplicationDependency.objects.all()
+    model_form = forms.ApplicationDependencyForm
+
+
+class ApplicationDependencyBulkDeleteView(generic.BulkDeleteView):
+    queryset = ApplicationDependency.objects.all()
+    filterset = filtersets.ApplicationDependencyFilterSet
+    table = tables.ApplicationDependencyTable
+
+
+#
+# App Topology Data Views
+#
+
+class AppTopologyDataView(LoginRequiredMixin, View):
+    """AJAX endpoint returning application topology graph data (nodes + edges)."""
+
+    CRITICALITY_COLORS = {
+        'critical': '#e74c3c',
+        'high': '#e67e22',
+        'medium': '#f39c12',
+        'low': '#3498db',
+    }
+
+    def get(self, request):
+        environments = request.GET.getlist('environment')
+        criticalities = request.GET.getlist('criticality')
+        statuses = request.GET.getlist('status')
+        tenant_id = request.GET.get('tenant_id')
+        site_id = request.GET.get('site_id')
+        group_id = request.GET.get('group_id')
+        app_ids_param = request.GET.get('app_ids')
+        focus_app_param = request.GET.get('focus_app')
+        device_ids_param = request.GET.get('device_ids')
+        highlight_device_param = request.GET.get('highlight_device')
+        tags = request.GET.getlist('tag')
+
+        apps = Application.objects.select_related('group', 'tenant', 'site', 'primary_ip').annotate(
+            deploy_count=Count('deployments', distinct=True),
+            dep_out_count=Count('dependencies', distinct=True),
+            dep_in_count=Count('dependents', distinct=True),
+        )
+
+        # Focus app: show this app + all its upstream + downstream deps
+        if focus_app_param:
+            try:
+                focus_pk = int(focus_app_param)
+            except (ValueError, TypeError):
+                focus_pk = None
+            if focus_pk:
+                related_ids = {focus_pk}
+                # Upstream: what this app depends on (and recurse)
+                queue = [focus_pk]
+                for _ in range(10):  # max depth
+                    targets = set(ApplicationDependency.objects.filter(
+                        source_application_id__in=queue
+                    ).values_list('target_application_id', flat=True))
+                    new = targets - related_ids
+                    if not new:
+                        break
+                    related_ids |= new
+                    queue = list(new)
+                # Downstream: what depends on this app (and recurse)
+                queue = [focus_pk]
+                for _ in range(10):
+                    sources = set(ApplicationDependency.objects.filter(
+                        target_application_id__in=queue
+                    ).values_list('source_application_id', flat=True))
+                    new = sources - related_ids
+                    if not new:
+                        break
+                    related_ids |= new
+                    queue = list(new)
+                apps = apps.filter(pk__in=related_ids)
+        elif device_ids_param:
+            # Filter to apps deployed on specific devices + their dependency partners
+            dev_ids = [int(x) for x in device_ids_param.split(',') if x.strip().isdigit()]
+            device_ct = ContentType.objects.get_for_model(Device)
+            deployed_app_ids = set(
+                ApplicationDeployment.objects.filter(
+                    host_type=device_ct, host_id__in=dev_ids
+                ).values_list('application_id', flat=True)
+            )
+            if deployed_app_ids:
+                # Expand to include dependency partners (1 level)
+                related_ids = set(deployed_app_ids)
+                # Apps these depend on
+                related_ids |= set(ApplicationDependency.objects.filter(
+                    source_application_id__in=deployed_app_ids
+                ).values_list('target_application_id', flat=True))
+                # Apps that depend on these
+                related_ids |= set(ApplicationDependency.objects.filter(
+                    target_application_id__in=deployed_app_ids
+                ).values_list('source_application_id', flat=True))
+                apps = apps.filter(pk__in=related_ids)
+            else:
+                apps = apps.none()
+        elif app_ids_param:
+            ids = [int(x) for x in app_ids_param.split(',') if x.strip().isdigit()]
+            apps = apps.filter(pk__in=ids)
+        else:
+            if environments:
+                apps = apps.filter(environment__in=environments)
+            if criticalities:
+                apps = apps.filter(criticality__in=criticalities)
+            if statuses:
+                apps = apps.filter(status__in=statuses)
+            if tenant_id:
+                apps = apps.filter(tenant_id=tenant_id)
+            if site_id:
+                apps = apps.filter(site_id=site_id)
+            if group_id:
+                apps = apps.filter(group_id=group_id)
+            if tags:
+                apps = apps.filter(tags__slug__in=tags).distinct()
+
+            # Require at least one filter when not using app_ids
+            if not any([environments, criticalities, statuses, tenant_id, site_id, group_id, tags]):
+                # Return all apps if no filter (app topology is typically smaller than device topology)
+                pass
+
+        app_map = {}
+        nodes = []
+        for app in apps:
+            crit_color = self.CRITICALITY_COLORS.get(app.criticality, '#6c757d')
+            group_color = app.group.color if app.group else '#6c757d'
+
+            node = {
+                'id': f'app-{app.pk}',
+                'app_id': app.pk,
+                'node_type': 'application',
+                'name': app.name,
+                'category': app.get_environment_display(),
+                'category_color': group_color,
+                'role_color': group_color,
+                'status': app.get_status_display(),
+                'status_value': app.status,
+                'criticality': app.criticality,
+                'criticality_color': crit_color,
+                'environment': app.get_environment_display(),
+                'environment_value': app.environment,
+                'version': app.version,
+                'owner': app.tenant.name if app.tenant else '',
+                'group': app.group.name if app.group else '',
+                'site': app.site.name if app.site else '',
+                'description': app.description,
+                'url': app.get_absolute_url(),
+                'ports': [],
+                'primary_ip': str(app.primary_ip) if app.primary_ip else '',
+                'deploy_count': app.deploy_count,
+                'dependency_count': app.dep_out_count + app.dep_in_count,
+            }
+            app_map[app.pk] = node
+            nodes.append(node)
+
+        if not app_map:
+            return JsonResponse({'nodes': [], 'edges': [], 'stats': {'node_count': 0, 'edge_count': 0}})
+
+        # Mark apps deployed on the highlighted device
+        if highlight_device_param:
+            try:
+                hl_dev_id = int(highlight_device_param)
+                device_ct = ContentType.objects.get_for_model(Device)
+                hl_app_ids = set(
+                    ApplicationDeployment.objects.filter(
+                        host_type=device_ct, host_id=hl_dev_id
+                    ).values_list('application_id', flat=True)
+                )
+                hl_dev = Device.objects.filter(pk=hl_dev_id).first()
+                hl_dev_name = hl_dev.name if hl_dev else ''
+                for app_pk in hl_app_ids:
+                    if app_pk in app_map:
+                        app_map[app_pk]['on_device'] = True
+                        app_map[app_pk]['on_device_name'] = hl_dev_name
+            except (ValueError, TypeError):
+                pass
+
+        app_ids = set(app_map.keys())
+
+        # Get dependencies where both source and target are in scope
+        deps = ApplicationDependency.objects.filter(
+            source_application_id__in=app_ids,
+            target_application_id__in=app_ids,
+        ).select_related('source_application', 'target_application')
+
+        # Build "service ports" on each app from its dependencies
+        # Split into DEPENDS ON (outgoing) and NEEDED BY (incoming) sections
+        app_ports = {}  # app_pk -> [port_dicts]
+        for app_pk in app_ids:
+            app_ports[app_pk] = []
+
+        edges = []
+        for dep in deps:
+            crit = dep.source_application.criticality
+            crit_color = self.CRITICALITY_COLORS.get(crit, '#6c757d')
+
+            proto_display = dep.get_protocol_display() if dep.protocol else ''
+            port_str = f':{dep.port}' if dep.port else ''
+            label = f'{proto_display}{port_str}' if proto_display else ''
+
+            # Port on SOURCE app (outgoing — "DEPENDS ON" section)
+            src_port_id = f'dep-out-{dep.pk}'
+            target_name = dep.target_application.name
+            app_ports[dep.source_application_id].append({
+                'id': src_port_id,
+                'name': target_name,
+                'port_class': 'dep-outgoing',
+                'type': label,
+                'speed': None,
+                'cabled': True,
+            })
+
+            # Port on TARGET app (incoming — "NEEDED BY" section)
+            tgt_port_id = f'dep-in-{dep.pk}'
+            source_name = dep.source_application.name
+            app_ports[dep.target_application_id].append({
+                'id': tgt_port_id,
+                'name': source_name,
+                'port_class': 'dep-incoming',
+                'type': label,
+                'speed': None,
+                'cabled': True,
+            })
+
+            edges.append({
+                'id': f'dep-{dep.pk}',
+                'edge_type': 'dependency',
+                'source': f'app-{dep.source_application_id}',
+                'target': f'app-{dep.target_application_id}',
+                'source_port': src_port_id,
+                'target_port': tgt_port_id,
+                'source_port_name': target_name,
+                'target_port_name': source_name,
+                'directed': True,
+                'dependency_type': dep.dependency_type,
+                'color': crit_color,
+                'cable_type': label,
+                'cable_label': label or dep.dependency_type,
+                'cable_id': f'd{dep.pk}',
+                'status': dep.get_status_display(),
+                'status_value': dep.status,
+            })
+
+        # Build port list with section header rows
+        for app_pk, ports in app_ports.items():
+            outgoing = [p for p in ports if p['port_class'] == 'dep-outgoing']
+            incoming = [p for p in ports if p['port_class'] == 'dep-incoming']
+            sorted_ports = []
+            if outgoing:
+                sorted_ports.append({
+                    'id': f'hdr-out-{app_pk}',
+                    'name': 'DEPENDS ON',
+                    'port_class': 'section-header',
+                    'type': '', 'speed': None, 'cabled': False,
+                })
+                sorted_ports.extend(outgoing)
+            if incoming:
+                sorted_ports.append({
+                    'id': f'hdr-in-{app_pk}',
+                    'name': 'NEEDED BY',
+                    'port_class': 'section-header',
+                    'type': '', 'speed': None, 'cabled': False,
+                })
+                sorted_ports.extend(incoming)
+            if app_pk in app_map:
+                app_map[app_pk]['ports'] = sorted_ports
+                app_map[app_pk]['outgoing_count'] = len(outgoing)
+                app_map[app_pk]['incoming_count'] = len(incoming)
+
+        # Also include devices that apps are deployed on + deployed-on edges
+        deployments = ApplicationDeployment.objects.filter(
+            application_id__in=app_ids,
+        ).select_related('host_type')
+
+        device_ct = ContentType.objects.get_for_model(Device)
+        device_ids = set()
+        for dep in deployments:
+            if dep.host_type_id == device_ct.pk:
+                device_ids.add(dep.host_id)
+
+        # Add device nodes
+        if device_ids:
+            devices = Device.objects.filter(pk__in=device_ids).select_related(
+                'device_type__manufacturer', 'role', 'site', 'rack',
+            )
+            for device in devices:
+                device_node = {
+                    'id': f'device-{device.pk}',
+                    'device_id': device.pk,
+                    'node_type': 'device',
+                    'name': device.name or str(device),
+                    'role': device.role.name if device.role else '',
+                    'role_slug': device.role.slug if device.role else '',
+                    'role_color': f'#{device.role.color}' if device.role and device.role.color else '#6c757d',
+                    'device_type': str(device.device_type) if device.device_type else '',
+                    'status': device.get_status_display(),
+                    'status_value': device.status,
+                    'site': device.site.name if device.site else '',
+                    'rack': device.rack.name if device.rack else '',
+                    'url': device.get_absolute_url(),
+                    'ports': [],
+                    'interface_count': 0,
+                }
+                nodes.append(device_node)
+
+        # ── Role-aware status propagation ──
+        # Statuses: 'down' (all hosts dead), 'degraded' (primary down but standby exists),
+        #           'healthy' (all hosts up)
+        DOWN_STATUSES = {'offline', 'failed', 'decommissioning'}
+        FAILOVER_ROLES = {'standby', 'replica'}
+
+        if device_ids:
+            down_devices = {}  # device_id -> device_name
+            for node in nodes:
+                if node.get('node_type') == 'device' and node.get('status_value') in DOWN_STATUSES:
+                    down_devices[node['device_id']] = node['name']
+
+            if down_devices:
+                # Step 1: Classify each app's health based on host roles
+                # Build per-app deployment map: app_pk -> [(device_id, role)]
+                app_hosts = {}
+                for dep in deployments:
+                    if dep.host_type_id == device_ct.pk:
+                        app_hosts.setdefault(dep.application_id, []).append(
+                            (dep.host_id, dep.role)
+                        )
+
+                for app_pk, host_list in app_hosts.items():
+                    app_node = app_map.get(app_pk)
+                    if not app_node:
+                        continue
+
+                    primaries = [(did, r) for did, r in host_list if r not in FAILOVER_ROLES]
+                    failovers = [(did, r) for did, r in host_list if r in FAILOVER_ROLES]
+                    down_primary_names = [down_devices[did] for did, r in primaries if did in down_devices]
+                    down_failover_names = [down_devices[did] for did, r in failovers if did in down_devices]
+
+                    if not down_primary_names and not down_failover_names:
+                        continue  # all hosts up
+
+                    all_primaries_down = len(down_primary_names) == len(primaries) if primaries else True
+                    all_failovers_down = len(down_failover_names) == len(failovers) if failovers else True
+                    has_live_failover = failovers and not all_failovers_down
+
+                    reasons = down_primary_names + down_failover_names
+
+                    if all_primaries_down and all_failovers_down:
+                        app_node['host_status'] = 'down'
+                        app_node['host_down'] = True
+                    elif all_primaries_down and has_live_failover:
+                        app_node['host_status'] = 'degraded'
+                        app_node['host_down'] = False
+                    elif down_primary_names:
+                        app_node['host_status'] = 'degraded'
+                        app_node['host_down'] = False
+                    else:
+                        app_node['host_status'] = 'degraded'
+                        app_node['host_down'] = False
+
+                    app_node['host_down_reasons'] = reasons
+
+                # Step 2: Cascade through dependency chain (BFS)
+                # Edge convention: source DEPENDS ON target
+                # Build reverse adjacency with dep type: target_pk -> [(source_pk, dep_type)]
+                reverse_deps = {}
+                for d in deps:
+                    reverse_deps.setdefault(d.target_application_id, []).append(
+                        (d.source_application_id, d.dependency_type)
+                    )
+
+                # BFS cascade with cycle safety and status escalation
+                from collections import deque
+                queue = deque()
+                for pk_seed, node_seed in app_map.items():
+                    if node_seed.get('host_status') in ('down', 'degraded'):
+                        queue.append(pk_seed)
+
+                max_iterations = len(app_map) * 3  # cycle safety
+                iterations = 0
+                while queue and iterations < max_iterations:
+                    iterations += 1
+                    current_pk = queue.popleft()
+                    current_node = app_map.get(current_pk)
+                    if not current_node:
+                        continue
+                    current_status = current_node.get('host_status', 'healthy')
+                    if current_status == 'healthy':
+                        continue
+                    reason = current_node['name']
+
+                    for dependent_pk, dep_type in reverse_deps.get(current_pk, []):
+                        dep_node = app_map.get(dependent_pk)
+                        if not dep_node:
+                            continue
+
+                        # Determine propagated status
+                        new_status = 'down' if (current_status == 'down' and dep_type == 'hard') else 'degraded'
+
+                        existing = dep_node.get('host_status', 'healthy')
+                        escalated = False
+
+                        # Only escalate, never downgrade
+                        # IMPORTANT: host_down stays unchanged — it tracks OWN host state only
+                        # dep_down_reasons tracks cascaded dependency failures separately
+                        if existing == 'down':
+                            pass  # already worst
+                        elif new_status == 'down':
+                            dep_node['host_status'] = 'down'
+                            escalated = True
+                        elif existing == 'healthy':
+                            dep_node['host_status'] = 'degraded'
+                            escalated = True
+
+                        # Track dependency reasons separately from host reasons
+                        if 'dep_down_reasons' not in dep_node:
+                            dep_node['dep_down_reasons'] = []
+                        if reason not in dep_node['dep_down_reasons']:
+                            dep_node['dep_down_reasons'].append(reason)
+
+                        # Re-enqueue if status was escalated (handles cycles correctly)
+                        if escalated:
+                            queue.append(dependent_pk)
+
+        # Add deployed-on edges (with port references for mixed mode routing)
+        for dep in deployments:
+            if dep.host_type_id == device_ct.pk and dep.host_id in device_ids:
+                target_port_id = f'app-deploy-{dep.pk}'
+                edges.append({
+                    'id': f'deploy-{dep.pk}',
+                    'edge_type': 'deployed_on',
+                    'source': f'app-{dep.application_id}',
+                    'target': f'device-{dep.host_id}',
+                    'source_port': None,
+                    'target_port': target_port_id,
+                    'source_port_name': dep.application.name if dep.application_id in app_map else '',
+                    'target_port_name': dep.application.name if dep.application_id in app_map else '',
+                    'directed': False,
+                    'color': '#22d3ee',
+                    'label': dep.get_role_display(),
+                    'cable_type': f'{dep.get_role_display()} :{dep.port}' if dep.port else dep.get_role_display(),
+                    'cable_id': f'dp{dep.pk}',
+                })
+
+        # Count affected apps (no DB writes in GET — notifications handled separately)
+        down_apps = [n for n in nodes if n.get('node_type') == 'application' and n.get('host_status') == 'down']
+        degraded_apps = [n for n in nodes if n.get('node_type') == 'application' and n.get('host_status') == 'degraded']
+
+        return JsonResponse({
+            'nodes': nodes,
+            'edges': edges,
+            'stats': {
+                'node_count': len(nodes),
+                'edge_count': len(edges),
+                'down_count': len(down_apps),
+                'degraded_count': len(degraded_apps),
+            },
+        })
+
+
+class AppTopologyDetailView(LoginRequiredMixin, View):
+    """AJAX endpoint returning dependency details for an application."""
+
+    def get(self, request, app_id):
+        try:
+            app = Application.objects.select_related('group', 'tenant', 'site').get(pk=app_id)
+        except Application.DoesNotExist:
+            return JsonResponse({'error': 'Application not found'}, status=404)
+
+        # Upstream: what this app depends on
+        upstream = []
+        for dep in ApplicationDependency.objects.filter(
+            source_application=app,
+        ).select_related('target_application'):
+            upstream.append({
+                'id': dep.pk,
+                'app_id': dep.target_application.pk,
+                'app_name': dep.target_application.name,
+                'dependency_type': dep.dependency_type,
+                'protocol': dep.get_protocol_display() if dep.protocol else '',
+                'port': dep.port,
+                'status': dep.get_status_display(),
+            })
+
+        # Downstream: what depends on this app
+        downstream = []
+        for dep in ApplicationDependency.objects.filter(
+            target_application=app,
+        ).select_related('source_application'):
+            downstream.append({
+                'id': dep.pk,
+                'app_id': dep.source_application.pk,
+                'app_name': dep.source_application.name,
+                'dependency_type': dep.dependency_type,
+                'protocol': dep.get_protocol_display() if dep.protocol else '',
+                'port': dep.port,
+                'status': dep.get_status_display(),
+            })
+
+        # Deployments — batch-fetch hosts to avoid N+1
+        deploy_qs = list(ApplicationDeployment.objects.filter(
+            application=app,
+        ).select_related('host_type', 'service'))
+
+        # Group by content type, batch-fetch host objects
+        device_ct = ContentType.objects.get_for_model(Device)
+        device_deploy_ids = [d.host_id for d in deploy_qs if d.host_type_id == device_ct.pk]
+        device_map = {}
+        if device_deploy_ids:
+            device_map = Device.objects.in_bulk(device_deploy_ids)
+
+        vm_map = {}
+        try:
+            from virtualization.models import VirtualMachine
+            vm_ct = ContentType.objects.get_for_model(VirtualMachine)
+            vm_deploy_ids = [d.host_id for d in deploy_qs if d.host_type_id == vm_ct.pk]
+            if vm_deploy_ids:
+                vm_map = VirtualMachine.objects.in_bulk(vm_deploy_ids)
+        except ImportError:
+            pass
+
+        deployments = []
+        for deploy in deploy_qs:
+            if deploy.host_type_id == device_ct.pk:
+                host_obj = device_map.get(deploy.host_id)
+            else:
+                host_obj = vm_map.get(deploy.host_id)
+            host_status = host_obj.status if host_obj and hasattr(host_obj, 'status') else 'unknown'
+            deployments.append({
+                'id': deploy.pk,
+                'host_name': str(host_obj) if host_obj else 'Unknown',
+                'host_type': deploy.host_type.model if deploy.host_type else '',
+                'role': deploy.get_role_display(),
+                'role_value': deploy.role,
+                'port': deploy.port,
+                'protocol': deploy.protocol,
+                'host_status': host_status,
+                'ip_address': str(deploy.ip_address) if deploy.ip_address else '',
+                'service_name': str(deploy.service) if deploy.service else '',
+            })
+
+        return JsonResponse({
+            'app_name': app.name,
+            'app_url': app.get_absolute_url(),
+            'site': app.site.name if app.site else '',
+            'group': app.group.name if app.group else '',
+            'environment': app.get_environment_display(),
+            'upstream': upstream,
+            'downstream': downstream,
+            'deployments': deployments,
+        })
+
+
+#
 # AJAX: Split Cable at Marker
 #
 
@@ -1326,7 +2485,10 @@ class MarkerDetailView(LoginRequiredMixin, View):
 
         # Cable traces
         try:
-            interfaces = self._get_cable_traces(obj, object_type) if object_type in ('device', 'rearport', 'frontport') else []
+            if object_type in ('device', 'rearport', 'frontport'):
+                interfaces = self._get_cable_traces(obj, object_type)
+            else:
+                interfaces = []
         except Exception:
             interfaces = []
 
@@ -1354,13 +2516,11 @@ class MarkerDetailView(LoginRequiredMixin, View):
                         'trace': trace_data,
                     })
         elif object_type in ('rearport', 'frontport'):
-            from dcim.models import RearPort, FrontPort
             # Build a single unified trace that shows the full path through
             # the patch panel: e.g. Server:eth0 → Cable → FrontPort →
             # RearPort → Cable → Switch:GigabitEthernet.
             own_hops = self._trace_through_panels(obj)
             peer_hops = []
-            peer_name = None
             try:
                 from dcim.models import PortMapping
                 if object_type == 'rearport':
@@ -1371,7 +2531,6 @@ class MarkerDetailView(LoginRequiredMixin, View):
                         peer = mapping.front_port
                         if peer and peer.cable:
                             peer_hops = self._trace_through_panels(peer)
-                            peer_name = peer.name
                             break
                 else:
                     mappings = PortMapping.objects.filter(
@@ -1381,7 +2540,6 @@ class MarkerDetailView(LoginRequiredMixin, View):
                         peer = mapping.rear_port
                         if peer and peer.cable:
                             peer_hops = self._trace_through_panels(peer)
-                            peer_name = peer.name
                             break
             except Exception:
                 pass
@@ -1503,8 +2661,9 @@ class MarkerDetailView(LoginRequiredMixin, View):
         so we look up the corresponding FrontPort via PortMapping and
         keep tracing (FrontPort *does* have trace()).
         """
-        from dcim.models import PortMapping
         import logging
+
+        from dcim.models import PortMapping
         logger = logging.getLogger('netbox_map')
 
         all_hops = []
@@ -1799,3 +2958,81 @@ class DeviceMapLocationsView(generic.ObjectView):
             'rack_tiles': rack_tiles,
             'rack': instance.rack if instance.rack_id else None,
         }
+
+
+#
+# Device / VM Applications Tab
+#
+
+def _count_device_apps(device):
+    device_ct = ContentType.objects.get_for_model(Device)
+    return ApplicationDeployment.objects.filter(
+        host_type=device_ct, host_id=device.pk,
+    ).count()
+
+
+@register_model_view(Device, 'applications', path='applications')
+class DeviceApplicationsTabView(generic.ObjectChildrenView):
+    queryset = Device.objects.all()
+    child_model = ApplicationDeployment
+    table = tables.ApplicationDeploymentTable
+    template_name = 'netbox_map/device_applications_tab.html'
+    tab = ViewTab(
+        label=_('Applications'),
+        badge=lambda obj: _count_device_apps(obj),
+        permission='netbox_map.view_applicationdeployment',
+        hide_if_empty=True,
+    )
+
+    def get_children(self, request, parent):
+        device_ct = ContentType.objects.get_for_model(Device)
+        return ApplicationDeployment.objects.filter(
+            host_type=device_ct, host_id=parent.pk,
+        ).select_related('application')
+
+    def get_extra_context(self, request, instance):
+        from django.urls import reverse
+        device_ct = ContentType.objects.get_for_model(Device)
+        add_url = reverse('plugins:netbox_map:applicationdeployment_add')
+        add_url += f'?host_type={device_ct.pk}&device={instance.pk}'
+        return {'add_deployment_url': add_url}
+
+
+def _count_vm_apps(vm):
+    from virtualization.models import VirtualMachine
+    vm_ct = ContentType.objects.get_for_model(VirtualMachine)
+    return ApplicationDeployment.objects.filter(
+        host_type=vm_ct, host_id=vm.pk,
+    ).count()
+
+
+try:
+    from virtualization.models import VirtualMachine
+
+    @register_model_view(VirtualMachine, 'applications', path='applications')
+    class VMApplicationsTabView(generic.ObjectChildrenView):
+        queryset = VirtualMachine.objects.all()
+        child_model = ApplicationDeployment
+        table = tables.ApplicationDeploymentTable
+        template_name = 'netbox_map/device_applications_tab.html'
+        tab = ViewTab(
+            label=_('Applications'),
+            badge=lambda obj: _count_vm_apps(obj),
+            permission='netbox_map.view_applicationdeployment',
+            hide_if_empty=True,
+        )
+
+        def get_children(self, request, parent):
+            vm_ct = ContentType.objects.get_for_model(VirtualMachine)
+            return ApplicationDeployment.objects.filter(
+                host_type=vm_ct, host_id=parent.pk,
+            ).select_related('application')
+
+        def get_extra_context(self, request, instance):
+            from django.urls import reverse
+            vm_ct = ContentType.objects.get_for_model(VirtualMachine)
+            add_url = reverse('plugins:netbox_map:applicationdeployment_add')
+            add_url += f'?host_type={vm_ct.pk}&virtual_machine={instance.pk}'
+            return {'add_deployment_url': add_url}
+except ImportError:
+    pass

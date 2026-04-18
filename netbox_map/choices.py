@@ -1,5 +1,5 @@
-from netbox.choices import ChoiceSet
 from django.utils.translation import gettext_lazy as _
+from netbox.choices import ChoiceSet
 
 
 class FloorPlanTileTypeChoices(ChoiceSet):
@@ -65,30 +65,30 @@ class CablePathStatusChoices(ChoiceSet):
 # ── Built-in type metadata (color + icon for JS/template rendering) ──
 
 BUILTIN_TYPE_CONFIG = {
-    'rack':           {'name': 'Rack',            'color': '#4a7eff', 'icon': 'mdi-collage'},
-    'aisle':          {'name': 'Aisle',           'color': '#3a3a50', 'icon': 'mdi-arrow-expand-horizontal'},
-    'wall':           {'name': 'Wall',            'color': '#5c5c6e', 'icon': 'mdi-wall'},
-    'column':         {'name': 'Column',          'color': '#6e6e80', 'icon': 'mdi-square-outline'},
-    'door':           {'name': 'Door',            'color': '#1a8a7a', 'icon': 'mdi-door-open'},
-    'cooling':        {'name': 'Cooling',         'color': '#1890b0', 'icon': 'mdi-snowflake'},
-    'power':          {'name': 'Power',           'color': '#c89a20', 'icon': 'mdi-flash-outline'},
-    'empty':          {'name': 'Empty',           'color': '#2a2a3e', 'icon': 'mdi-checkbox-blank-outline'},
-    'reserved':       {'name': 'Reserved',        'color': '#b06820', 'icon': 'mdi-calendar-clock'},
-    'ap':             {'name': 'Access Point',    'color': '#7b42c8', 'icon': 'mdi-wifi'},
-    'camera':         {'name': 'Camera',          'color': '#c42020', 'icon': 'mdi-cctv'},
-    'printer':        {'name': 'Printer',         'color': '#e67e22', 'icon': 'mdi-printer'},
+    'rack':           {'name': 'Rack', 'color': '#4a7eff', 'icon': 'mdi-collage'},
+    'aisle':          {'name': 'Aisle', 'color': '#3a3a50', 'icon': 'mdi-arrow-expand-horizontal'},
+    'wall':           {'name': 'Wall', 'color': '#5c5c6e', 'icon': 'mdi-wall'},
+    'column':         {'name': 'Column', 'color': '#6e6e80', 'icon': 'mdi-square-outline'},
+    'door':           {'name': 'Door', 'color': '#1a8a7a', 'icon': 'mdi-door-open'},
+    'cooling':        {'name': 'Cooling', 'color': '#1890b0', 'icon': 'mdi-snowflake'},
+    'power':          {'name': 'Power', 'color': '#c89a20', 'icon': 'mdi-flash-outline'},
+    'empty':          {'name': 'Empty', 'color': '#2a2a3e', 'icon': 'mdi-checkbox-blank-outline'},
+    'reserved':       {'name': 'Reserved', 'color': '#b06820', 'icon': 'mdi-calendar-clock'},
+    'ap':             {'name': 'Access Point', 'color': '#7b42c8', 'icon': 'mdi-wifi'},
+    'camera':         {'name': 'Camera', 'color': '#c42020', 'icon': 'mdi-cctv'},
+    'printer':        {'name': 'Printer', 'color': '#e67e22', 'icon': 'mdi-printer'},
     'floorplan_link': {'name': 'Floor Plan Link', 'color': '#4a50c8', 'icon': 'mdi-floor-plan'},
-    'drop':           {'name': 'Drop',            'color': '#2ecc71', 'icon': 'mdi-ethernet'},
+    'drop':           {'name': 'Drop', 'color': '#2ecc71', 'icon': 'mdi-ethernet'},
     # FTTH / Fiber types
-    'splice_closure': {'name': 'Splice Closure',  'color': '#e67e22', 'icon': 'mdi-connection'},
-    'olt':            {'name': 'OLT',             'color': '#2ecc71', 'icon': 'mdi-server-network'},
-    'ont':            {'name': 'ONT',             'color': '#3498db', 'icon': 'mdi-router-wireless'},
-    'splitter':       {'name': 'Splitter',        'color': '#9b59b6', 'icon': 'mdi-call-split'},
-    'fdt':            {'name': 'FDT',             'color': '#1abc9c', 'icon': 'mdi-package-variant-closed'},
-    'fat':            {'name': 'FAT',             'color': '#e74c3c', 'icon': 'mdi-access-point'},
-    'manhole':        {'name': 'Manhole',         'color': '#7f8c8d', 'icon': 'mdi-circle-outline'},
-    'pole':           {'name': 'Pole',            'color': '#f39c12', 'icon': 'mdi-transmission-tower'},
-    'handhole':       {'name': 'Handhole',        'color': '#95a5a6', 'icon': 'mdi-circle-half-full'},
+    'splice_closure': {'name': 'Splice Closure', 'color': '#e67e22', 'icon': 'mdi-connection'},
+    'olt':            {'name': 'OLT', 'color': '#2ecc71', 'icon': 'mdi-server-network'},
+    'ont':            {'name': 'ONT', 'color': '#3498db', 'icon': 'mdi-router-wireless'},
+    'splitter':       {'name': 'Splitter', 'color': '#9b59b6', 'icon': 'mdi-call-split'},
+    'fdt':            {'name': 'FDT', 'color': '#1abc9c', 'icon': 'mdi-package-variant-closed'},
+    'fat':            {'name': 'FAT', 'color': '#e74c3c', 'icon': 'mdi-access-point'},
+    'manhole':        {'name': 'Manhole', 'color': '#7f8c8d', 'icon': 'mdi-circle-outline'},
+    'pole':           {'name': 'Pole', 'color': '#f39c12', 'icon': 'mdi-transmission-tower'},
+    'handhole':       {'name': 'Handhole', 'color': '#95a5a6', 'icon': 'mdi-circle-half-full'},
 }
 
 # Set of all built-in slugs for quick lookup
@@ -136,3 +136,91 @@ def get_all_type_configs():
             'builtin': False,
         })
     return configs
+
+
+#
+# Application choices
+#
+
+class ApplicationStatusChoices(ChoiceSet):
+    STATUS_ACTIVE = 'active'
+    STATUS_PLANNED = 'planned'
+    STATUS_DEPRECATED = 'deprecated'
+    STATUS_DECOMMISSIONED = 'decommissioned'
+
+    CHOICES = [
+        (STATUS_ACTIVE, _('Active'), 'green'),
+        (STATUS_PLANNED, _('Planned'), 'cyan'),
+        (STATUS_DEPRECATED, _('Deprecated'), 'yellow'),
+        (STATUS_DECOMMISSIONED, _('Decommissioned'), 'red'),
+    ]
+
+
+class ApplicationCriticalityChoices(ChoiceSet):
+    CRITICALITY_LOW = 'low'
+    CRITICALITY_MEDIUM = 'medium'
+    CRITICALITY_HIGH = 'high'
+    CRITICALITY_CRITICAL = 'critical'
+
+    CHOICES = [
+        (CRITICALITY_LOW, _('Low'), 'blue'),
+        (CRITICALITY_MEDIUM, _('Medium'), 'yellow'),
+        (CRITICALITY_HIGH, _('High'), 'orange'),
+        (CRITICALITY_CRITICAL, _('Critical'), 'red'),
+    ]
+
+
+class ApplicationEnvironmentChoices(ChoiceSet):
+    ENV_PRODUCTION = 'production'
+    ENV_STAGING = 'staging'
+    ENV_DEVELOPMENT = 'development'
+    ENV_TESTING = 'testing'
+
+    CHOICES = [
+        (ENV_PRODUCTION, _('Production'), 'green'),
+        (ENV_STAGING, _('Staging'), 'yellow'),
+        (ENV_DEVELOPMENT, _('Development'), 'cyan'),
+        (ENV_TESTING, _('Testing'), 'blue'),
+    ]
+
+
+class DependencyTypeChoices(ChoiceSet):
+    TYPE_HARD = 'hard'
+    TYPE_SOFT = 'soft'
+
+    CHOICES = [
+        (TYPE_HARD, _('Hard'), 'red'),
+        (TYPE_SOFT, _('Soft'), 'blue'),
+    ]
+
+
+class DependencyProtocolChoices(ChoiceSet):
+    PROTO_API = 'api'
+    PROTO_DATABASE = 'database'
+    PROTO_MESSAGING = 'messaging'
+    PROTO_GRPC = 'grpc'
+    PROTO_FILESYSTEM = 'filesystem'
+    PROTO_OTHER = 'other'
+
+    CHOICES = [
+        (PROTO_API, _('API (HTTP/REST)'), 'blue'),
+        (PROTO_DATABASE, _('Database'), 'green'),
+        (PROTO_MESSAGING, _('Messaging/Queue'), 'purple'),
+        (PROTO_GRPC, _('gRPC'), 'cyan'),
+        (PROTO_FILESYSTEM, _('Filesystem/NFS'), 'yellow'),
+        (PROTO_OTHER, _('Other'), 'gray'),
+    ]
+
+
+class DeploymentRoleChoices(ChoiceSet):
+    ROLE_PRIMARY = 'primary'
+    ROLE_REPLICA = 'replica'
+    ROLE_WORKER = 'worker'
+    ROLE_STANDBY = 'standby'
+
+    CHOICES = [
+        (ROLE_PRIMARY, _('Primary'), 'green'),
+        (ROLE_REPLICA, _('Replica'), 'blue'),
+        (ROLE_WORKER, _('Worker'), 'cyan'),
+        (ROLE_STANDBY, _('Standby'), 'yellow'),
+    ]

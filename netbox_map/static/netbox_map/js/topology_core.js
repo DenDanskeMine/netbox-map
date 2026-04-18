@@ -54,6 +54,9 @@ window.TopologyApp = (function() {
         this.customHierarchy = null;
         this.addedDeviceIds = new Set();
         this.searchQuery = '';
+        this.topologyMode = 'network';  // 'network' or 'apps'
+        this.appDataUrl = config.appDataUrl || '';
+        this.appDetailUrl = config.appDetailUrl || '';
     }
 
     /* ===== API ===== */
@@ -124,6 +127,9 @@ window.TopologyApp = (function() {
             try { savedLayout = JSON.parse(savedLayout); } catch(e) { savedLayout = {}; }
         }
 
+        var appDetailUrl = container.getAttribute('data-app-detail-url') || '';
+        appDetailUrl = appDetailUrl.replace(/0\/$/, '');
+
         return {
             topologyUrl: container.getAttribute('data-topology-url') || '',
             deviceDetailUrl: deviceDetailUrl,
@@ -132,6 +138,8 @@ window.TopologyApp = (function() {
             initialFilters: initialFilters,
             savedViewId: container.getAttribute('data-saved-view-id') || null,
             savedLayout: savedLayout,
+            appDataUrl: container.getAttribute('data-app-data-url') || '',
+            appDetailUrl: appDetailUrl,
         };
     }
 
@@ -216,6 +224,23 @@ window.TopologyApp = (function() {
         return '\uF1A7';  // mdi-monitor
     }
 
+    /* ===== Application Utilities ===== */
+
+    function criticalityColor(level) {
+        var colors = {critical:'#e74c3c', high:'#e67e22', medium:'#f39c12', low:'#3498db'};
+        return colors[level] || '#6c757d';
+    }
+
+    var APP_TYPE_ICONS = {
+        'web-app': '\uF59F', 'database': '\uF1BC', 'api': '\uF0106',
+        'messaging': '\uF0361', 'cache': '\uF0E8C', 'monitoring': '\uF0239',
+        'storage': '\uF1DA', 'auth': '\uF0587',
+    };
+
+    function appTypeIcon(type) {
+        return APP_TYPE_ICONS[type] || '\uF0379'; // mdi-application default
+    }
+
     return {
         EventBus: EventBus,
         State: State,
@@ -227,5 +252,8 @@ window.TopologyApp = (function() {
         speedClass: speedClass,
         statusColor: statusColor,
         roleIcon: roleIcon,
+        criticalityColor: criticalityColor,
+        appTypeIcon: appTypeIcon,
+        APP_TYPE_ICONS: APP_TYPE_ICONS,
     };
 })();

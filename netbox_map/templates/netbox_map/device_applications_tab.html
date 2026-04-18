@@ -1,0 +1,10 @@
+{% extends 'generic/object_children.html' %}
+{% load i18n %}
+
+{% block extra_controls %}
+  {% if add_deployment_url %}
+    <a href="{{ add_deployment_url }}" class="btn btn-sm btn-primary">
+      <i class="mdi mdi-plus-thick"></i> {% trans "Assign Application" %}
+    </a>
+  {% endif %}
+{% endblock %}

@@ -1,0 +1,38 @@
+{% extends 'generic/object.html' %}
+{% load helpers %}
+{% load i18n %}
+
+{% block content %}
+  {% include 'netbox_map/inc/beta_banner.html' %}
+  <div class="row mb-3">
+    <div class="col-md-6">
+      <div class="card">
+        <h5 class="card-header">{% trans "Application Group" %}</h5>
+        <table class="table table-hover attr-table">
+          <tr>
+            <th scope="row">{% trans "Name" %}</th>
+            <td>{{ object.name }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Slug" %}</th>
+            <td><code>{{ object.slug }}</code></td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Color" %}</th>
+            <td>
+              <span style="display:inline-block;width:16px;height:16px;border-radius:3px;background:{{ object.color }};border:1px solid #ccc;vertical-align:middle;"></span>
+              {{ object.color }}
+            </td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Description" %}</th>
+            <td>{{ object.description|placeholder }}</td>
+          </tr>
+        </table>
+      </div>
+    </div>
+    <div class="col-md-6">
+      {% include 'inc/panels/tags.html' %}
+    </div>
+  </div>
+{% endblock %}
