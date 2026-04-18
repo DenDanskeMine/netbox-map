@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [0.10.0] - 2026-04-08
+## [0.10.0] - 2026-04-18
 
 ### Added
 - **Application Mapping (Beta)**: Model applications, deployments, dependencies, and templates (#36)
@@ -14,6 +14,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Device/VM detail page Applications tab and summary panel
 - IP address and NetBox Service integration on deployments
 - Dashboard widget for application health overview
+- Circuit support in topology view -- traces through circuit terminations to show WAN/provider links (#40)
 - REST API endpoints for all application models (full CRUD)
 - MapSettings singleton REST API endpoint
 - LocationCoordinates filterset with site_id filter

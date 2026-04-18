@@ -417,6 +417,170 @@ class TopologyDataView(LoginRequiredMixin, View):
                         'url': cable.get_absolute_url(),
                     })
 
+        # ── Circuit edges: trace through CircuitTerminations to far-side devices ──
+        try:
+            from circuits.models import CircuitTermination
+            circuit_ct = ContentType.objects.get_for_model(
+                CircuitTermination,
+            )
+
+            # Find CableTerminations pointing to CircuitTerminations
+            circuit_cable_terms = CableTermination.objects.filter(
+                termination_type=circuit_ct,
+            ).select_related('cable')
+
+            # Group by cable: cable_id → CircuitTermination id
+            cable_to_ct = {}
+            for cterm in circuit_cable_terms:
+                cable_to_ct.setdefault(cterm.cable_id, []).append(
+                    cterm.termination_id
+                )
+
+            # For each cable that has both a device port and a
+            # CircuitTermination, find the far-side device
+            circuit_term_ids = set()
+            for ct_ids in cable_to_ct.values():
+                circuit_term_ids.update(ct_ids)
+
+            if circuit_term_ids:
+                ct_objects = {
+                    ct.pk: ct
+                    for ct in CircuitTermination.objects.filter(
+                        pk__in=circuit_term_ids,
+                    ).select_related(
+                        'circuit__provider',
+                        'circuit__type',
+                    )
+                }
+
+                # Build: cable_id → (device_id, port_info) for cables
+                # that also touch a CircuitTermination
+                for cable_id, ct_ids in cable_to_ct.items():
+                    if cable_id not in cable_terms:
+                        continue
+                    # Find device port(s) on this cable
+                    dev_ports = []
+                    for ct_key in cable_terms.get(cable_id, []):
+                        dev_id = port_id_map.get(ct_key)
+                        if dev_id and dev_id in device_ids:
+                            port = port_info_map.get(ct_key)
+                            dev_ports.append((dev_id, port))
+
+                    if not dev_ports:
+                        continue
+
+                    for ct_id in ct_ids:
+                        ct_obj = ct_objects.get(ct_id)
+                        if not ct_obj:
+                            continue
+                        circuit = ct_obj.circuit
+                        # Find peer termination (opposite side)
+                        peer = (
+                            circuit.termination_z
+                            if ct_obj.term_side == 'A'
+                            else circuit.termination_a
+                        )
+                        if not peer or not peer.cable_id:
+                            continue
+
+                        # Find device on peer cable
+                        peer_cable_id = peer.cable_id
+                        peer_dev_ports = []
+                        for ct_key in cable_terms.get(
+                            peer_cable_id, []
+                        ):
+                            dev_id = port_id_map.get(ct_key)
+                            if dev_id and dev_id in device_ids:
+                                port = port_info_map.get(ct_key)
+                                peer_dev_ports.append(
+                                    (dev_id, port)
+                                )
+
+                        # Create circuit edges between device pairs
+                        for dev_a, port_a in dev_ports:
+                            for dev_b, port_b in peer_dev_ports:
+                                if dev_a == dev_b:
+                                    continue
+                                edge_id = (
+                                    f'circuit-{circuit.pk}'
+                                )
+                                # Consistent ordering
+                                if dev_a > dev_b:
+                                    dev_a, dev_b = dev_b, dev_a
+                                    port_a, port_b = port_b, port_a
+                                provider = str(
+                                    circuit.provider
+                                ) if circuit.provider else ''
+                                ctype = str(
+                                    circuit.type
+                                ) if circuit.type else ''
+                                commit = circuit.commit_rate
+                                label = (
+                                    f'{circuit.cid}'
+                                    f' ({provider})'
+                                    if provider
+                                    else circuit.cid
+                                )
+                                edges.append({
+                                    'id': edge_id,
+                                    'edge_type': 'circuit',
+                                    'source': f'device-{dev_a}',
+                                    'target': f'device-{dev_b}',
+                                    'source_port': (
+                                        port_a['id']
+                                        if port_a else None
+                                    ),
+                                    'target_port': (
+                                        port_b['id']
+                                        if port_b else None
+                                    ),
+                                    'source_port_name': (
+                                        port_a['name']
+                                        if port_a else ''
+                                    ),
+                                    'target_port_name': (
+                                        port_b['name']
+                                        if port_b else ''
+                                    ),
+                                    'source_port_speed': (
+                                        port_a['speed']
+                                        if port_a else None
+                                    ),
+                                    'target_port_speed': (
+                                        port_b['speed']
+                                        if port_b else None
+                                    ),
+                                    'cable_id': circuit.pk,
+                                    'cable_label': label,
+                                    'cable_type': ctype,
+                                    'cable_type_value': (
+                                        'circuit'
+                                    ),
+                                    'color': '#0ea5e9',
+                                    'status': (
+                                        circuit
+                                        .get_status_display()
+                                    ),
+                                    'status_value': (
+                                        circuit.status
+                                    ),
+                                    'length': '',
+                                    'length_unit': '',
+                                    'url': (
+                                        circuit
+                                        .get_absolute_url()
+                                    ),
+                                    'circuit_id': circuit.pk,
+                                    'circuit_cid': circuit.cid,
+                                    'circuit_provider': provider,
+                                    'circuit_type': ctype,
+                                    'circuit_commit_rate': (
+                                        commit
+                                    ),
+                                })
+        except ImportError:
+            pass  # circuits app not installed
+
         # ── Add application deployment ports to device nodes (for mixed mode) ──
         # Shows which apps run on each device as port-like rows on the card
         device_ct = ContentType.objects.get_for_model(Device)
