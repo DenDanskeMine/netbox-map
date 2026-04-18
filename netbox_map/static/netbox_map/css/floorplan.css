@@ -23,10 +23,10 @@
     --fp-toggle-active-bg: rgba(13, 110, 253, 0.1);
     --fp-toggle-active-border: rgba(13, 110, 253, 0.3);
     --fp-toggle-active-text: #0d6efd;
-    --fp-canvas-bg: #0d0f1a;
-    --fp-zoom-bg: rgba(0, 0, 0, 0.7);
-    --fp-zoom-border: rgba(0, 0, 0, 0.2);
-    --fp-zoom-text: #e0e0e0;
+    --fp-canvas-bg: #e8eaef;
+    --fp-zoom-bg: rgba(255, 255, 255, 0.85);
+    --fp-zoom-border: rgba(0, 0, 0, 0.15);
+    --fp-zoom-text: #495057;
     --fp-link-color: #0d6efd;
     --fp-scrollbar-thumb: rgba(0, 0, 0, 0.15);
     --fp-scrollbar-hover: rgba(0, 0, 0, 0.25);

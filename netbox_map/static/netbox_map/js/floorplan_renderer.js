@@ -14,6 +14,7 @@
         this.ctx = null;
         this.container = null;
         this.bgImg = null;
+        this._isDark = true; // will be updated on render
 
         // Listen for render requests
         var self = this;
@@ -102,6 +103,38 @@
         ctx.closePath();
     };
 
+    /** Detect current NetBox theme (light vs dark). */
+    Renderer.prototype._detectTheme = function() {
+        var el = document.documentElement;
+        this._isDark = !el || el.getAttribute('data-bs-theme') !== 'light';
+    };
+
+    /** Theme-aware canvas colors. */
+    Renderer.prototype._colors = function() {
+        if (this._isDark) {
+            return {
+                canvasBg: '#0d0f1a',
+                gridBg: '#16192b',
+                gridLine: 'rgba(255, 255, 255, 0.06)',
+                gridLineImg: 'rgba(255, 255, 255, 0.12)',
+                zoomText: 'rgba(255, 255, 255, 0.4)',
+                selectStroke: '#00d4ff',
+                selectShadow: '#00d4ff',
+                normalBorder: 'rgba(255, 255, 255, 0.12)',
+            };
+        }
+        return {
+            canvasBg: '#e8eaef',
+            gridBg: '#dfe1e8',
+            gridLine: 'rgba(0, 0, 0, 0.08)',
+            gridLineImg: 'rgba(0, 0, 0, 0.15)',
+            zoomText: 'rgba(0, 0, 0, 0.35)',
+            selectStroke: '#0d6efd',
+            selectShadow: '#0d6efd',
+            normalBorder: 'rgba(0, 0, 0, 0.15)',
+        };
+    };
+
     /** Get fill color for a tile based on type and utilization. */
     Renderer.prototype._getTileFillColor = function(tile) {
         if (tile.type === 'rack') {
@@ -143,13 +176,14 @@
 
         // Border (selected = cyan glow, normal = subtle)
         var isSelected = s.selectedTile && s.selectedTile.id === tile.id;
+        var c = this._colors();
         if (isSelected) {
-            ctx.strokeStyle = '#00d4ff';
+            ctx.strokeStyle = c.selectStroke;
             ctx.lineWidth = 2.5 / s.zoom;
-            ctx.shadowColor = '#00d4ff';
+            ctx.shadowColor = c.selectShadow;
             ctx.shadowBlur = 8 / s.zoom;
         } else {
-            ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
+            ctx.strokeStyle = c.normalBorder;
             ctx.lineWidth = 1 / s.zoom;
             ctx.shadowColor = 'transparent';
             ctx.shadowBlur = 0;
@@ -327,13 +361,14 @@
     Renderer.prototype.drawGrid = function() {
         var s = this.state;
         var ctx = this.ctx;
+        var c = this._colors();
 
         if (!this.bgImg) {
-            ctx.fillStyle = '#16192b';
+            ctx.fillStyle = c.gridBg;
             ctx.fillRect(0, 0, s.worldWidth, s.worldHeight);
         }
 
-        ctx.strokeStyle = this.bgImg ? 'rgba(255, 255, 255, 0.12)' : 'rgba(255, 255, 255, 0.06)';
+        ctx.strokeStyle = this.bgImg ? c.gridLineImg : c.gridLine;
         ctx.lineWidth = 1 / s.zoom;
 
         for (var x = 0; x <= s.gridWidth; x++) {
@@ -360,9 +395,11 @@
         var cw = parseFloat(this.canvas.style.width);
         var ch = parseFloat(this.canvas.style.height);
 
-        // Reset transform and clear
+        // Detect theme and reset transform
+        this._detectTheme();
+        var c = this._colors();
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        ctx.fillStyle = '#0d0f1a';
+        ctx.fillStyle = c.canvasBg;
         ctx.fillRect(0, 0, cw, ch);
 
         // Apply pan/zoom
@@ -397,7 +434,7 @@
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
         // Zoom indicator
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+        ctx.fillStyle = c.zoomText;
         ctx.font = '11px ' + FONT_FAMILY;
         ctx.textAlign = 'right';
         ctx.textBaseline = 'bottom';
