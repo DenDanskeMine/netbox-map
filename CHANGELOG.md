@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.10.1] - 2026-04-19
+
+### Fixed
+- `TypeError: __str__ returned non-string (type __proxy__)` when opening the NetBox Dashboard → Add Widget picker. The AppHealthWidget used `gettext_lazy` for `default_title`/`description`, but NetBox's `DashboardWidget.__str__` returns `self.title` directly and Python's `__str__` contract requires a real `str`. Switched to eager `gettext` (matching NetBox's built-in widgets).
+
+[0.10.1]: https://github.com/DenDanskeMine/netbox-map/compare/v0.10.0...v0.10.1
+
 ## [0.10.0] - 2026-04-18
 
 ### Added
