@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.10.2] - 2026-05-03
+
+### Fixed
+- Tag reverse-accessor clash with other plugins that also define an `Application` model (e.g. `netbox-security`) — Django startup crashed with `fields.E304`. All `Application*` models now declare an explicit `related_name` prefixed with `netbox_map_`. (#42)
+- Floor plan PDF export rendered in dark mode even when the user was in light mode. The theme detector defaulted to dark when `data-bs-theme` wasn't set yet; now uses a 4-tier fallback (attribute → localStorage → `prefers-color-scheme` → light). Same fix applied to the canvas renderer. (#41)
+- Topology view PDF export hung the browser on large canvases (Page Unresponsive dialog or apparent timeout). Render is now async-chunked via `requestAnimationFrame`, with live progress on the export button, a confirm dialog for very large topologies (>600 nodes+edges), and reduced bezier sample counts.
+
+[0.10.2]: https://github.com/DenDanskeMine/netbox-map/compare/v0.10.1...v0.10.2
+
 ## [0.10.1] - 2026-04-19
 
 ### Fixed
