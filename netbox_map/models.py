@@ -7,7 +7,9 @@ from django.db import models
 from django.urls import reverse
 from django.utils.text import slugify
 from django.utils.translation import gettext_lazy as _
+from extras.managers import NetBoxTaggableManager
 from netbox.models import NetBoxModel
+from taggit.managers import TaggableManager
 
 from .choices import (
     BUILTIN_TYPE_SLUGS,
@@ -795,6 +797,14 @@ class ApplicationGroup(NetBoxModel):
         validators=[RegexValidator(regex=r'^#[0-9a-fA-F]{6}$', message=_('Enter a valid hex color.'))],
     )
     description = models.CharField(max_length=200, blank=True)
+    # Override tags with explicit related_name to avoid Tag.applicationgroup_set
+    # collision with other plugins that also define an ApplicationGroup model.
+    tags = TaggableManager(
+        through='extras.TaggedItem',
+        ordering=('weight', 'name'),
+        manager=NetBoxTaggableManager,
+        related_name='netbox_map_applicationgroup_set',
+    )
 
     clone_fields = ('color',)
 
@@ -841,6 +851,13 @@ class ApplicationTemplate(NetBoxModel):
     name_format = models.CharField(
         max_length=200, default='{app}',
         help_text=_('Use {app} for template name, {host} for hostname'),
+    )
+    # Override tags with explicit related_name to avoid collisions with other plugins.
+    tags = TaggableManager(
+        through='extras.TaggedItem',
+        ordering=('weight', 'name'),
+        manager=NetBoxTaggableManager,
+        related_name='netbox_map_applicationtemplate_set',
     )
 
     class Meta:
@@ -895,6 +912,15 @@ class Application(NetBoxModel):
         related_name='+', blank=True, null=True,
         verbose_name=_('Primary IP'),
         help_text=_('Primary IP address for this application'),
+    )
+    # Override tags with explicit related_name to avoid Tag.application_set
+    # collision with other plugins that also define an Application model
+    # (e.g. netbox-security). See issue #42.
+    tags = TaggableManager(
+        through='extras.TaggedItem',
+        ordering=('weight', 'name'),
+        manager=NetBoxTaggableManager,
+        related_name='netbox_map_application_set',
     )
 
     clone_fields = (
@@ -955,6 +981,13 @@ class ApplicationDeployment(NetBoxModel):
         help_text=_('NetBox application service linked to this deployment'),
     )
     description = models.CharField(max_length=200, blank=True)
+    # Override tags with explicit related_name to avoid collisions with other plugins.
+    tags = TaggableManager(
+        through='extras.TaggedItem',
+        ordering=('weight', 'name'),
+        manager=NetBoxTaggableManager,
+        related_name='netbox_map_applicationdeployment_set',
+    )
 
     clone_fields = ('application', 'role', 'port', 'protocol')
 
@@ -1004,6 +1037,13 @@ class ApplicationDependency(NetBoxModel):
         default=ApplicationStatusChoices.STATUS_ACTIVE,
     )
     description = models.CharField(max_length=500, blank=True)
+    # Override tags with explicit related_name to avoid collisions with other plugins.
+    tags = TaggableManager(
+        through='extras.TaggedItem',
+        ordering=('weight', 'name'),
+        manager=NetBoxTaggableManager,
+        related_name='netbox_map_applicationdependency_set',
+    )
 
     clone_fields = ('dependency_type', 'protocol', 'port', 'status')
 
