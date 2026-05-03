@@ -36,6 +36,37 @@
     flex-shrink: 0;
 }
 
+/* Toggle pill for "Sub-locations" / "Sub-roles" (#35) */
+.topo-toolbar-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+    color: var(--fp-text-muted);
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 4px;
+    border: 1px solid transparent;
+    user-select: none;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+.topo-toolbar-toggle:hover {
+    background: rgba(0, 0, 0, 0.04);
+}
+[data-bs-theme="dark"] .topo-toolbar-toggle:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+.topo-toolbar-toggle input[type="checkbox"] {
+    margin: 0;
+    cursor: pointer;
+}
+.topo-toolbar-toggle:has(input:checked) {
+    color: var(--fp-text);
+    border-color: var(--fp-toggle-active-border, rgba(13, 110, 253, 0.3));
+    background: var(--fp-toggle-active-bg, rgba(13, 110, 253, 0.1));
+}
+
 .topo-filter-field {
     width: 145px;
     min-width: 90px;

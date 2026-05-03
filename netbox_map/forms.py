@@ -1236,6 +1236,23 @@ class TopologyFilterForm(forms.Form):
         required=False,
         label=_('Cable Type'),
     )
+    # #44 — Filter devices by tag
+    tag = forms.CharField(
+        required=False,
+        label=_('Tag (slug)'),
+        help_text=_('Comma-separated list of tag slugs to match. Devices with any of these tags are shown.'),
+    )
+    # #35 — Toggle to include MPTT descendants for hierarchical filters
+    include_sub_locations = forms.BooleanField(
+        required=False,
+        label=_('Include sub-locations'),
+        help_text=_('When a Location is selected, also include its descendants.'),
+    )
+    include_sub_roles = forms.BooleanField(
+        required=False,
+        label=_('Include sub-roles'),
+        help_text=_('When Device Role(s) are selected, also include their descendants.'),
+    )
 
 
 #

@@ -26,7 +26,18 @@
       <div class="topo-filter-field">{{ filter_form.location_id }}</div>
       <div class="topo-filter-field topo-filter-sm">{{ filter_form.role_id }}</div>
       <div class="topo-filter-field topo-filter-sm">{{ filter_form.cable_type }}</div>
+      <div class="topo-filter-field topo-filter-sm">
+        {{ filter_form.tag }}
+      </div>
       <div class="d-none">{{ filter_form.tenant_id }}{{ filter_form.rack_id }}</div>
+      <label class="topo-toolbar-toggle" title="{% trans 'Include sub-locations' %}">
+        {{ filter_form.include_sub_locations }}
+        <span><i class="mdi mdi-file-tree-outline"></i> {% trans 'Sub-locations' %}</span>
+      </label>
+      <label class="topo-toolbar-toggle" title="{% trans 'Include sub-roles' %}">
+        {{ filter_form.include_sub_roles }}
+        <span><i class="mdi mdi-account-tree-outline"></i> {% trans 'Sub-roles' %}</span>
+      </label>
       <button type="submit" class="topo-btn topo-btn-primary">{% trans "Apply" %}</button>
       {% if active_filters %}
       <a href="?" class="topo-btn topo-btn-danger" title="{% trans 'Clear filters' %}"><i class="mdi mdi-close"></i></a>
