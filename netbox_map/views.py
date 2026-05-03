@@ -202,8 +202,10 @@ class TopologyDataView(LoginRequiredMixin, View):
                     tag_slugs.append(piece)
         # Include MPTT descendants for hierarchical filters (#35).
         # Truthy values: '1', 'true', 'yes', 'on'.
+
         def _truthy(v):
             return str(v).lower() in ('1', 'true', 'yes', 'on')
+
         include_sub_locations = _truthy(request.GET.get('include_sub_locations', ''))
         include_sub_roles = _truthy(request.GET.get('include_sub_roles', ''))
 
