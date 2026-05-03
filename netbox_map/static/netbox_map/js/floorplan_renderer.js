@@ -114,10 +114,31 @@
         ctx.closePath();
     };
 
-    /** Detect current NetBox theme (light vs dark). */
+    /** Detect current NetBox theme (light vs dark).
+     *
+     * Resolution order:
+     *   1. data-bs-theme on <html> ("dark"/"light") — set by NetBox's colorMode JS
+     *   2. NetBox's localStorage key 'netbox-color-mode'
+     *   3. window.matchMedia('(prefers-color-scheme: dark)')
+     *   4. Fallback: light (NetBox's own default when no preference is found)
+     *
+     * Previous logic defaulted to DARK when the attribute was missing,
+     * which caused the PDF to look dark even when the user was in light
+     * mode (issue #41).
+     */
     Renderer.prototype._detectTheme = function() {
-        var el = document.documentElement;
-        this._isDark = !el || el.getAttribute('data-bs-theme') !== 'light';
+        var attr = document.documentElement && document.documentElement.getAttribute('data-bs-theme');
+        if (attr === 'dark') { this._isDark = true; return; }
+        if (attr === 'light') { this._isDark = false; return; }
+        try {
+            var stored = window.localStorage.getItem('netbox-color-mode');
+            if (stored === 'dark') { this._isDark = true; return; }
+            if (stored === 'light') { this._isDark = false; return; }
+        } catch (e) { /* localStorage may be blocked */ }
+        if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+            this._isDark = true; return;
+        }
+        this._isDark = false;
     };
 
     /** Theme-aware canvas colors. */
