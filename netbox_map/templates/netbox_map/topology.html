@@ -18,8 +18,8 @@
 
 {# ===== Toolbar ===== #}
 <div class="topo-toolbar">
-  {# Row 1: Filters + Actions #}
-  <form method="get" action="" id="topology-filter-form" class="topo-toolbar-row">
+  {# Row 1: Filters only #}
+  <form method="get" action="" id="topology-filter-form" class="topo-toolbar-row topo-toolbar-row-filters">
     <div class="topo-toolbar-group topo-toolbar-filters">
       <label class="topo-toolbar-label"><i class="mdi mdi-filter-variant"></i></label>
       <div class="topo-filter-field">{{ filter_form.site_id }}</div>
@@ -30,20 +30,31 @@
         {{ filter_form.tag }}
       </div>
       <div class="d-none">{{ filter_form.tenant_id }}{{ filter_form.rack_id }}</div>
-      <label class="topo-toolbar-toggle" title="{% trans 'Include sub-locations' %}">
-        {{ filter_form.include_sub_locations }}
-        <span><i class="mdi mdi-file-tree-outline"></i> {% trans 'Sub-locations' %}</span>
-      </label>
-      <label class="topo-toolbar-toggle" title="{% trans 'Include sub-roles' %}">
-        {{ filter_form.include_sub_roles }}
-        <span><i class="mdi mdi-account-tree-outline"></i> {% trans 'Sub-roles' %}</span>
-      </label>
+      <div class="topo-toggle-group">
+        <div class="form-check" title="{% trans 'Include sub-locations (children of selected Location)' %}">
+          <input type="checkbox" class="form-check-input" id="id_include_sub_locations"
+                 name="include_sub_locations" {% if filter_form.include_sub_locations.value %}checked{% endif %}>
+          <label class="form-check-label small text-muted" for="id_include_sub_locations">
+            <i class="mdi mdi-file-tree-outline"></i> sub-locations
+          </label>
+        </div>
+        <div class="form-check" title="{% trans 'Include sub-roles (children of selected Role)' %}">
+          <input type="checkbox" class="form-check-input" id="id_include_sub_roles"
+                 name="include_sub_roles" {% if filter_form.include_sub_roles.value %}checked{% endif %}>
+          <label class="form-check-label small text-muted" for="id_include_sub_roles">
+            <i class="mdi mdi-account-tree-outline"></i> sub-roles
+          </label>
+        </div>
+      </div>
       <button type="submit" class="topo-btn topo-btn-primary">{% trans "Apply" %}</button>
       {% if active_filters %}
       <a href="?" class="topo-btn topo-btn-danger" title="{% trans 'Clear filters' %}"><i class="mdi mdi-close"></i></a>
       {% endif %}
     </div>
+  </form>
 
+  {# Row 2: Actions + stats #}
+  <div class="topo-toolbar-row topo-toolbar-row-actions">
     <div class="topo-toolbar-group topo-toolbar-info">
       <span class="topo-stat" id="topology-stats">
         <span id="stat-nodes">0</span> {% trans "devices" %}
@@ -158,7 +169,7 @@
       {# PDF Export #}
       <button id="topo-export-pdf" class="topo-btn" type="button" title="{% trans 'Export PDF' %}"><i class="mdi mdi-download"></i></button>
     </div>
-  </form>
+  </div>
 </div>
 
 {# ===== Main layout: SVG graph + sidebar ===== #}

@@ -26,8 +26,10 @@ from utilities.forms.fields import (
     DynamicModelChoiceField,
     DynamicModelMultipleChoiceField,
     SlugField,
+    TagFilterField,
 )
 from utilities.forms.rendering import FieldSet
+from utilities.forms.widgets import APISelect, APISelectMultiple
 
 from .choices import (
     ApplicationCriticalityChoices,
@@ -1208,40 +1210,42 @@ class TopologyFilterForm(forms.Form):
         queryset=Site.objects.all(),
         required=False,
         label=_('Site'),
+        widget=APISelect(attrs={'data-placeholder': _('Site')}),
     )
     tenant_id = DynamicModelChoiceField(
         queryset=Tenant.objects.all(),
         required=False,
         label=_('Tenant'),
+        widget=APISelect(attrs={'data-placeholder': _('Tenant')}),
     )
     location_id = DynamicModelChoiceField(
         queryset=Location.objects.all(),
         required=False,
         label=_('Location'),
         query_params={'site_id': '$site_id'},
+        widget=APISelect(attrs={'data-placeholder': _('Location')}),
     )
     rack_id = DynamicModelChoiceField(
         queryset=Rack.objects.all(),
         required=False,
         label=_('Rack'),
         query_params={'site_id': '$site_id', 'location_id': '$location_id'},
+        widget=APISelect(attrs={'data-placeholder': _('Rack')}),
     )
     role_id = DynamicModelMultipleChoiceField(
         queryset=DeviceRole.objects.all(),
         required=False,
         label=_('Device Role'),
+        widget=APISelectMultiple(attrs={'data-placeholder': _('Role')}),
     )
     cable_type = forms.ChoiceField(
-        choices=[('', '---------')] + list(CableTypeChoices),
+        choices=[('', _('Cable type'))] + list(CableTypeChoices),
         required=False,
         label=_('Cable Type'),
     )
-    # #44 — Filter devices by tag
-    tag = forms.CharField(
-        required=False,
-        label=_('Tag (slug)'),
-        help_text=_('Comma-separated list of tag slugs to match. Devices with any of these tags are shown.'),
-    )
+    # #44 — Filter devices by tag (multi-select dropdown of tags actually
+    # used on Device, instead of a free-text slug input).
+    tag = TagFilterField(model=Device)
     # #35 — Toggle to include MPTT descendants for hierarchical filters
     include_sub_locations = forms.BooleanField(
         required=False,
@@ -1253,6 +1257,12 @@ class TopologyFilterForm(forms.Form):
         label=_('Include sub-roles'),
         help_text=_('When Device Role(s) are selected, also include their descendants.'),
     )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # TagFilterField doesn't accept a custom widget kwarg, so set
+        # its placeholder here so it matches the other filter dropdowns.
+        self.fields['tag'].widget.attrs['data-placeholder'] = _('Tag')
 
 
 #
