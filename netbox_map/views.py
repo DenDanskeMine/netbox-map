@@ -46,14 +46,18 @@ class TopologyView(LoginRequiredMixin, View):
         filter_form = forms.TopologyFilterForm(data=request.GET or None)
 
         initial_filters = {}
-        for key in ('site_id', 'tenant_id', 'location_id', 'rack_id', 'cable_type', 'device_ids'):
+        for key in ('site_id', 'tenant_id', 'location_id', 'rack_id', 'cable_type', 'device_ids',
+                    'include_sub_locations', 'include_sub_roles'):
             val = request.GET.get(key)
             if val:
                 initial_filters[key] = val
-        # role_id supports multiple values
+        # role_id and tag support multiple values
         role_ids = request.GET.getlist('role_id')
         if role_ids:
             initial_filters['role_id'] = role_ids
+        tag_slugs = request.GET.getlist('tag')
+        if tag_slugs:
+            initial_filters['tag'] = tag_slugs
 
         # App topology params
         topology_mode = request.GET.get('mode', '')
@@ -186,6 +190,24 @@ class TopologyDataView(LoginRequiredMixin, View):
         role_ids = request.GET.getlist('role_id')
         cable_type = request.GET.get('cable_type')
         device_ids_param = request.GET.get('device_ids')
+        # Tag filter (#44) — match any of the supplied tag slugs.
+        # Accepts both repeated ?tag=a&tag=b and a single comma-separated
+        # ?tag=a,b form (the toolbar input submits the latter).
+        raw_tags = request.GET.getlist('tag')
+        tag_slugs = []
+        for entry in raw_tags:
+            for piece in entry.split(','):
+                piece = piece.strip()
+                if piece:
+                    tag_slugs.append(piece)
+        # Include MPTT descendants for hierarchical filters (#35).
+        # Truthy values: '1', 'true', 'yes', 'on'.
+
+        def _truthy(v):
+            return str(v).lower() in ('1', 'true', 'yes', 'on')
+
+        include_sub_locations = _truthy(request.GET.get('include_sub_locations', ''))
+        include_sub_roles = _truthy(request.GET.get('include_sub_roles', ''))
 
         devices = Device.objects.select_related(
             'device_type__manufacturer', 'role', 'site', 'location',
@@ -203,14 +225,41 @@ class TopologyDataView(LoginRequiredMixin, View):
             if tenant_id:
                 devices = devices.filter(tenant_id=tenant_id)
             if location_id:
-                devices = devices.filter(location_id=location_id)
+                # #35: optionally include all descendant locations.
+                # dcim.Location is an MPTT model.
+                if include_sub_locations:
+                    from dcim.models import Location
+                    try:
+                        loc = Location.objects.get(pk=location_id)
+                        loc_ids = list(loc.get_descendants(include_self=True).values_list('pk', flat=True))
+                        devices = devices.filter(location_id__in=loc_ids)
+                    except Location.DoesNotExist:
+                        devices = devices.filter(location_id=location_id)
+                else:
+                    devices = devices.filter(location_id=location_id)
             if rack_id:
                 devices = devices.filter(rack_id=rack_id)
             if role_ids:
-                devices = devices.filter(role_id__in=role_ids)
+                # #35: optionally include all descendant roles.
+                # dcim.DeviceRole is an MPTT model.
+                if include_sub_roles:
+                    from dcim.models import DeviceRole
+                    expanded = set()
+                    for rid in role_ids:
+                        try:
+                            r = DeviceRole.objects.get(pk=rid)
+                            expanded.update(r.get_descendants(include_self=True).values_list('pk', flat=True))
+                        except DeviceRole.DoesNotExist:
+                            expanded.add(int(rid))
+                    devices = devices.filter(role_id__in=list(expanded))
+                else:
+                    devices = devices.filter(role_id__in=role_ids)
+            if tag_slugs:
+                # #44: filter to devices that carry any of the supplied tag slugs
+                devices = devices.filter(tags__slug__in=tag_slugs).distinct()
 
             # Require at least one filter when not using device_ids
-            if not any([site_id, tenant_id, location_id, rack_id, role_ids]):
+            if not any([site_id, tenant_id, location_id, rack_id, role_ids, tag_slugs]):
                 return JsonResponse({'nodes': [], 'edges': [], 'stats': {'node_count': 0, 'edge_count': 0}})
 
         device_map = {}
