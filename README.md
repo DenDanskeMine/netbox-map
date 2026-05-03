@@ -160,6 +160,7 @@ All endpoints support filtering, pagination, and brief mode.
 
 | netbox-map | NetBox   | Python |
 |------------|----------|--------|
+| 0.11.x     | 4.5+    | 3.12+  |
 | 0.10.x     | 4.5+    | 3.12+  |
 | 0.9.x      | 4.5+    | 3.12+  |
 | 0.8.x      | 4.5+    | 3.12+  |

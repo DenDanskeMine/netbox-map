@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.11.0] - 2026-05-03
+
+### Added
+- **Filter Network Topology by tag (#44)** — new multi-select dropdown of tags actually used on `Device`. Pick one or more tags to scope the topology to those devices. The dropdown shows the per-tag usage count next to each name (e.g. "Topology Test (5)"). Saved views remember the selected tags.
+- **Include sub-locations / sub-roles (#35)** — two new toggles next to the topology filter inputs. When a Location is selected and "sub-locations" is checked, all descendant locations are included via MPTT (`get_descendants(include_self=True)`). Same for hierarchical Device Roles. Works with multi-role selections.
+
+### Changed
+- Topology toolbar split into two rows — filters on top, actions (Views, Save, zoom, mode toggles, etc.) below. Eliminates the overlap that occurred when several filters were active or the window was narrow.
+- Filter dropdowns now auto-size to their selected value (130–280px) so long location/site names like "DC Building A — Room 101" don't wrap mid-word inside a fixed-width field.
+- Sub-location / sub-role toggles use NetBox's standard `form-check` checkboxes for visual consistency with the rest of the UI.
+- Filter placeholders simplified to just "Site", "Location", "Role", "Tenant", "Rack", "Cable type", "Tag" — no more "Filter by …" prefix.
+
+[0.11.0]: https://github.com/DenDanskeMine/netbox-map/compare/v0.10.2...v0.11.0
+
 ## [0.10.2] - 2026-05-03
 
 ### Fixed
