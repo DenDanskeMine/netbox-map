@@ -81,31 +81,84 @@
         var btn = document.getElementById('topo-export-pdf');
         if (!btn) return;
         var self = this;
+        self._exportBtn = btn;
         btn.addEventListener('click', function() {
             var icon = btn.querySelector('i');
             var origClass = icon.className;
+            var origText = btn.textContent;
+            self._origIconClass = origClass;
+            self._origBtnText = origText;
             icon.className = 'mdi mdi-loading mdi-spin';
             btn.disabled = true;
+            // Yield once so the spinner paints before heavy work starts
             setTimeout(function() {
-                try { self.exportPDF(); }
-                catch (e) { console.error('PDF export error:', e); alert('PDF export failed: ' + e.message); }
-                icon.className = origClass;
-                btn.disabled = false;
+                Promise.resolve()
+                    .then(function() { return self.exportPDF(); })
+                    .catch(function(e) {
+                        console.error('PDF export error:', e);
+                        alert('PDF export failed: ' + (e && e.message ? e.message : e));
+                    })
+                    .then(function() {
+                        icon.className = origClass;
+                        btn.disabled = false;
+                        // Reset text node next to the icon (preserves icon element)
+                        self._setExportProgress(null);
+                    });
             }, 50);
         });
     }
 
+    /* Update the export button label with progress text. Pass null to clear. */
+    TopologyPDF.prototype._setExportProgress = function(text) {
+        var btn = this._exportBtn;
+        if (!btn) return;
+        var icon = btn.querySelector('i');
+        // Replace the text-node sibling of the icon, keep the icon
+        for (var i = btn.childNodes.length - 1; i >= 0; i--) {
+            var n = btn.childNodes[i];
+            if (n.nodeType === Node.TEXT_NODE) btn.removeChild(n);
+        }
+        if (text) btn.appendChild(document.createTextNode(' ' + text));
+    };
+
+    /* Yield to the browser so it can paint and stay responsive.
+     * Wrap a heavy synchronous loop in async chunks of `batchSize` items. */
+    TopologyPDF.prototype._chunked = function(items, perItem, batchSize, label) {
+        var self = this;
+        return new Promise(function(resolve) {
+            if (!items || items.length === 0) { resolve(); return; }
+            var i = 0;
+            var total = items.length;
+            function step() {
+                var end = Math.min(i + batchSize, total);
+                for (; i < end; i++) perItem(items[i], i);
+                if (label) {
+                    var pct = Math.round((i / total) * 100);
+                    self._setExportProgress(label + ' ' + pct + '%');
+                }
+                if (i < total) {
+                    // RAF gives the browser a chance to repaint and dismisses
+                    // any "Page Unresponsive" warnings on large topologies.
+                    requestAnimationFrame(step);
+                } else {
+                    resolve();
+                }
+            }
+            step();
+        });
+    };
+
     TopologyPDF.prototype.exportPDF = function() {
         if (this.state.topologyMode === 'apps') {
-            this.exportAppPDF();
-            return;
+            return this.exportAppPDF();
         }
-        this._exportNetworkPDF();
+        return this._exportNetworkPDF();
     };
 
     TopologyPDF.prototype._exportNetworkPDF = function() {
         var jsPDF = window.jspdf && window.jspdf.jsPDF;
         if (!jsPDF) { alert('jsPDF not loaded'); return; }
+        var self = this;
 
         var state = this.state;
         var nodeData = this.renderer._stencilNodeData;
@@ -140,6 +193,18 @@
         var visibleEdges = state.edges.filter(function(e) {
             return visibleIds.has(edgeSourceId(e)) && visibleIds.has(edgeTargetId(e));
         });
+
+        // Warn the user before kicking off a very large render — these can
+        // take 30-60s and produce huge PDFs.
+        var totalOps = visibleNodes.length + visibleEdges.length;
+        if (totalOps > 600) {
+            var ok = confirm(
+                'This topology has ' + visibleNodes.length + ' devices and '
+                + visibleEdges.length + ' cables. The PDF export may take '
+                + 'a while and produce a large file. Continue?'
+            );
+            if (!ok) return Promise.resolve();
+        }
 
         // Lookups
         var nodeById = {};
@@ -213,7 +278,11 @@
         doc.line(margin, margin + hdrH - 2, pageW - margin, margin + hdrH - 2);
 
         // ===== Cables =====
-        visibleEdges.forEach(function(edge) {
+        // Reduce bezier samples on big topologies — visually identical at PDF
+        // scale and cuts per-edge ops by 50%.
+        var bezierSamples = visibleEdges.length > 200 ? 10 : 16;
+
+        function drawCable(edge) {
             var sid = edgeSourceId(edge), tid = edgeTargetId(edge);
             var sp = getPortPos(edge.source_port, tid);
             var tp = getPortPos(edge.target_port, sid);
@@ -241,7 +310,7 @@
                 var cp = Math.max(dx * 0.45, 60);
                 var sD2 = sp.side === 'right' ? 1 : -1;
                 var tD2 = tp.side === 'right' ? 1 : -1;
-                var pts = sampleBezier(sp.x, sp.y, sp.x+cp*sD2, sp.y, tp.x+cp*tD2, tp.y, tp.x, tp.y, 25);
+                var pts = sampleBezier(sp.x, sp.y, sp.x+cp*sD2, sp.y, tp.x+cp*tD2, tp.y, tp.x, tp.y, bezierSamples);
                 for (var i = 0; i < pts.length - 1; i++) {
                     doc.line(tx(pts[i].x), ty(pts[i].y), tx(pts[i+1].x), ty(pts[i+1].y));
                 }
@@ -252,65 +321,57 @@
             doc.setFillColor(rgb.r, rgb.g, rgb.b);
             doc.circle(tx(sp.x), ty(sp.y), Math.max(ts(2.5), 0.4), 'F');
             doc.circle(tx(tp.x), ty(tp.y), Math.max(ts(2.5), 0.4), 'F');
-        });
+        }
 
         // ===== Cable Labels (only if toggle is ON in the web UI) =====
         var edgeLayer = document.querySelector('.edge-layer');
         var showLabels = edgeLayer && edgeLayer.classList.contains('show-cable-labels');
-        if (showLabels) {
-            // Simple approach: place each label at a spread position along its cable
-            // No collision avoidance — just spread + small white bg for readability
-            var labelT = [0.3, 0.5, 0.7, 0.35, 0.65, 0.4, 0.6, 0.45, 0.55];
+        var labelT = [0.3, 0.5, 0.7, 0.35, 0.65, 0.4, 0.6, 0.45, 0.55];
 
-            visibleEdges.forEach(function(edge, idx) {
-                var sid = edgeSourceId(edge), tid = edgeTargetId(edge);
-                var sp = getPortPos(edge.source_port, tid);
-                var tp = getPortPos(edge.target_port, sid);
-                if (!sp || !tp) return;
+        function drawCableLabel(edge, idx) {
+            var sid = edgeSourceId(edge), tid = edgeTargetId(edge);
+            var sp = getPortPos(edge.source_port, tid);
+            var tp = getPortPos(edge.target_port, sid);
+            if (!sp || !tp) return;
 
-                // Short label: just #ID + abbreviated type
-                var label = '#' + edge.cable_id;
-                if (edge.cable_type) {
-                    var ct = edge.cable_type;
-                    // Abbreviate common types
-                    ct = ct.replace('Single-mode Fiber', 'SMF').replace('Multimode Fiber', 'MMF');
-                    label += ' ' + ct;
-                }
+            // Short label: just #ID + abbreviated type
+            var label = '#' + edge.cable_id;
+            if (edge.cable_type) {
+                var ct = edge.cable_type;
+                ct = ct.replace('Single-mode Fiber', 'SMF').replace('Multimode Fiber', 'MMF');
+                label += ' ' + ct;
+            }
 
-                var t = labelT[idx % labelT.length];
-                var lx, ly;
+            var t = labelT[idx % labelT.length];
+            var lx, ly;
 
-                if (state.cableStyle === 'ortho') {
-                    lx = sp.x + (tp.x - sp.x) * t;
-                    ly = (sp.y + tp.y) / 2;
-                } else {
-                    var dx = Math.abs(tp.x - sp.x);
-                    var cp = Math.max(dx * 0.45, 60);
-                    var sD = sp.side === 'right' ? 1 : -1;
-                    var tD = tp.side === 'right' ? 1 : -1;
-                    var mt = 1 - t;
-                    lx = mt*mt*mt*sp.x + 3*mt*mt*t*(sp.x+cp*sD) + 3*mt*t*t*(tp.x+cp*tD) + t*t*t*tp.x;
-                    ly = mt*mt*mt*sp.y + 3*mt*mt*t*sp.y + 3*mt*t*t*tp.y + t*t*t*tp.y;
-                }
+            if (state.cableStyle === 'ortho') {
+                lx = sp.x + (tp.x - sp.x) * t;
+                ly = (sp.y + tp.y) / 2;
+            } else {
+                var dx = Math.abs(tp.x - sp.x);
+                var cp = Math.max(dx * 0.45, 60);
+                var sD = sp.side === 'right' ? 1 : -1;
+                var tD = tp.side === 'right' ? 1 : -1;
+                var mt = 1 - t;
+                lx = mt*mt*mt*sp.x + 3*mt*mt*t*(sp.x+cp*sD) + 3*mt*t*t*(tp.x+cp*tD) + t*t*t*tp.x;
+                ly = mt*mt*mt*sp.y + 3*mt*mt*t*sp.y + 3*mt*t*t*tp.y + t*t*t*tp.y;
+            }
 
-                doc.setFontSize(Math.max(fs(5), 1.3));
-                doc.setFont('helvetica', 'normal');
+            doc.setFontSize(Math.max(fs(5), 1.3));
+            doc.setFont('helvetica', 'normal');
 
-                var tw = doc.getTextWidth(label);
-                var th = doc.getFontSize() * 0.35;
+            var tw = doc.getTextWidth(label);
+            var th = doc.getFontSize() * 0.35;
 
-                // Small white background
-                doc.setFillColor(255, 255, 255);
-                doc.rect(tx(lx) - tw/2 - 0.3, ty(ly) - th - 0.2, tw + 0.6, th + 0.4, 'F');
-
-                // Text in dark gray
-                doc.setTextColor(80, 80, 90);
-                doc.text(label, tx(lx), ty(ly), { align: 'center' });
-            });
+            doc.setFillColor(255, 255, 255);
+            doc.rect(tx(lx) - tw/2 - 0.3, ty(ly) - th - 0.2, tw + 0.6, th + 0.4, 'F');
+            doc.setTextColor(80, 80, 90);
+            doc.text(label, tx(lx), ty(ly), { align: 'center' });
         }
 
         // ===== Device Cards =====
-        visibleNodes.forEach(function(node) {
+        function drawDeviceCard(node) {
             var cx = tx(node.x), cy = ty(node.y);
             var cw = ts(CARD_W), ch = ts(node._cardH || 60);
             var cr = Math.max(ts(5), 0.4);
@@ -389,8 +450,26 @@
                     doc.text(badge, cx + cw - ts(6), py + ph * 0.62, { align: 'right' });
                 }
             });
-        });
+        }
 
+        // ===== Async chunked render — keeps the browser responsive on
+        // large topologies (#43). Each phase yields to the event loop
+        // between batches via requestAnimationFrame.
+        return self._chunked(visibleEdges, drawCable, 60, 'Cables')
+            .then(function() {
+                if (!showLabels) return;
+                return self._chunked(visibleEdges, drawCableLabel, 100, 'Labels');
+            })
+            .then(function() {
+                return self._chunked(visibleNodes, drawDeviceCard, 25, 'Devices');
+            })
+            .then(function() {
+                self._setExportProgress('Finalizing…');
+                drawNetworkFooter();
+                doc.save('Network_Topology.pdf');
+            });
+
+        function drawNetworkFooter() {
         // ===== Footer Legend =====
         var ly = pageH - margin - ftrH + 6;
         doc.setDrawColor(210, 210, 210);
@@ -427,10 +506,7 @@
             doc.text(p[0], lx + 2.5, ly);
             lx += doc.getTextWidth(p[0]) + 6;
         });
-
-        // Save
-        var title = 'Network_Topology';
-        doc.save(title + '.pdf');
+        }  // end drawNetworkFooter
     };
 
     /* ===== App Topology PDF Export ===== */
@@ -440,6 +516,7 @@
     TopologyPDF.prototype.exportAppPDF = function() {
         var jsPDF = window.jspdf && window.jspdf.jsPDF;
         if (!jsPDF) { alert('jsPDF not loaded'); return; }
+        var self = this;
 
         var state = this.state;
         var nodeData = this.renderer._stencilNodeData;
@@ -454,6 +531,16 @@
             return e.edge_type === 'dependency' &&
                 nodeIds.has(edgeSourceId(e)) && nodeIds.has(edgeTargetId(e));
         });
+
+        // Warn the user before kicking off a very large render (#43)
+        if (nodes.length + edges.length > 600) {
+            var ok = confirm(
+                'This topology has ' + nodes.length + ' apps and '
+                + edges.length + ' dependencies. The PDF export may take '
+                + 'a while. Continue?'
+            );
+            if (!ok) return Promise.resolve();
+        }
 
         var nodeById = {};
         nodes.forEach(function(n) { nodeById[n.id] = n; });
@@ -503,8 +590,11 @@
         doc.setLineWidth(0.2);
         doc.line(margin, margin + hdrH - 2, pageW - margin, margin + hdrH - 2);
 
-        // ── Edges (orthogonal) ──
-        edges.forEach(function(e) {
+        // ── Edges (bezier) ──
+        // Reduce sample count on big topologies (#43)
+        var appBezierSamples = edges.length > 200 ? 12 : 18;
+
+        function drawAppEdge(e) {
             var sn = nodeById[edgeSourceId(e)];
             var tn = nodeById[edgeTargetId(e)];
             if (!sn || !tn) return;
@@ -537,7 +627,7 @@
 
             var dx = Math.abs(stx - sx);
             var cp = Math.max(dx * 0.4, 40);
-            var pts = sampleBezier(sx, sy, sx + cp * sDir, sy, stx + cp * tDir, sty, stx, sty, 30);
+            var pts = sampleBezier(sx, sy, sx + cp * sDir, sy, stx + cp * tDir, sty, stx, sty, appBezierSamples);
             for (var pi = 0; pi < pts.length - 1; pi++) {
                 doc.line(tx(pts[pi].x), ty(pts[pi].y), tx(pts[pi + 1].x), ty(pts[pi + 1].y));
             }
@@ -554,10 +644,10 @@
                 );
             }
             doc.setLineDashPattern([]);
-        });
+        }
 
         // ── App Cards ──
-        nodes.forEach(function(n) {
+        function drawAppCard(n) {
             var cx = tx(n.x), cy = ty(n.y);
             var cw = ts(APP_W), ch = ts(n._h || n._cardH || 60);
             var cr = Math.max(ts(4), 0.3);
@@ -654,8 +744,21 @@
                 doc.setTextColor(160, 160, 170);
                 doc.text(footerText, cx + cw / 2, cy + ch - ts(4), { align: 'center' });
             }
-        });
+        }
 
+        // ===== Async chunked render — keeps the browser responsive on
+        // large topologies (#43)
+        return self._chunked(edges, drawAppEdge, 50, 'Edges')
+            .then(function() {
+                return self._chunked(nodes, drawAppCard, 25, 'Apps');
+            })
+            .then(function() {
+                self._setExportProgress('Finalizing…');
+                drawAppFooter();
+                doc.save('Application_Topology.pdf');
+            });
+
+        function drawAppFooter() {
         // ── Footer Legend ──
         var ly = pageH - margin - ftrH + 6;
         doc.setDrawColor(210, 210, 210);
@@ -698,8 +801,7 @@
             doc.text(s[0], lx + 2.5, ly);
             lx += doc.getTextWidth(s[0]) + 6;
         });
-
-        doc.save('Application_Topology.pdf');
+        }  // end drawAppFooter
     };
 
     window.TopologyPDF = TopologyPDF;
