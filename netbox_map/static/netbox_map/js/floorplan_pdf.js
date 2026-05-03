@@ -74,9 +74,25 @@
         var renderScale = Math.min(scaleX, scaleY);
         offCtx.scale(renderScale, renderScale);
 
-        // Detect theme
-        var el = document.documentElement;
-        var isDark = !el || el.getAttribute('data-bs-theme') !== 'light';
+        // Detect theme — resolution order matches the renderer (issue #41):
+        //   1. data-bs-theme attribute on <html>
+        //   2. NetBox's localStorage 'netbox-color-mode'
+        //   3. prefers-color-scheme media query
+        //   4. Fallback: light (NetBox's own default)
+        var isDark = (function() {
+            var attr = document.documentElement && document.documentElement.getAttribute('data-bs-theme');
+            if (attr === 'dark') return true;
+            if (attr === 'light') return false;
+            try {
+                var stored = window.localStorage.getItem('netbox-color-mode');
+                if (stored === 'dark') return true;
+                if (stored === 'light') return false;
+            } catch (e) { /* localStorage may be blocked */ }
+            if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+                return true;
+            }
+            return false;
+        })();
         var gridBg = isDark ? '#16192b' : '#dfe1e8';
         var gridLine = isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.08)';
         var gridLineImg = isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.15)';
