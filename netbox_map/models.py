@@ -7,7 +7,11 @@ from django.db import models
 from django.urls import reverse
 from django.utils.text import slugify
 from django.utils.translation import gettext_lazy as _
-from extras.managers import NetBoxTaggableManager
+try:
+    from extras.managers import NetBoxTaggableManager as _NetBoxTaggableManager
+    _TAGGABLE_MANAGER_KWARGS = {'manager': _NetBoxTaggableManager, 'ordering': ('weight', 'name')}
+except ImportError:
+    _TAGGABLE_MANAGER_KWARGS = {'ordering': ('weight', 'name')}
 from netbox.models import NetBoxModel
 from taggit.managers import TaggableManager
 
@@ -158,6 +162,10 @@ class FloorPlan(NetBoxModel):
     comments = models.TextField(
         verbose_name=_('comments'),
         blank=True
+    )
+    tags = TaggableManager(
+        through='extras.TaggedItem',
+        related_name='netbox_map_floorplan_set',
     )
 
     clone_fields = (
@@ -801,8 +809,7 @@ class ApplicationGroup(NetBoxModel):
     # collision with other plugins that also define an ApplicationGroup model.
     tags = TaggableManager(
         through='extras.TaggedItem',
-        ordering=('weight', 'name'),
-        manager=NetBoxTaggableManager,
+        **_TAGGABLE_MANAGER_KWARGS,
         related_name='netbox_map_applicationgroup_set',
     )
 
@@ -855,8 +862,7 @@ class ApplicationTemplate(NetBoxModel):
     # Override tags with explicit related_name to avoid collisions with other plugins.
     tags = TaggableManager(
         through='extras.TaggedItem',
-        ordering=('weight', 'name'),
-        manager=NetBoxTaggableManager,
+        **_TAGGABLE_MANAGER_KWARGS,
         related_name='netbox_map_applicationtemplate_set',
     )
 
@@ -918,8 +924,7 @@ class Application(NetBoxModel):
     # (e.g. netbox-security). See issue #42.
     tags = TaggableManager(
         through='extras.TaggedItem',
-        ordering=('weight', 'name'),
-        manager=NetBoxTaggableManager,
+        **_TAGGABLE_MANAGER_KWARGS,
         related_name='netbox_map_application_set',
     )
 
@@ -984,8 +989,7 @@ class ApplicationDeployment(NetBoxModel):
     # Override tags with explicit related_name to avoid collisions with other plugins.
     tags = TaggableManager(
         through='extras.TaggedItem',
-        ordering=('weight', 'name'),
-        manager=NetBoxTaggableManager,
+        **_TAGGABLE_MANAGER_KWARGS,
         related_name='netbox_map_applicationdeployment_set',
     )
 
@@ -1040,8 +1044,7 @@ class ApplicationDependency(NetBoxModel):
     # Override tags with explicit related_name to avoid collisions with other plugins.
     tags = TaggableManager(
         through='extras.TaggedItem',
-        ordering=('weight', 'name'),
-        manager=NetBoxTaggableManager,
+        **_TAGGABLE_MANAGER_KWARGS,
         related_name='netbox_map_applicationdependency_set',
     )
 
