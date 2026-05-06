@@ -166,6 +166,7 @@ class FloorPlan(NetBoxModel):
     tags = TaggableManager(
         through='extras.TaggedItem',
         related_name='netbox_map_floorplan_set',
+        **_TAGGABLE_MANAGER_KWARGS,
     )
 
     clone_fields = (
