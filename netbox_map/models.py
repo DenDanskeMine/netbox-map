@@ -7,6 +7,7 @@ from django.db import models
 from django.urls import reverse
 from django.utils.text import slugify
 from django.utils.translation import gettext_lazy as _
+
 try:
     from extras.managers import NetBoxTaggableManager as _NetBoxTaggableManager
     _TAGGABLE_MANAGER_KWARGS = {'manager': _NetBoxTaggableManager, 'ordering': ('weight', 'name')}
