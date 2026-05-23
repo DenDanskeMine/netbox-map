@@ -196,8 +196,11 @@
         var y = tile.y * ts;
         var w = tile.w * ts;
         var h = tile.h * ts;
-        var gap = 2;
-        var radius = 4;
+        // Reduced from gap=2,radius=4 — earlier values left a noticeable
+        // moat of unused space between adjacent tiles and made small tiles
+        // look more like rounded chips than grid cells.
+        var gap = 1;
+        var radius = 2;
 
         var fillColor = this._getTileFillColor(tile);
 
@@ -226,7 +229,13 @@
         ctx.shadowBlur = 0;
 
         // ── Label text with auto-sizing ──
-        var textColor = this._getTextColor(fillColor);
+        // Honor an explicit per-type foreground if set on a CustomMarkerType,
+        // otherwise fall back to auto contrast against the background.
+        var fgOverride = (s.typeIconFgMap || {})[tile.type];
+        var textColor;
+        if (fgOverride === 'light') textColor = '#ffffff';
+        else if (fgOverride === 'dark') textColor = '#1a1a2e';
+        else textColor = this._getTextColor(fillColor);
         ctx.fillStyle = textColor;
 
         var label = tile.label || '';

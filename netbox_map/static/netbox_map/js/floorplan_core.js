@@ -53,12 +53,16 @@ window.FloorplanApp = (function() {
         this.typeConfigs = config.typeConfigs || [];
         this.typeColorMap = {};
         this.typeNameMap = {};
+        // Explicit per-type icon/text foreground from CustomMarkerType.icon_foreground.
+        // Values: 'light' | 'dark' | 'auto' (or undefined → auto contrast).
+        this.typeIconFgMap = {};
         this.allTypes = [];
         for (var i = 0; i < this.typeConfigs.length; i++) {
             var tc = this.typeConfigs[i];
             this.allTypes.push(tc.slug);
             this.typeColorMap[tc.slug] = tc.color;
             this.typeNameMap[tc.slug] = tc.name;
+            if (tc.icon_fg) this.typeIconFgMap[tc.slug] = tc.icon_fg;
         }
 
         // Visibility toggles

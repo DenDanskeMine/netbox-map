@@ -1,0 +1,91 @@
+/* #63 — Icon picker UI for Custom Marker Types */
+
+.icon-picker {
+    margin-top: 8px;
+    padding: 10px;
+    border: 1px solid var(--fp-border, rgba(0, 0, 0, 0.1));
+    border-radius: 6px;
+    background: var(--fp-bg-soft, rgba(0, 0, 0, 0.02));
+}
+
+.icon-picker-search {
+    margin-bottom: 8px;
+}
+
+.icon-picker-preview {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: var(--fp-bg, rgba(0, 0, 0, 0.04));
+    font-size: 12px;
+}
+.icon-picker-preview-label {
+    color: var(--fp-text-muted, #6c757d);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-size: 10px;
+}
+.icon-picker-preview-chip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: #3498db;  /* default — JS could later sync with color picker */
+    color: #fff;
+}
+.icon-picker-preview-chip .mdi {
+    font-size: 16px;
+}
+
+.icon-picker-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(38px, 1fr));
+    gap: 4px;
+    max-height: 260px;
+    overflow-y: auto;
+}
+
+.icon-picker-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 38px;
+    border: 1px solid var(--fp-border, rgba(0, 0, 0, 0.1));
+    background: var(--fp-bg, #fff);
+    color: var(--fp-text, #333);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background 0.1s, border-color 0.1s;
+}
+.icon-picker-btn:hover {
+    background: var(--fp-bg-hover, #e9f3ff);
+    border-color: #0d6efd;
+}
+.icon-picker-btn.active {
+    background: #0d6efd;
+    border-color: #0d6efd;
+    color: #fff;
+}
+.icon-picker-btn .mdi {
+    font-size: 18px;
+}
+
+[data-bs-theme="dark"] .icon-picker {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: rgba(255, 255, 255, 0.1);
+}
+[data-bs-theme="dark"] .icon-picker-btn {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: rgba(255, 255, 255, 0.1);
+    color: #eee;
+}
+[data-bs-theme="dark"] .icon-picker-btn:hover {
+    background: rgba(13, 110, 253, 0.2);
+    border-color: #0d6efd;
+}

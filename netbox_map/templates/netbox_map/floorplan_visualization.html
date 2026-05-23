@@ -38,14 +38,23 @@
     <div class="toolbar-divider"></div>
     <div class="toolbar-group">
       <div class="fp-type-chips" id="fp-type-chips">
-        {% for tc in type_configs %}
+        {% for tc in type_configs %}{% if not tc.hidden %}
         <span class="fp-type-chip{% if forloop.first %} active{% endif %}"
               data-type="{{ tc.slug }}" title="{{ tc.name }}"
               style="background: {{ tc.color }}">
           <i class="mdi {{ tc.icon }}"></i>
         </span>
-        {% endfor %}
+        {% endif %}{% endfor %}
       </div>
+      {% if hidden_tile_type_count %}
+      {# #63 — small tooltip so users know hidden types can be re-enabled in Settings #}
+      <span class="fp-hidden-types-hint text-muted small ms-1"
+            title="{% blocktrans count counter=hidden_tile_type_count %}{{ counter }} tile type hidden — enable in Map Settings → Tile Types{% plural %}{{ counter }} tile types hidden — enable in Map Settings → Tile Types{% endblocktrans %}">
+        <a href="{% url 'plugins:netbox_map:settings' %}#tab-tile-types" class="text-decoration-none">
+          <i class="mdi mdi-eye-off-outline"></i> +{{ hidden_tile_type_count }}
+        </a>
+      </span>
+      {% endif %}
       <input type="text" id="tile-label-input" class="form-control form-control-sm toolbar-input-label"
              placeholder="{% trans 'Label' %}">
     </div>
