@@ -4,6 +4,47 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.12.0] - 2026-05-23
+
+### Added
+- **Filter Site Map sites by tag (#64)** — new tag dropdown in the Site Map filter panel; lists tags actually used on Sites.
+- **Site Map: load empty by default (#65)** — new "Site Map — Load Empty" setting in Map Settings. When enabled, the Site Map starts with no markers; applying any filter (region/group/tenant/tag/device role) reveals the matching sites. Recommended for instances with thousands of sites.
+- **Multi-site selection in Topology (#53)** — the Site filter is now a multi-select. Pick two or more sites and inter-site cables render as the topology of the combined device set.
+- **Auto-suggest grid width/height from background image (#52)** — picking a background image on a FloorPlan now auto-fills the grid dimensions based on `image_pixels / tile_size`, recomputing live when the tile size changes. Manual override still works.
+- **Toolbar: hide unconnected ports (#61)** — new `mdi-ethernet-off` button in the Topology toolbar. When active, each device card collapses to only show ports whose remote endpoint is also in the current view. State persists in Saved Views.
+- **Geocode unplaced sites from physical_address (#54)** — small crosshair-GPS button on each unplaced-site chip in the Site Map editor. Clicking it queries OpenStreetMap Nominatim and auto-places the site at the resolved coordinates. No new server-side dependency — uses Nominatim's public API directly from the browser.
+- **Configurable tile-type visibility + Switch/UPS built-ins + icon picker (#63)**
+  - Added `Switch` (`mdi-lan`) and `UPS` (`mdi-battery-high`) as built-in tile types.
+  - New **Settings → Tile Types** tab with two independent lists: one for the Floor Plan editor toolbar, one for the Site Map create-chip tray. Fresh installs hide FTTH/fiber types by default, plus floor-plan-only structural types (`column`, `wall`, `aisle`, `empty`, `reserved`) on the Site Map. Existing tiles of hidden types still render normally — only the editor chip is hidden, so nothing breaks if a type is in use on an existing plan. A small `+N hidden` hint appears next to the chip strip and links back to the settings.
+  - New **icon picker** for Custom Marker Types: searches the entire MDI catalog (~7000+ icons, parsed from the loaded stylesheet at runtime — zero new bytes shipped) with a live preview chip and a curated quick-pick set.
+  - New **icon color** option on Custom Marker Types: `Auto` (default — picks light/dark based on background luma), `Light (white)`, or `Dark (black)`. Affects Site Map markers, Floor Plan tiles, drag ghosts, and chip trays.
+- **About tab in Map Settings** — version, author, license, source/docs/issues links, and a NetBox + Python compatibility matrix.
+- **PDF backgrounds on Floor Plans (#67)** — `FloorPlan.background_image` now accepts PDF uploads alongside PNG / JPEG / GIF / WEBP. PDFs are stored as-is and rendered to canvas in the browser via **PDF.js** at 3x the world resolution, so they stay crisp when you zoom in — none of the blurriness you get with a pre-rasterized PNG. The PDF.js bundle (~1.7MB) is loaded lazily, so plans with raster backgrounds pay nothing for the feature. New server dependency: `pypdfium2>=4.0` (Apache-2.0 + BSD, prebuilt pure-Python wheels, no system packages required) — used only for the grid auto-suggest endpoint that reads PDF page dimensions.
+- **Hide patch panels: speed-aware coloring** — virtual passthrough edges now use the real endpoint port speed colors. When both ends match speed → the speed color; when they differ → an orange "speed mismatch" warning color + label.
+- **Add connected devices: pull intermediate patch panels** — the right-click "Add connected devices" action now also adds devices that sit on the cable trace between the source and the far endpoint, so cables don't go missing when traces run through a patch panel.
+
+### Fixed
+- **Topology "Hide patch panels" toggle did nothing (#66)** — replaced the fragile role-slug-based detection with a real Front↔Rear `PortMapping` traversal sourced from a new `passthrough_pairs` backend field. Now correctly collapses any device with front/rear ports (regardless of `DeviceRole` name) and properly chains edges through patch panels in series.
+- **Plugin tabs missing on netbox-map detail pages (#62)** — netbox-attachments / netbox-contract (and any other plugin using `register_model_view` to add tabs) now appear on `Application`, `ApplicationGroup`, `ApplicationTemplate`, `ApplicationDeployment`, `ApplicationDependency`, `FloorPlan`, `FloorPlanTile`, `MapMarker`, `CablePath`, `TopologySavedView`, and `CustomMarkerType` detail pages. Root cause: `netbox_map/urls.py` was using explicit `path()` entries without `include(get_model_urls(...))`, so URLs registered by other plugins via `register_model_view` were never wired up.
+- **Plugin loads on NetBox 4.5.3 / 4.5.4 (#60)** — `extras.managers.NetBoxTaggableManager` only exists in NetBox 4.5.5+. The import is now wrapped in `try/except ImportError` so the plugin loads on older 4.5.x (without the perf optimization). Thanks @berlikm — merged from PR #49.
+- **Floor plan tiles look tighter** — reduced inter-tile gap from 2 → 1 and corner radius from 4 → 2; tiles look more like grid cells than rounded chips.
+
+### Changed
+- Reorganised the left-sidebar menu: **Maps** (Site Map, Floor Plans, Topology View), **Catalogs** (Map Markers, Cable Paths, Floor Plan Tiles, Saved Topology Views, Custom Marker Types), **Applications (Beta)**, **Configuration** (Settings).
+- NetBox compatibility matrix now formally includes **4.6.x** in addition to 4.5.x.
+
+### Migrations
+- `0024_floorplan_tags_related_name` (from #49) — metadata-only `related_name` change.
+- `0025_mapsettings_site_map_load_empty` (#65)
+- `0026_mapsettings_hidden_tile_types` (#63)
+- `0027_backfill_hidden_tile_types` (#63) — backfills the FTTH/fiber defaults on existing installs only where the list is empty AND no existing tile uses those types (so live fiber deployments are never silently hidden).
+- `0028_mapsettings_hidden_tile_types_sitemap` (#63)
+- `0029_backfill_hidden_tile_types_sitemap` (#63) — copies existing floor-plan list to site-map list.
+- `0030_custommarkertype_icon_foreground` (#63)
+- `0031_alter_floorplan_background_image` (#67) — switches `background_image` from `ImageField` to `FileField` to allow PDFs. No data change; existing rasters keep working unchanged.
+
+[0.12.0]: https://github.com/DenDanskeMine/netbox-map/compare/v0.11.0...v0.12.0
+
 ## [0.11.0] - 2026-05-03
 
 ### Added

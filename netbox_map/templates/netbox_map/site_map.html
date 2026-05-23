@@ -61,6 +61,10 @@
             {{ filter_form.device_role_id }}
             <div class="form-text">{% trans "Sites with devices of these roles" %}</div>
           </div>
+          <div class="col-md-4">
+            <label class="form-label fw-semibold mb-1">{% trans "Tag" %}</label>
+            {{ filter_form.tag }}
+          </div>
         </div>
         <div class="d-flex gap-2 mt-3">
           <button type="submit" class="btn btn-sm btn-primary">{% trans "Apply" %}</button>
@@ -100,6 +104,14 @@
       <div class="toolbar-card-label">{% trans "Create" %}</div>
       <div class="toolbar-card-body toolbar-create-body">
         <div class="chip-tray chip-tray--create" id="chip-tray-create"></div>
+        {% if hidden_tile_type_count %}
+        {# #63 hint linking to Settings → Tile Types to re-enable hidden chips #}
+        <a href="{% url 'plugins:netbox_map:settings' %}#tab-tile-types"
+           class="fp-hidden-types-hint text-muted small text-decoration-none"
+           title="{% blocktrans count counter=hidden_tile_type_count %}{{ counter }} marker type hidden — enable in Map Settings → Tile Types{% plural %}{{ counter }} marker types hidden — enable in Map Settings → Tile Types{% endblocktrans %}">
+          <i class="mdi mdi-eye-off-outline"></i> +{{ hidden_tile_type_count }}
+        </a>
+        {% endif %}
         <button class="btn btn-sm btn-outline-info" id="draw-cable-btn">
           <i class="mdi mdi-vector-polyline"></i> {% trans "Cable" %}
         </button>

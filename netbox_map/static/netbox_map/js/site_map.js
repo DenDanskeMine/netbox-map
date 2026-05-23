@@ -108,9 +108,25 @@
     } catch (e) {
         console.error('Failed to parse type configs:', e);
     }
+    // Resolve `auto` icon foreground using a luma threshold — matches
+    // CustomMarkerType.resolved_icon_foreground() on the backend.
+    function resolveIconFg(fg, bg) {
+        if (fg === 'light' || fg === 'dark') return fg;
+        var c = (bg || '').replace('#', '');
+        if (c.length !== 6) return 'light';
+        var r = parseInt(c.substring(0, 2), 16);
+        var g = parseInt(c.substring(2, 4), 16);
+        var b = parseInt(c.substring(4, 6), 16);
+        return (0.2126 * r + 0.7152 * g + 0.0722 * b) > 160 ? 'dark' : 'light';
+    }
     var TILE_CONFIG = {};
     TYPE_CONFIGS_RAW.forEach(function(tc) {
-        TILE_CONFIG[tc.slug] = { color: tc.color, icon: tc.icon, label: tc.name };
+        TILE_CONFIG[tc.slug] = {
+            color: tc.color,
+            icon: tc.icon,
+            label: tc.name,
+            iconFg: resolveIconFg(tc.icon_fg, tc.color),
+        };
     });
 
     /* ── Tracking all sidebar items and their Leaflet objects ─────── */
@@ -507,7 +523,7 @@
 
         var icon = L.divIcon({
             className: '',
-            html: '<div class="site-marker--tile" style="background:' + cfg.color + '"><i class="mdi ' + cfg.icon + '"></i></div>',
+            html: '<div class="site-marker--tile" style="background:' + cfg.color + ';color:' + (cfg.iconFg === 'dark' ? '#1a1a1a' : '#fff') + '"><i class="mdi ' + cfg.icon + '"></i></div>',
             iconSize: [20, 20],
             iconAnchor: [10, 10],
             popupAnchor: [0, -12]
@@ -655,7 +671,7 @@
 
         var icon = L.divIcon({
             className: '',
-            html: '<div class="site-marker--tile" style="background:' + cfg.color + '"><i class="mdi ' + cfg.icon + '"></i></div>',
+            html: '<div class="site-marker--tile" style="background:' + cfg.color + ';color:' + (cfg.iconFg === 'dark' ? '#1a1a1a' : '#fff') + '"><i class="mdi ' + cfg.icon + '"></i></div>',
             iconSize: [20, 20],
             iconAnchor: [10, 10],
             popupAnchor: [0, -12]
@@ -2525,6 +2541,8 @@
                         if (e.button !== 0) return;
                         startChipDrag('site', s, e);
                     });
+                    // #54 — small geocode button when the site has an address
+                    attachGeocodeButton(chip, s);
                     chipTrayPlace.appendChild(chip);
                 });
             } else {
@@ -2654,6 +2672,90 @@
         return chip;
     }
 
+    /* ── #54 — Geocode an unplaced site from its physical_address ─────── */
+    var GEOCODE_URL = 'https://nominatim.openstreetmap.org/search';
+    var geocodingNow = new Set();
+
+    function geocodeSite(site, chip) {
+        if (!site.physical_address) return;
+        if (geocodingNow.has(site.id)) return;
+        geocodingNow.add(site.id);
+
+        var btn = chip && chip.querySelector('.chip-geocode');
+        if (btn) {
+            btn.classList.add('is-loading');
+            btn.title = 'Looking up address…';
+        }
+
+        var url = GEOCODE_URL + '?q=' + encodeURIComponent(site.physical_address) +
+                  '&format=json&limit=1&addressdetails=0';
+
+        // Nominatim asks for a descriptive User-Agent. Browsers won't let us
+        // set User-Agent directly, but the Referer header from the page is
+        // enough for their usage policy (they accept identifying via Referer
+        // for in-browser apps).
+        fetch(url, {
+            headers: { 'Accept': 'application/json' },
+            referrerPolicy: 'origin',
+        })
+            .then(function (r) { return r.json(); })
+            .then(function (results) {
+                geocodingNow.delete(site.id);
+                if (btn) { btn.classList.remove('is-loading'); btn.title = 'Geocode from address'; }
+                if (!results || !results.length) {
+                    window.alert('Could not geocode this address:\n\n' + site.physical_address);
+                    return;
+                }
+                var lat = parseFloat(results[0].lat);
+                var lng = parseFloat(results[0].lon);
+                if (isNaN(lat) || isNaN(lng)) {
+                    window.alert('Geocoder returned invalid coordinates.');
+                    return;
+                }
+                apiRequest(siteApiUrl + site.id + '/', 'PATCH', {
+                    latitude: lat.toFixed(6),
+                    longitude: lng.toFixed(6),
+                })
+                    .then(function () {
+                        site.latitude = lat;
+                        site.longitude = lng;
+                        createSiteMarker(site);
+                        unplacedSites = unplacedSites.filter(function (s) { return s.id !== site.id; });
+                        buildPlaceChips();
+                        buildToggleButtons();
+                        buildSidebarList();
+                        if (map && typeof map.setView === 'function') {
+                            map.setView([lat, lng], 14);
+                        }
+                    })
+                    .catch(function (err) {
+                        window.alert('Could not save coordinates: ' + (err && err.message || err));
+                    });
+            })
+            .catch(function (err) {
+                geocodingNow.delete(site.id);
+                if (btn) { btn.classList.remove('is-loading'); btn.title = 'Geocode from address'; }
+                window.alert('Geocoder request failed: ' + (err && err.message || err));
+            });
+    }
+
+    function attachGeocodeButton(chip, site) {
+        if (!site || !site.physical_address) return;
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'chip-geocode btn btn-sm btn-link p-0 ms-1';
+        btn.title = 'Geocode from address';
+        btn.innerHTML = '<i class="mdi mdi-crosshairs-gps"></i>';
+        btn.addEventListener('click', function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            geocodeSite(site, chip);
+        });
+        // Stop the click event from also kicking off the drag-to-place flow.
+        btn.addEventListener('mousedown', function (e) { e.stopPropagation(); });
+        chip.appendChild(btn);
+    }
+
     /* ── Tile search dropdown (for 1000s of tiles) ─────────────── */
     function updateTileSearchPlaceholder() {
         if (!tileSearchInput) return;
@@ -2738,10 +2840,14 @@
         chipTrayCreate.innerHTML = '';
 
         TYPE_CONFIGS_RAW.forEach(function (tc) {
-            var cfg = TILE_CONFIG[tc.slug] || { color: '#888', icon: 'mdi-circle' };
+            // #63 — skip types the admin has hidden from the Site Map
+            // create-chip tray (manage in Settings → Tile Types).
+            if (tc.hidden) return;
+            var cfg = TILE_CONFIG[tc.slug] || { color: '#888', icon: 'mdi-circle', iconFg: 'light' };
             var chip = document.createElement('span');
             chip.className = 'create-chip';
             chip.style.background = cfg.color;
+            chip.style.color = cfg.iconFg === 'dark' ? '#1a1a1a' : '#fff';
             chip.innerHTML = '<i class="mdi ' + cfg.icon + '"></i>';
             chip.title = tc.name + ' — drag to place';
             chip.addEventListener('mousedown', function (e) {
@@ -2775,11 +2881,11 @@
             ghostSize = [22, 22]; ghostAnchor = [11, 11];
         } else if (mode === 'tile') {
             var cfg = TILE_CONFIG[item.type] || { color: '#888', icon: 'mdi-circle' };
-            ghostHtml = '<div class="site-marker--tile" style="background:' + cfg.color + '"><i class="mdi ' + cfg.icon + '"></i></div>';
+            ghostHtml = '<div class="site-marker--tile" style="background:' + cfg.color + ';color:' + (cfg.iconFg === 'dark' ? '#1a1a1a' : '#fff') + '"><i class="mdi ' + cfg.icon + '"></i></div>';
             ghostSize = [20, 20]; ghostAnchor = [10, 10];
         } else { // marker
             var cfg = TILE_CONFIG[item.marker_type] || { color: '#888', icon: 'mdi-circle' };
-            ghostHtml = '<div class="site-marker--tile" style="background:' + cfg.color + '"><i class="mdi ' + cfg.icon + '"></i></div>';
+            ghostHtml = '<div class="site-marker--tile" style="background:' + cfg.color + ';color:' + (cfg.iconFg === 'dark' ? '#1a1a1a' : '#fff') + '"><i class="mdi ' + cfg.icon + '"></i></div>';
             ghostSize = [20, 20]; ghostAnchor = [10, 10];
         }
 

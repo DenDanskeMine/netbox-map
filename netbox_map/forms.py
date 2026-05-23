@@ -87,6 +87,18 @@ class FloorPlanForm(NetBoxModelForm):
     )
     comments = CommentField()
 
+    # #52 / #67 — opt-in checkbox for the JS auto-suggest. Default ON for
+    # new plans (you usually want the suggestion) and OFF when editing an
+    # existing plan (so you don't accidentally overwrite a custom grid).
+    autofill_grid = forms.BooleanField(
+        required=False,
+        label=_('Auto-fill grid from background'),
+        help_text=_(
+            'When checked, picking a new background image (or PDF) auto-fills '
+            'the grid width/height based on the image dimensions and tile size.'
+        ),
+    )
+
     fieldsets = (
         FieldSet(
             'site', 'location', 'name', 'description', 'tags',
@@ -97,10 +109,15 @@ class FloorPlanForm(NetBoxModelForm):
             name=_('Grid Configuration')
         ),
         FieldSet(
-            'background_image',
+            'background_image', 'autofill_grid',
             name=_('Background')
         ),
     )
+
+    class Media:
+        # #52 — auto-suggest grid_width / grid_height from the chosen
+        # background image dimensions (pure client-side).
+        js = ('netbox_map/js/floorplan_form_autosuggest.js',)
 
     class Meta:
         model = FloorPlan
@@ -108,6 +125,40 @@ class FloorPlanForm(NetBoxModelForm):
             'site', 'location', 'name', 'grid_width', 'grid_height',
             'tile_size', 'background_image', 'description', 'comments', 'tags',
         ]
+
+    # Allowed background_image content types — raster images plus PDF.
+    # PDF is intercepted and rasterized in clean_background_image() before
+    # the file ever hits storage, so everything downstream still sees a PNG.
+    _ALLOWED_IMAGE_EXTS = {'.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.tif', '.tiff'}
+    _ALLOWED_EXTS = _ALLOWED_IMAGE_EXTS | {'.pdf'}
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Default autofill_grid: ON for new plans, OFF when editing
+        if self.instance and not self.instance.pk:
+            self.fields['autofill_grid'].initial = True
+
+    def clean_background_image(self):
+        """Accept image OR PDF — store both as-is.
+
+        PDFs are rendered to canvas in the browser via PDF.js at the user's
+        current zoom level, which keeps them sharp at any scale instead of
+        the blurry rasterized PNG approach we used before. Server-side we
+        only validate the file extension; the actual file bytes go straight
+        to FileStorage.
+        """
+        f = self.cleaned_data.get('background_image')
+        if not f or not hasattr(f, 'name'):
+            return f
+        import os
+        ext = os.path.splitext(f.name)[1].lower()
+        if ext not in self._ALLOWED_EXTS:
+            raise forms.ValidationError(
+                _('Unsupported file type. Allowed: %(exts)s.') % {
+                    'exts': ', '.join(sorted(self._ALLOWED_EXTS)),
+                }
+            )
+        return f
 
 
 class FloorPlanFilterForm(NetBoxModelFilterSetForm):
@@ -220,20 +271,32 @@ class FloorPlanImportForm(NetBoxModelImportForm):
 class CustomMarkerTypeForm(NetBoxModelForm):
     fieldsets = (
         FieldSet(
-            'name', 'slug', 'color', 'icon', 'description', 'tags',
+            'name', 'slug', 'color', 'icon', 'icon_foreground', 'description', 'tags',
             name=_('Custom Marker Type')
         ),
     )
 
+    class Media:
+        # #63 — icon picker widget (loaded via custom template since
+        # NetBox's default ObjectEditView doesn't emit form media)
+        js = ('netbox_map/js/icon_picker.js',)
+        css = {'all': ('netbox_map/css/icon_picker.css',)}
+
     class Meta:
         model = CustomMarkerType
-        fields = ['name', 'slug', 'color', 'icon', 'description', 'tags']
+        fields = ['name', 'slug', 'color', 'icon', 'icon_foreground', 'description', 'tags']
         widgets = {
             'color': forms.TextInput(attrs={'type': 'color'}),
+            # #63 — the icon picker JS hooks onto this field's id
+            'icon': forms.TextInput(attrs={'class': 'icon-picker-input', 'placeholder': 'mdi-…'}),
         }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.fields['icon'].help_text = _(
+            'Click an icon below or type any Material Design Icons (mdi-) name. '
+            'Browse the full set at https://pictogrammers.com/library/mdi/.'
+        )
         if not self.instance.pk:
             self.fields['slug'].required = False
             self.fields['slug'].help_text = _(
@@ -1069,12 +1132,41 @@ class MapSettingsForm(forms.ModelForm):
         label=_('Popover Fields'),
     )
 
+    # #63 — Inverted UI: admins tick the types they want **active** in the
+    # toolbar. The model field stores the inverse (hidden list) so adding
+    # new types in future plugin versions keeps them visible by default.
+    # `form-check-input` is the Bootstrap class NetBox uses for checkboxes.
+    _cbm_attrs = {'class': 'form-check-input'}
+    visible_tile_types = forms.MultipleChoiceField(
+        choices=(),  # populated dynamically in __init__
+        widget=forms.CheckboxSelectMultiple(attrs=_cbm_attrs),
+        required=False,
+        label=_('Active Tile Types — Floor Plan'),
+        help_text=_(
+            'Ticked types appear in the floor-plan editor toolbar. '
+            'Existing tiles of unticked types still render normally.'
+        ),
+    )
+    visible_tile_types_sitemap = forms.MultipleChoiceField(
+        choices=(),  # populated dynamically in __init__
+        widget=forms.CheckboxSelectMultiple(attrs=_cbm_attrs),
+        required=False,
+        label=_('Active Tile Types — Site Map'),
+        help_text=_(
+            'Ticked types appear in the Site Map create-chip tray. '
+            'Existing markers of unticked types still render normally.'
+        ),
+    )
+
     class Meta:
         model = MapSettings
         fields = (
             'show_mac', 'show_custom_fields', 'sync_device_gps',
+            'site_map_load_empty',
             'device_fields', 'rack_fields', 'powerpanel_fields', 'powerfeed_fields',
             'popover_fields',
+            # NB: hidden_tile_types is set via the visible_tile_types proxy field
+            # in save() — not exposed directly to the user.
         )
 
     def __init__(self, *args, **kwargs):
@@ -1125,6 +1217,27 @@ class MapSettingsForm(forms.ModelForm):
             if type_key in config:
                 self.initial[field_name] = config[type_key]
 
+        # #63 — Build the (active types) checkbox choices from every known
+        # tile type (built-in + custom). Initial value = all types NOT
+        # in hidden_tile_types.
+        from .choices import BUILTIN_TYPE_CONFIG
+        from .models import CustomMarkerType
+        type_choices = [(slug, info['name']) for slug, info in BUILTIN_TYPE_CONFIG.items()]
+        try:
+            for ct in CustomMarkerType.objects.order_by('name'):
+                type_choices.append((ct.slug, f'{ct.name} (custom)'))
+        except Exception:
+            pass
+        self.fields['visible_tile_types'].choices = type_choices
+        self.fields['visible_tile_types_sitemap'].choices = type_choices
+        if self.instance and self.instance.pk:
+            hidden_fp = set(self.instance.hidden_tile_types or [])
+            hidden_sm = set(self.instance.hidden_tile_types_sitemap or [])
+        else:
+            hidden_fp = hidden_sm = set()
+        self.initial['visible_tile_types'] = [slug for slug, _ in type_choices if slug not in hidden_fp]
+        self.initial['visible_tile_types_sitemap'] = [slug for slug, _ in type_choices if slug not in hidden_sm]
+
     def save(self, commit=True):
         instance = super().save(commit=False)
 
@@ -1134,6 +1247,19 @@ class MapSettingsForm(forms.ModelForm):
             field_name = f'{type_key}_popover_fields'
             config[type_key] = self.cleaned_data.get(field_name, [])
         instance.tile_popover_config = config
+
+        # #63 — Invert each "active" selection into its stored hidden list
+        from .choices import BUILTIN_TYPE_CONFIG
+        from .models import CustomMarkerType
+        all_slugs = set(BUILTIN_TYPE_CONFIG.keys())
+        try:
+            all_slugs.update(CustomMarkerType.objects.values_list('slug', flat=True))
+        except Exception:
+            pass
+        visible_fp = set(self.cleaned_data.get('visible_tile_types') or [])
+        visible_sm = set(self.cleaned_data.get('visible_tile_types_sitemap') or [])
+        instance.hidden_tile_types = sorted(all_slugs - visible_fp)
+        instance.hidden_tile_types_sitemap = sorted(all_slugs - visible_sm)
 
         if commit:
             instance.save()
@@ -1199,6 +1325,10 @@ class SiteMapFilterForm(forms.Form):
         label=_('Device Role'),
         help_text=_('Only show sites that have devices with these roles'),
     )
+    # #64 — Filter sites by tag. NetBox's SiteFilterSet already accepts
+    # ?tag=<slug> for the queryset side; this just exposes it in the UI as a
+    # dropdown of tags actually used on Site.
+    tag = TagFilterField(model=Site)
 
 
 #
@@ -1206,11 +1336,15 @@ class SiteMapFilterForm(forms.Form):
 #
 
 class TopologyFilterForm(forms.Form):
-    site_id = DynamicModelChoiceField(
+    # #53 — multi-site selection so users can render topologies that span
+    # multiple sites (eg primary DC + DR, or campus + branch with inter-site
+    # cables). Sites with cables to selected sites are still drawn from the
+    # union; if both endpoints are in the picked set the edge appears too.
+    site_id = DynamicModelMultipleChoiceField(
         queryset=Site.objects.all(),
         required=False,
         label=_('Site'),
-        widget=APISelect(attrs={'data-placeholder': _('Site')}),
+        widget=APISelectMultiple(attrs={'data-placeholder': _('Site')}),
     )
     tenant_id = DynamicModelChoiceField(
         queryset=Tenant.objects.all(),

@@ -19,9 +19,19 @@ jobs:
       - run: ruff check netbox_map/
 
   test:
-    name: Test
+    name: Test (NetBox ${{ matrix.netbox_ref }})
     runs-on: ubuntu-latest
     needs: lint
+    strategy:
+      # Don't cancel sibling jobs — surface every version failure independently
+      fail-fast: false
+      matrix:
+        # Test against the latest patch of every NetBox minor line listed in
+        # the compatibility matrix (README.md / docs/index.md). Add/remove
+        # entries here when the support window changes.
+        netbox_ref:
+          - v4.5.10  # 4.5.x line — minimum supported
+          - v4.6.1   # 4.6.x line — current
     services:
       postgres:
         image: postgres:16
@@ -39,11 +49,11 @@ jobs:
         image: redis:7
         ports: ['6379:6379']
     steps:
-      - name: Checkout NetBox
+      - name: Checkout NetBox ${{ matrix.netbox_ref }}
         uses: actions/checkout@v4
         with:
           repository: netbox-community/netbox
-          ref: v4.5.7
+          ref: ${{ matrix.netbox_ref }}
           path: netbox
 
       - name: Checkout plugin

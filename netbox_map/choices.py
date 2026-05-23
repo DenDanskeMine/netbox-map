@@ -17,6 +17,9 @@ class FloorPlanTileTypeChoices(ChoiceSet):
     TYPE_PRINTER = 'printer'
     TYPE_FLOORPLAN_LINK = 'floorplan_link'
     TYPE_DROP = 'drop'
+    # #63 — universally relevant built-ins
+    TYPE_SWITCH = 'switch'
+    TYPE_UPS = 'ups'
 
     CHOICES = [
         (TYPE_RACK, _('Rack'), 'blue'),
@@ -33,6 +36,8 @@ class FloorPlanTileTypeChoices(ChoiceSet):
         (TYPE_PRINTER, _('Printer'), 'orange'),
         (TYPE_FLOORPLAN_LINK, _('Floor Plan Link'), 'indigo'),
         (TYPE_DROP, _('Drop'), 'green'),
+        (TYPE_SWITCH, _('Switch'), 'blue'),
+        (TYPE_UPS, _('UPS'), 'yellow'),
     ]
 
 
@@ -79,6 +84,9 @@ BUILTIN_TYPE_CONFIG = {
     'printer':        {'name': 'Printer', 'color': '#e67e22', 'icon': 'mdi-printer'},
     'floorplan_link': {'name': 'Floor Plan Link', 'color': '#4a50c8', 'icon': 'mdi-floor-plan'},
     'drop':           {'name': 'Drop', 'color': '#2ecc71', 'icon': 'mdi-ethernet'},
+    # #63 — Switch and UPS are universally relevant — added as built-ins
+    'switch':         {'name': 'Switch', 'color': '#2980b9', 'icon': 'mdi-lan'},
+    'ups':            {'name': 'UPS', 'color': '#f1c40f', 'icon': 'mdi-battery-high'},
     # FTTH / Fiber types
     'splice_closure': {'name': 'Splice Closure', 'color': '#e67e22', 'icon': 'mdi-connection'},
     'olt':            {'name': 'OLT', 'color': '#2ecc71', 'icon': 'mdi-server-network'},
@@ -93,6 +101,22 @@ BUILTIN_TYPE_CONFIG = {
 
 # Set of all built-in slugs for quick lookup
 BUILTIN_TYPE_SLUGS = set(BUILTIN_TYPE_CONFIG.keys())
+
+# #63 — Tile types hidden from the FLOOR PLAN editor toolbar by default
+# for fresh installs. Existing installs are unaffected (the field defaults
+# to an empty list and load() does not retroactively touch it).
+DEFAULT_HIDDEN_TILE_TYPES = [
+    'splice_closure', 'olt', 'ont', 'splitter',
+    'fdt', 'fat', 'manhole', 'pole', 'handhole',
+]
+
+# Default-hidden types in the SITE MAP create-chip tray. The Site Map deals
+# with geographic markers, so the structural floor-plan-only types (column,
+# wall, aisle, empty, reserved) are rarely useful there — hide by default
+# in addition to the fiber types above.
+DEFAULT_HIDDEN_TILE_TYPES_SITEMAP = DEFAULT_HIDDEN_TILE_TYPES + [
+    'column', 'wall', 'aisle', 'empty', 'reserved',
+]
 
 
 def get_all_tile_type_choices():
@@ -116,7 +140,7 @@ def get_tile_type_display(slug):
 
 
 def get_all_type_configs():
-    """Return list of dicts for JS injection: [{slug, name, color, icon, builtin}, ...]"""
+    """Return list of dicts for JS injection: [{slug, name, color, icon, icon_fg, builtin}, ...]"""
     from .models import CustomMarkerType
     configs = []
     for slug, info in BUILTIN_TYPE_CONFIG.items():
@@ -125,6 +149,9 @@ def get_all_type_configs():
             'name': info['name'],
             'color': info['color'],
             'icon': info['icon'],
+            # Built-ins inherit the auto-contrast rule via the JS helper —
+            # send 'auto' so the frontend computes it from the background.
+            'icon_fg': info.get('icon_fg', 'auto'),
             'builtin': True,
         })
     for ct in CustomMarkerType.objects.order_by('name'):
@@ -133,6 +160,7 @@ def get_all_type_configs():
             'name': ct.name,
             'color': ct.color,
             'icon': ct.icon,
+            'icon_fg': ct.resolved_icon_foreground(),
             'builtin': False,
         })
     return configs

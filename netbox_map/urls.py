@@ -1,11 +1,43 @@
-from django.urls import path
+from django.urls import include, path
 from netbox.views.generic import ObjectChangeLogView
+from utilities.urls import get_model_urls
 
 from . import models, views
+
+# #62 — include plugin-registered model views (eg netbox-attachments,
+# netbox-contract tabs) under each model's detail URL. Without this, plugins
+# that hook into our models via register_model_view never get URLs and their
+# tabs silently disappear from the detail page.
+# Map: (model_name, url_prefix) — url_prefix matches the kebab-cased path
+# used elsewhere in this file.
+_plugin_extensible_models = (
+    ('floorplan', 'floorplans'),
+    ('floorplantile', 'floorplan-tiles'),
+    ('mapmarker', 'map-markers'),
+    ('custommarkertype', 'custom-marker-types'),
+    ('cablepath', 'cable-paths'),
+    ('topologysavedview', 'topology-saved-views'),
+    ('applicationgroup', 'application-groups'),
+    ('applicationtemplate', 'application-templates'),
+    ('application', 'applications'),
+    ('applicationdeployment', 'application-deployments'),
+    ('applicationdependency', 'application-dependencies'),
+)
 
 urlpatterns = (
     # Settings
     path('settings/', views.MapSettingsView.as_view(), name='settings'),
+
+    # #62 — plugin model-view hooks for every detail page. Added first so
+    # plugin-registered URLs (eg "application-attachment_list") resolve under
+    # the same prefix as our explicit detail paths below.
+    *[
+        path(
+            f'{prefix}/<int:pk>/',
+            include(get_model_urls('netbox_map', model_name)),
+        )
+        for model_name, prefix in _plugin_extensible_models
+    ],
 
     # CustomMarkerType
     path(
@@ -74,6 +106,14 @@ urlpatterns = (
         'topology/save-layout/',
         views.TopologySaveLayoutView.as_view(),
         name='topology_save_layout',
+    ),
+    # #67 — return rasterized pixel dimensions for an uploaded PDF so the
+    # FloorPlan form's grid auto-suggest can fire for PDFs the same way it
+    # already does for raster images. Plain login auth — metadata only.
+    path(
+        'api/pdf-dimensions/',
+        views.PdfDimensionsView.as_view(),
+        name='pdf_dimensions',
     ),
 
     # Topology Saved Views

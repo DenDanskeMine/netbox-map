@@ -1,0 +1,10 @@
+{% extends 'generic/object_edit.html' %}
+{% load static %}
+
+{# #63 — load the icon picker assets. NetBox's default object_edit.html
+   doesn't emit {{ form.media }}, so we include the JS/CSS by hand. #}
+{% block content %}
+  {{ block.super }}
+  <link rel="stylesheet" href="{% static 'netbox_map/css/icon_picker.css' %}">
+  <script src="{% static 'netbox_map/js/icon_picker.js' %}"></script>
+{% endblock %}

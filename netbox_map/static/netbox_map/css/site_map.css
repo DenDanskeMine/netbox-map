@@ -476,6 +476,30 @@
     max-width: 120px;
 }
 
+/* #54 — geocode button on unplaced-site chips */
+.place-chip .chip-geocode {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    border: 0;
+    background: transparent;
+    color: var(--fp-text-muted, #6c757d);
+    cursor: pointer;
+}
+.place-chip .chip-geocode .mdi {
+    font-size: 14px;
+    line-height: 1;
+}
+.place-chip .chip-geocode:hover {
+    color: #0d6efd;
+}
+.place-chip .chip-geocode.is-loading {
+    animation: spin 1s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
 /* ── Create chips (marker type icons) ────────────────────────── */
 .create-chip {
     display: inline-flex;

@@ -68,6 +68,7 @@ class CustomMarkerTypeViewTest(
             'slug': 'custom_type_d',
             'color': '#ff5733',
             'icon': 'mdi-shape',
+            'icon_foreground': 'auto',
             'description': '',
             'tags': [],
         }

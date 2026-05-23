@@ -80,13 +80,52 @@ class CustomMarkerType(NetBoxModel):
         default='mdi-shape',
         help_text=_('MDI icon class (e.g. mdi-server-network)'),
     )
+    # Light or dark icon foreground. `auto` picks based on background luma —
+    # the right default for most users; the explicit options exist for cases
+    # where the contrast heuristic looks off.
+    ICON_FG_AUTO = 'auto'
+    ICON_FG_LIGHT = 'light'
+    ICON_FG_DARK = 'dark'
+    ICON_FG_CHOICES = (
+        (ICON_FG_AUTO, _('Auto (contrast with background)')),
+        (ICON_FG_LIGHT, _('Light (white)')),
+        (ICON_FG_DARK, _('Dark (black)')),
+    )
+    icon_foreground = models.CharField(
+        verbose_name=_('icon color'),
+        max_length=10,
+        choices=ICON_FG_CHOICES,
+        default=ICON_FG_AUTO,
+        help_text=_(
+            'Icon color on top of the background. "Auto" picks light or '
+            'dark based on the background brightness.'
+        ),
+    )
     description = models.CharField(
         verbose_name=_('description'),
         max_length=200,
         blank=True,
     )
 
-    clone_fields = ('color', 'icon')
+    clone_fields = ('color', 'icon', 'icon_foreground')
+
+    def resolved_icon_foreground(self):
+        """Resolve `auto` to an actual `light` or `dark` based on background luma."""
+        if self.icon_foreground != self.ICON_FG_AUTO:
+            return self.icon_foreground
+        c = (self.color or '').lstrip('#')
+        if len(c) != 6:
+            return self.ICON_FG_LIGHT
+        try:
+            r = int(c[0:2], 16)
+            g = int(c[2:4], 16)
+            b = int(c[4:6], 16)
+        except ValueError:
+            return self.ICON_FG_LIGHT
+        # Standard relative luminance — anything <128 is "dark" enough to
+        # warrant white text.
+        luma = 0.2126 * r + 0.7152 * g + 0.0722 * b
+        return self.ICON_FG_DARK if luma > 160 else self.ICON_FG_LIGHT
 
     class Meta:
         ordering = ('name',)
@@ -149,11 +188,17 @@ class FloorPlan(NetBoxModel):
         validators=[MinValueValidator(5), MaxValueValidator(200)],
         help_text=_('Size of each tile in pixels for rendering')
     )
-    background_image = models.ImageField(
+    # #67 — FileField (not ImageField) so PDFs can be uploaded too.
+    # PDF uploads are rasterized to PNG at form-clean time (see
+    # FloorPlanForm.clean_background_image) before they ever hit storage,
+    # so anything stored on disk is always a raster image the renderer
+    # already understands.
+    background_image = models.FileField(
         upload_to='floorplan-backgrounds/',
         blank=True,
         null=True,
-        verbose_name=_('background image')
+        verbose_name=_('background image'),
+        help_text=_('PNG, JPEG, GIF, WEBP or PDF. PDFs are rasterized at upload (page 1).'),
     )
     description = models.CharField(
         verbose_name=_('description'),
@@ -725,6 +770,50 @@ class MapSettings(models.Model):
         help_text=_('Per-tile-type popover field configuration'),
     )
 
+    # #65 — Site Map: load empty by default. On instances with thousands of
+    # sites, loading them all blows the browser; admins can flip this on so
+    # the Site Map starts blank and only renders sites once a filter is set.
+    site_map_load_empty = models.BooleanField(
+        default=False,
+        verbose_name=_('Site Map — Load Empty'),
+        help_text=_(
+            'Start the Site Map with no markers. Sites only appear once a '
+            'region/group/tenant/tag filter is applied. Recommended for '
+            'instances with thousands of sites.'
+        ),
+    )
+
+    # #63 — Tile type slugs hidden from the floor-plan editor toolbar.
+    # IMPORTANT: existing installs default to [] (nothing hidden) — fiber
+    # types stay visible for anyone already using them. Fresh installs get
+    # DEFAULT_HIDDEN_TILE_TYPES seeded on first MapSettings.load() so they
+    # don't see 9 irrelevant FTTH chips by default.
+    # Hidden only refers to the EDITOR TOOLBAR — existing tiles of hidden
+    # types still render normally on the floor plan.
+    hidden_tile_types = models.JSONField(
+        default=list,
+        blank=True,
+        verbose_name=_('Hidden Tile Types (Floor Plan)'),
+        help_text=_(
+            'Tile-type slugs hidden from the floor-plan editor toolbar. '
+            'Existing tiles of these types still render normally — '
+            'only the editor chip is hidden.'
+        ),
+    )
+    # #63 — separate visibility list for the Site Map create-chip tray, so
+    # admins can show fiber/marker types on the Site Map but not on individual
+    # Floor Plans (or vice versa). Defaults to the same defaults as the
+    # floor-plan list on fresh installs.
+    hidden_tile_types_sitemap = models.JSONField(
+        default=list,
+        blank=True,
+        verbose_name=_('Hidden Tile Types (Site Map)'),
+        help_text=_(
+            'Tile-type slugs hidden from the Site Map create-chip tray. '
+            'Existing markers of these types still render normally.'
+        ),
+    )
+
     class Meta:
         verbose_name = _('Map Settings')
         verbose_name_plural = _('Map Settings')
@@ -754,6 +843,15 @@ class MapSettings(models.Model):
                 ]
             }
             obj.tile_popover_config['drop'] = ['label', 'cable_trace']
+            # #63 — hide FTTH/fiber types from the toolbar on fresh installs.
+            # Existing installs are not migrated to this default — they keep
+            # their empty list so fiber types stay visible if they're using them.
+            # Site Map additionally hides floor-plan-only structural types
+            # (column / wall / aisle / empty / reserved) since those aren't
+            # useful as geographic markers.
+            from .choices import DEFAULT_HIDDEN_TILE_TYPES, DEFAULT_HIDDEN_TILE_TYPES_SITEMAP
+            obj.hidden_tile_types = list(DEFAULT_HIDDEN_TILE_TYPES)
+            obj.hidden_tile_types_sitemap = list(DEFAULT_HIDDEN_TILE_TYPES_SITEMAP)
             obj.save()
         return obj
 

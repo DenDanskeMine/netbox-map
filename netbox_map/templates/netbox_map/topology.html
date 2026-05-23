@@ -149,6 +149,12 @@
         <i class="mdi mdi-transit-skip"></i>
       </button>
 
+      {# #61 — Hide ports whose remote end isn't in the current filtered view #}
+      <button id="topo-hide-unconnected-ports" class="topo-btn" type="button"
+              title="{% trans 'Hide ports not connected within current filtered view — collapses device cards to only show ports going to other visible devices.' %}">
+        <i class="mdi mdi-ethernet-off"></i>
+      </button>
+
       <span class="topo-toolbar-divider"></span>
 
       {# Cable color mode #}

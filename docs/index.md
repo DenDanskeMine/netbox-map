@@ -12,13 +12,14 @@ A NetBox plugin for interactive floor plan visualization, site maps, network top
 
 ## Compatibility
 
-| netbox-map | NetBox | Python |
-|------------|--------|--------|
-| 0.11.x     | 4.5+  | 3.12+  |
-| 0.10.x     | 4.5+  | 3.12+  |
-| 0.9.x      | 4.5+  | 3.12+  |
-| 0.8.x      | 4.5+  | 3.12+  |
-| ≤ 0.7.x    | 4.5+  | 3.12+  |
+| netbox-map | NetBox        | Python |
+|------------|---------------|--------|
+| 0.12.x     | 4.5+ &middot; 4.6+ | 3.12+  |
+| 0.11.x     | 4.5+          | 3.12+  |
+| 0.10.x     | 4.5+          | 3.12+  |
+| 0.9.x      | 4.5+          | 3.12+  |
+| 0.8.x      | 4.5+          | 3.12+  |
+| ≤ 0.7.x    | 4.5+          | 3.12+  |
 
 ## Dependencies
 

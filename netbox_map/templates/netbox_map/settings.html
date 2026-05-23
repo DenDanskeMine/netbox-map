@@ -1,5 +1,6 @@
 {% extends 'base/layout.html' %}
 {% load helpers %}
+{% load i18n %}
 
 {% block title %}Map Settings{% endblock %}
 
@@ -51,6 +52,20 @@
         <span class="mdi mdi-card-text me-1"></span> Detail Panel
       </button>
     </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="tab-tile-types-btn" data-bs-toggle="tab"
+              data-bs-target="#tab-tile-types" type="button" role="tab"
+              aria-controls="tab-tile-types" aria-selected="false">
+        <span class="mdi mdi-shape me-1"></span> Tile Types
+      </button>
+    </li>
+    <li class="nav-item ms-auto" role="presentation">
+      <button class="nav-link" id="tab-about-btn" data-bs-toggle="tab"
+              data-bs-target="#tab-about" type="button" role="tab"
+              aria-controls="tab-about" aria-selected="false">
+        <span class="mdi mdi-information-outline me-1"></span> About
+      </button>
+    </li>
   </ul>
 
   {# ── Tab Content ── #}
@@ -65,7 +80,7 @@
         </h5>
         <div class="card-body">
           {% for field in form %}
-            {% if field.name in 'show_mac,show_custom_fields,sync_device_gps' %}
+            {% if field.name in 'show_mac,show_custom_fields,sync_device_gps,site_map_load_empty' %}
             <div class="mb-3 form-check">
               {{ field }}
               <label for="{{ field.id_for_label }}" class="form-check-label fw-bold">{{ field.label }}</label>
@@ -276,6 +291,129 @@
       </div>{# /detailAccordion #}
     </div>
 
+    {# ━━ Tile Types Tab (#63) ━━ #}
+    <div class="tab-pane fade" id="tab-tile-types" role="tabpanel"
+         aria-labelledby="tab-tile-types-btn">
+
+      {# Floor Plan section #}
+      <div class="card mb-3">
+        <h5 class="card-header">
+          <span class="mdi mdi-floor-plan me-2"></span> {% trans "Active Tile Types — Floor Plan" %}
+        </h5>
+        <div class="card-body">
+          <p class="text-muted small mb-3">
+            {% blocktrans %}
+            Tick the tile types you want available in the floor-plan editor toolbar.
+            Existing tiles of unticked types still render normally — only the toolbar
+            chip is hidden, so nothing breaks if a type is in use on an existing plan.
+            Fresh installs hide the FTTH/fiber types by default; tick them here to enable.
+            {% endblocktrans %}
+          </p>
+          <div class="row">
+            {% for choice in form.visible_tile_types %}
+            <div class="col-md-4 col-lg-3 mb-2">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox"
+                       name="visible_tile_types"
+                       value="{{ choice.data.value }}"
+                       id="{{ choice.id_for_label }}"
+                       {% if choice.data.selected %}checked{% endif %}>
+                <label class="form-check-label" for="{{ choice.id_for_label }}">{{ choice.choice_label }}</label>
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+          {% for error in form.visible_tile_types.errors %}
+          <div class="text-danger small">{{ error }}</div>
+          {% endfor %}
+        </div>
+      </div>
+
+      {# Site Map section #}
+      <div class="card">
+        <h5 class="card-header">
+          <span class="mdi mdi-map-outline me-2"></span> {% trans "Active Tile Types — Site Map" %}
+        </h5>
+        <div class="card-body">
+          <p class="text-muted small mb-3">
+            {% blocktrans %}
+            Tick the marker types available in the Site Map create-chip tray. This
+            list is independent of the floor-plan one — e.g. you can show fiber
+            markers on the Site Map but hide them in individual floor plans, or
+            vice versa.
+            {% endblocktrans %}
+          </p>
+          <div class="row">
+            {% for choice in form.visible_tile_types_sitemap %}
+            <div class="col-md-4 col-lg-3 mb-2">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox"
+                       name="visible_tile_types_sitemap"
+                       value="{{ choice.data.value }}"
+                       id="{{ choice.id_for_label }}"
+                       {% if choice.data.selected %}checked{% endif %}>
+                <label class="form-check-label" for="{{ choice.id_for_label }}">{{ choice.choice_label }}</label>
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+          {% for error in form.visible_tile_types_sitemap.errors %}
+          <div class="text-danger small">{{ error }}</div>
+          {% endfor %}
+        </div>
+      </div>
+
+    </div>
+
+    {# ━━ About Tab ━━ #}
+    <div class="tab-pane fade" id="tab-about" role="tabpanel"
+         aria-labelledby="tab-about-btn">
+      <div class="card">
+        <h5 class="card-header">
+          <span class="mdi mdi-information-outline me-2"></span> {% trans "About netbox-map" %}
+        </h5>
+        <div class="card-body">
+          <dl class="row mb-3">
+            <dt class="col-sm-3">{% trans "Version" %}</dt>
+            <dd class="col-sm-9"><code>{{ plugin_version }}</code></dd>
+            <dt class="col-sm-3">{% trans "Author" %}</dt>
+            <dd class="col-sm-9">Christian Rose (<a href="https://github.com/DenDanskeMine" target="_blank" rel="noopener">@DenDanskeMine</a>)</dd>
+            <dt class="col-sm-3">{% trans "License" %}</dt>
+            <dd class="col-sm-9">Apache-2.0</dd>
+            <dt class="col-sm-3">{% trans "Source" %}</dt>
+            <dd class="col-sm-9"><a href="https://github.com/DenDanskeMine/netbox-map" target="_blank" rel="noopener">github.com/DenDanskeMine/netbox-map</a></dd>
+            <dt class="col-sm-3">{% trans "Docs" %}</dt>
+            <dd class="col-sm-9"><a href="https://dendanskemine.github.io/netbox-map/" target="_blank" rel="noopener">dendanskemine.github.io/netbox-map</a></dd>
+            <dt class="col-sm-3">{% trans "Report an issue" %}</dt>
+            <dd class="col-sm-9"><a href="https://github.com/DenDanskeMine/netbox-map/issues" target="_blank" rel="noopener">GitHub Issues</a></dd>
+          </dl>
+
+          <h6 class="mt-4">{% trans "Compatibility" %}</h6>
+          <div class="table-responsive">
+            <table class="table table-sm table-bordered align-middle mb-0">
+              <thead>
+                <tr>
+                  <th>netbox-map</th>
+                  <th>NetBox</th>
+                  <th>Python</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td><code>0.12.x</code></td><td>4.5+ &middot; 4.6+</td><td>3.12+</td></tr>
+                <tr><td><code>0.11.x</code></td><td>4.5+</td><td>3.12+</td></tr>
+                <tr><td><code>0.10.x</code></td><td>4.5+</td><td>3.12+</td></tr>
+                <tr><td><code>0.9.x</code></td><td>4.5+</td><td>3.12+</td></tr>
+                <tr class="text-muted"><td>&le; 0.8.x</td><td>4.5+</td><td>3.12+</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="text-muted small mt-2 mb-0">
+            {% trans "The plugin's <code>min_version</code> is enforced by NetBox at startup. If you upgrade NetBox to a version above the matrix, the plugin will continue to load but is not formally tested there." %}
+          </p>
+        </div>
+      </div>
+    </div>
+
   </div>{# /tab-content #}
 
   {# ── Sticky Save Button ── #}
@@ -287,6 +425,17 @@
 </form>
 
 <script>
+  // #63 — when the URL has a tab hash (eg #tab-tile-types), switch to it.
+  // Bootstrap 5 doesn't activate tabs by URL hash on its own.
+  (function () {
+    var hash = window.location.hash;
+    if (!hash) return;
+    var btn = document.querySelector('.nav-tabs button[data-bs-target="' + hash + '"]');
+    if (btn && window.bootstrap && window.bootstrap.Tab) {
+      window.bootstrap.Tab.getOrCreateInstance(btn).show();
+    }
+  })();
+
   // Rewrite Django's CheckboxSelectMultiple output to use NetBox/Bootstrap 5 form-check classes
   document.querySelectorAll('.checkbox-list input[type="checkbox"]').forEach(function(input) {
     input.classList.remove('form-control');
