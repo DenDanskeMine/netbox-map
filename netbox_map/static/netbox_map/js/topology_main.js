@@ -50,6 +50,21 @@
             state.topologyMode = layout._topology_mode;
         }
 
+        // #61 — restore "Hide unconnected ports" toggle
+        if (layout._hide_unconnected_ports) {
+            state.hideUnconnectedPorts = true;
+            // Mark the button visually once the DOM is ready
+            var setBtn = function() {
+                var btn = document.getElementById('topo-hide-unconnected-ports');
+                if (btn) btn.classList.add('active');
+            };
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', setBtn);
+            } else {
+                setBtn();
+            }
+        }
+
         // Merge mode-specific positions into the top level
         var modeKey = '_pos_' + state.topologyMode;
         if (layout[modeKey] && typeof layout[modeKey] === 'object') {
@@ -122,6 +137,10 @@
         layout[modeKey] = modePositions;
         if (state.topologyMode !== 'network') {
             layout._topology_mode = state.topologyMode;
+        }
+        // #61 — persist "Hide unconnected ports" toggle in saved views
+        if (state.hideUnconnectedPorts) {
+            layout._hide_unconnected_ports = true;
         }
         return layout;
     }
@@ -557,7 +576,10 @@
                 if (Array.isArray(val)) val.forEach(function(v) { netParams.append(key, v); });
                 else netParams.set(key, val);
                 // Pass site_id to app endpoint for full dependency data
-                if (key === 'site_id') appParams.set(key, val);
+                if (key === 'site_id') {
+                    if (Array.isArray(val)) val.forEach(function(v) { appParams.append('site_id', v); });
+                    else appParams.set('site_id', val);
+                }
             }
         });
 
@@ -1098,6 +1120,13 @@
                         neighborIds.add(iface.connected_to.device_id);
                     }
                 }
+                // Pull in any intermediate devices on the cable trace
+                // (typically patch panels) so the real cables to/from them
+                // can be drawn — without this, a far-end server appears
+                // floating with no connection.
+                (iface.path_device_ids || []).forEach(function(devId) {
+                    if (!canvasIds.has(devId)) neighborIds.add(devId);
+                });
             });
 
             if (neighborIds.size === 0) {
@@ -1187,7 +1216,11 @@
         });
     }
 
-    // Pass-through collapse toggle
+    // Pass-through collapse toggle (#66)
+    // Detect patch panels by presence of front↔rear port pairs (from the
+    // backend's passthrough_pairs) rather than by a role-slug substring,
+    // and chain edges through them following the real port mapping —
+    // including chains of multiple patch panels in series.
     var collapsePP = document.getElementById('topo-collapse-pp');
     if (collapsePP) {
         collapsePP.addEventListener('click', function() {
@@ -1197,68 +1230,157 @@
                 // Save ALL positions before doing anything (including PPs)
                 state._allPositionsBeforePP = getCurrentPositions();
 
-                // Find patch panel nodes
+                // Find passthrough devices (any device with a non-empty
+                // passthrough_pairs list — works regardless of role name).
                 var ppNodes = new Set();
+                var ppPairs = {};  // ppId -> { portId -> mateePortId }
+                // Map portId → speed so we can color virtual passthrough
+                // edges by the real endpoint port speeds.
+                var portSpeed = {};
                 state.nodes.forEach(function(n) {
-                    if (n.role_slug && n.role_slug.indexOf('patch-panel') !== -1) {
+                    if (n.passthrough_pairs && n.passthrough_pairs.length) {
                         ppNodes.add(n.id);
+                        var map = {};
+                        n.passthrough_pairs.forEach(function(p) {
+                            map[p.front] = p.rear;
+                            map[p.rear]  = p.front;
+                        });
+                        ppPairs[n.id] = map;
                     }
+                    (n.ports || []).forEach(function(p) {
+                        if (p.speed) portSpeed[p.id] = p.speed;
+                    });
                 });
 
                 if (ppNodes.size === 0) return;
 
-                // Collect edges to/from patch panels
-                var ppEdges = [];
-                var normalEdges = [];
+                // Index edges by (deviceId, portId) so we can look up the next
+                // hop after we cross a patch panel pair.
+                function endpointId(e, side) {
+                    var v = e[side];
+                    return typeof v === 'object' ? v.id : v;
+                }
+                var edgeByEndpoint = {};  // 'deviceId|portId' -> edge
                 state.edges.forEach(function(e) {
-                    var s = typeof e.source === 'object' ? e.source.id : e.source;
-                    var t = typeof e.target === 'object' ? e.target.id : e.target;
-                    if (ppNodes.has(s) || ppNodes.has(t)) ppEdges.push(e);
-                    else normalEdges.push(e);
+                    edgeByEndpoint[endpointId(e, 'source') + '|' + e.source_port] = e;
+                    edgeByEndpoint[endpointId(e, 'target') + '|' + e.target_port] = e;
                 });
 
-                // Group PP edges by patch panel
-                var ppGroups = {};
-                ppEdges.forEach(function(e) {
-                    var s = typeof e.source === 'object' ? e.source.id : e.source;
-                    var t = typeof e.target === 'object' ? e.target.id : e.target;
-                    var ppId = ppNodes.has(s) ? s : t;
-                    var otherDevId = ppNodes.has(s) ? t : s;
-                    var otherPort = ppNodes.has(s) ? e.target_port : e.source_port;
-                    var otherPortName = ppNodes.has(s) ? e.target_port_name : e.source_port_name;
-                    if (!ppGroups[ppId]) ppGroups[ppId] = [];
-                    ppGroups[ppId].push({
-                        deviceId: otherDevId,
-                        portId: otherPort,
-                        portName: otherPortName,
-                    });
-                });
-
-                // Create virtual edges
-                var virtualEdges = [];
-                Object.keys(ppGroups).forEach(function(ppId) {
-                    var connections = ppGroups[ppId];
-                    var ppName = '';
-                    state.nodes.forEach(function(n) { if (n.id === ppId) ppName = n.name; });
-                    for (var i = 0; i < connections.length - 1; i += 2) {
-                        var a = connections[i], b = connections[i + 1];
-                        virtualEdges.push({
-                            id: 'virtual-' + ppId + '-' + i,
-                            source: a.deviceId, target: b.deviceId,
-                            source_port: a.portId, target_port: b.portId,
-                            source_port_name: a.portName, target_port_name: b.portName,
-                            cable_id: 'PP', cable_label: 'Through ' + ppName,
-                            cable_type: 'Pass-through', cable_type_value: '',
-                            color: '#9e9e9e', status: 'Connected', status_value: 'connected',
-                            length: '', length_unit: '', url: '', _virtual: true,
-                        });
+                // Walk the chain starting from an edge end that lands on a PP.
+                // Returns { devId, portId, portName } of the first non-PP
+                // endpoint reached, plus the list of PP hops visited.
+                function walkOut(startDevId, startPortId, startPortName, visited) {
+                    visited = visited || new Set();
+                    if (!ppNodes.has(startDevId)) {
+                        return { devId: startDevId, portId: startPortId, portName: startPortName, hops: [] };
                     }
+                    var hops = [];
+                    var devId = startDevId, portId = startPortId, portName = startPortName;
+                    while (ppNodes.has(devId)) {
+                        var pairMap = ppPairs[devId];
+                        var matePortId = pairMap && pairMap[portId];
+                        if (!matePortId) return null;  // unpaired port — abort
+                        hops.push(devId);
+                        var key = devId + '|' + matePortId;
+                        if (visited.has(key)) return null;  // cycle
+                        visited.add(key);
+                        var nextEdge = edgeByEndpoint[key];
+                        if (!nextEdge) return null;  // dangling
+                        var srcDev = endpointId(nextEdge, 'source');
+                        if (srcDev === devId && nextEdge.source_port === matePortId) {
+                            devId = endpointId(nextEdge, 'target');
+                            portId = nextEdge.target_port;
+                            portName = nextEdge.target_port_name;
+                        } else {
+                            devId = endpointId(nextEdge, 'source');
+                            portId = nextEdge.source_port;
+                            portName = nextEdge.source_port_name;
+                        }
+                    }
+                    return { devId: devId, portId: portId, portName: portName, hops: hops };
+                }
+
+                // Walk every edge that touches a PP, building virtual edges
+                // between the two real (non-PP) endpoints. Track which
+                // physical edges have been "consumed" so we don't emit
+                // duplicates for the partner edge.
+                var consumed = new Set();
+                var virtualEdges = [];
+                var normalEdges = [];
+
+                state.edges.forEach(function(e) {
+                    var s = endpointId(e, 'source'), t = endpointId(e, 'target');
+                    var srcIsPP = ppNodes.has(s), tgtIsPP = ppNodes.has(t);
+                    if (!srcIsPP && !tgtIsPP) {
+                        normalEdges.push(e);
+                        return;
+                    }
+                    if (consumed.has(e.id)) return;
+                    consumed.add(e.id);
+
+                    // Walk outward from each end. If the end is already a real
+                    // device, walkOut just echoes it.
+                    var leftStart  = srcIsPP ? { dev: t, port: e.target_port, name: e.target_port_name }
+                                              : { dev: s, port: e.source_port, name: e.source_port_name };
+                    var rightStart = srcIsPP ? { dev: s, port: e.source_port, name: e.source_port_name }
+                                              : { dev: t, port: e.target_port, name: e.target_port_name };
+                    var visited = new Set();
+                    var left  = walkOut(leftStart.dev,  leftStart.port,  leftStart.name,  visited);
+                    var right = walkOut(rightStart.dev, rightStart.port, rightStart.name, visited);
+                    if (!left || !right) return;
+
+                    // Mark every cable touched by the walk as consumed.
+                    left.hops.concat(right.hops).forEach(function(hopDev) {
+                        // (already marked above via visited set on portIds; nothing else needed)
+                    });
+                    // Also mark the partner edge on the right side
+                    var rightKey = right.devId + '|' + right.portId;
+                    var partner = edgeByEndpoint[rightKey];
+                    if (partner) consumed.add(partner.id);
+
+                    var hopNames = left.hops.concat(right.hops).map(function(id) {
+                        var nm = '';
+                        state.nodes.forEach(function(n) { if (n.id === id) nm = n.name; });
+                        return nm;
+                    }).filter(Boolean);
+
+                    // Color the synthetic edge by the real endpoint port speeds.
+                    // Both ends match → speed color. Mismatch → orange warning.
+                    // Unknown → fall back to grey.
+                    var lSpeed = portSpeed[left.portId];
+                    var rSpeed = portSpeed[right.portId];
+                    var vColor = '#9e9e9e';
+                    var vLabel = 'Through ' + hopNames.join(' → ');
+                    if (lSpeed && rSpeed) {
+                        if (lSpeed === rSpeed) {
+                            vColor = (App && App.speedColor) ? App.speedColor(lSpeed) : '#9e9e9e';
+                        } else {
+                            vColor = '#f39c12';  // bottleneck / mismatch
+                            vLabel += '  ⚠ speed mismatch';
+                        }
+                    }
+                    virtualEdges.push({
+                        id: 'virtual-' + e.id,
+                        source: left.devId, target: right.devId,
+                        source_port: left.portId, target_port: right.portId,
+                        source_port_name: left.portName, target_port_name: right.portName,
+                        source_port_speed: lSpeed || null,
+                        target_port_speed: rSpeed || null,
+                        cable_id: 'PP', cable_label: vLabel,
+                        cable_type: 'Pass-through', cable_type_value: '',
+                        color: vColor, status: 'Connected', status_value: 'connected',
+                        length: '', length_unit: '', url: '', _virtual: true,
+                    });
                 });
 
                 state._origNodes = state.nodes;
                 state._origEdges = state.edges;
                 var filteredNodes = state.nodes.filter(function(n) { return !ppNodes.has(n.id); });
                 var mergedEdges = normalEdges.concat(virtualEdges);
+                // Keep state.nodes/edges in sync so downstream readers see the
+                // collapsed view (sidebar device list, filter counts, etc.).
+                state.nodes = filteredNodes;
+                state.edges = mergedEdges;
 
                 // Use the saved positions (non-PP nodes keep their spots)
                 state.savedLayout = state._allPositionsBeforePP;
@@ -1290,6 +1412,17 @@
                     delete state._allPositionsBeforePP;
                 }
             }
+        });
+    }
+
+    // #61 — Hide ports whose remote end isn't currently visible. Pure
+    // renderer-side filter, so we just flip the state flag and re-render.
+    var hideUnconnected = document.getElementById('topo-hide-unconnected-ports');
+    if (hideUnconnected) {
+        hideUnconnected.addEventListener('click', function() {
+            state.hideUnconnectedPorts = this.classList.toggle('active');
+            state.savedLayout = getCurrentPositions();
+            renderer.render(state.nodes, state.edges, true);
         });
     }
 

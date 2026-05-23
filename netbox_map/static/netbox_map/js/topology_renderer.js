@@ -285,6 +285,28 @@
         });
         var edgeData = edges.map(function(e) { return Object.assign({}, e); });
 
+        // #61 — Hide ports whose other end isn't in the current view.
+        // Build a port_id → endpoint device map first, then a set of visible
+        // device ids; any port whose remote endpoint isn't visible gets
+        // filtered from its card BEFORE card heights are computed, so the
+        // cards naturally shrink to fit.
+        if (self.state.hideUnconnectedPorts) {
+            var _portTargetDev = {};
+            edgeData.forEach(function(e) {
+                var es = typeof e.source === 'object' ? e.source.id : e.source;
+                var et = typeof e.target === 'object' ? e.target.id : e.target;
+                if (e.source_port) _portTargetDev[e.source_port] = et;
+                if (e.target_port) _portTargetDev[e.target_port] = es;
+            });
+            var _visibleDevIds = new Set(nodeData.map(function(n) { return n.id; }));
+            nodeData.forEach(function(nd) {
+                if (nd.node_type === 'application') return;  // apps are filtered differently
+                nd.ports = (nd.ports || []).filter(function(p) {
+                    return _visibleDevIds.has(_portTargetDev[p.id]);
+                });
+            });
+        }
+
         // Compute card heights
         nodeData.forEach(function(nd) {
             if (nd.node_type === 'application') {

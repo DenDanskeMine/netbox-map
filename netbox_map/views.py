@@ -46,18 +46,21 @@ class TopologyView(LoginRequiredMixin, View):
         filter_form = forms.TopologyFilterForm(data=request.GET or None)
 
         initial_filters = {}
-        for key in ('site_id', 'tenant_id', 'location_id', 'rack_id', 'cable_type', 'device_ids',
+        for key in ('tenant_id', 'location_id', 'rack_id', 'cable_type', 'device_ids',
                     'include_sub_locations', 'include_sub_roles'):
             val = request.GET.get(key)
             if val:
                 initial_filters[key] = val
-        # role_id and tag support multiple values
+        # role_id, tag and (since #53) site_id support multiple values
         role_ids = request.GET.getlist('role_id')
         if role_ids:
             initial_filters['role_id'] = role_ids
         tag_slugs = request.GET.getlist('tag')
         if tag_slugs:
             initial_filters['tag'] = tag_slugs
+        site_ids = request.GET.getlist('site_id')
+        if site_ids:
+            initial_filters['site_id'] = site_ids
 
         # App topology params
         topology_mode = request.GET.get('mode', '')
@@ -183,7 +186,16 @@ class TopologyDataView(LoginRequiredMixin, View):
             RearPort,
         )
 
-        site_id = request.GET.get('site_id')
+        # #53 — multi-site selection. Accept repeated ?site_id=… and the
+        # comma-separated form; fall back to a single ?site_id=… for
+        # backwards compatibility with saved views and the legacy form.
+        raw_sites = request.GET.getlist('site_id')
+        site_ids = []
+        for entry in raw_sites:
+            for piece in entry.split(','):
+                piece = piece.strip()
+                if piece.isdigit():
+                    site_ids.append(int(piece))
         tenant_id = request.GET.get('tenant_id')
         location_id = request.GET.get('location_id')
         rack_id = request.GET.get('rack_id')
@@ -220,8 +232,8 @@ class TopologyDataView(LoginRequiredMixin, View):
             ids = [int(x) for x in device_ids_param.split(',') if x.strip().isdigit()]
             devices = devices.filter(pk__in=ids)
         else:
-            if site_id:
-                devices = devices.filter(site_id=site_id)
+            if site_ids:
+                devices = devices.filter(site_id__in=site_ids)
             if tenant_id:
                 devices = devices.filter(tenant_id=tenant_id)
             if location_id:
@@ -259,7 +271,7 @@ class TopologyDataView(LoginRequiredMixin, View):
                 devices = devices.filter(tags__slug__in=tag_slugs).distinct()
 
             # Require at least one filter when not using device_ids
-            if not any([site_id, tenant_id, location_id, rack_id, role_ids, tag_slugs]):
+            if not any([site_ids, tenant_id, location_id, rack_id, role_ids, tag_slugs]):
                 return JsonResponse({'nodes': [], 'edges': [], 'stats': {'node_count': 0, 'edge_count': 0}})
 
         device_map = {}
@@ -293,6 +305,10 @@ class TopologyDataView(LoginRequiredMixin, View):
                 'url': device.get_absolute_url(),
                 'interface_count': 0,
                 'ports': [],
+                # #66 — front↔rear port pairs for accurate "Hide patch panels".
+                # Populated below; any device with non-empty list is treated as
+                # a passthrough device regardless of its DeviceRole slug.
+                'passthrough_pairs': [],
                 'virtual_chassis': device.virtual_chassis.name if device.virtual_chassis else None,
             }
             device_map[device.pk] = node
@@ -383,6 +399,34 @@ class TopologyDataView(LoginRequiredMixin, View):
                 dev_id = port_id_map[key]
                 if dev_id in device_map:
                     device_map[dev_id]['ports'].append(info)
+
+        # #66 — Populate passthrough_pairs (front↔rear port mapping) so the
+        # frontend can chain edges through real patch panels without relying
+        # on a fragile role-slug check. NetBox 4.6+ uses PortMapping;
+        # older versions stored the mapping directly on FrontPort.
+        try:
+            from dcim.models import PortMapping
+            mappings = PortMapping.objects.filter(device_id__in=device_ids).values(
+                'device_id', 'front_port_id', 'rear_port_id',
+            )
+            for m in mappings:
+                dev_id = m['device_id']
+                if dev_id in device_map:
+                    device_map[dev_id]['passthrough_pairs'].append({
+                        'front': f"fp-{m['front_port_id']}",
+                        'rear': f"rp-{m['rear_port_id']}",
+                    })
+        except ImportError:
+            # NetBox < 4.6 — read pairs from FrontPort.rear_port directly
+            for fp in FrontPort.objects.filter(device_id__in=device_ids).values(
+                'device_id', 'id', 'rear_port_id',
+            ):
+                dev_id = fp['device_id']
+                if dev_id in device_map and fp['rear_port_id']:
+                    device_map[dev_id]['passthrough_pairs'].append({
+                        'front': f"fp-{fp['id']}",
+                        'rear': f"rp-{fp['rear_port_id']}",
+                    })
 
         # Interface counts
         iface_counts = Interface.objects.filter(
@@ -714,6 +758,13 @@ class TopologyDeviceDetailView(LoginRequiredMixin, View):
 
                 # Find remote end via trace(), fall back to CableTermination
                 connected = None
+                # #66/#66bis — also collect intermediate devices along the
+                # trace (e.g. patch panels). Without these, "Add connected
+                # devices" on a switch whose cables run through a patch
+                # panel pulls the far-end servers onto the canvas but skips
+                # the PP, which means the topology view can't draw any
+                # cable to them (the real cable terminates at the PP).
+                path_device_ids = []
                 try:
                     trace = iface.trace()
                     if trace:
@@ -728,6 +779,14 @@ class TopologyDeviceDetailView(LoginRequiredMixin, View):
                                     'port': far_obj.name,
                                     'port_type': type(far_obj).__name__,
                                 }
+                        # Collect every distinct device along the trace
+                        # except the source device itself.
+                        for near_terms, _cable, far_terms_h in trace:
+                            for hop_terms in (near_terms, far_terms_h):
+                                for t in hop_terms or []:
+                                    dev = getattr(t, 'device', None)
+                                    if dev and dev.pk != device.pk and dev.pk not in path_device_ids:
+                                        path_device_ids.append(dev.pk)
                 except Exception:
                     pass
 
@@ -754,6 +813,10 @@ class TopologyDeviceDetailView(LoginRequiredMixin, View):
                         pass
 
                 iface_data['connected_to'] = connected
+                # Devices on the cable path between this interface and the
+                # far endpoint — used by the "add connected devices" action
+                # so intermediate patch panels are pulled in too.
+                iface_data['path_device_ids'] = path_device_ids
             result.append(iface_data)
 
         ports = []
@@ -811,6 +874,9 @@ class CustomMarkerTypeView(generic.ObjectView):
 class CustomMarkerTypeEditView(generic.ObjectEditView):
     queryset = CustomMarkerType.objects.all()
     form = forms.CustomMarkerTypeForm
+    # #63 — custom template that loads the icon-picker JS/CSS (generic
+    # object_edit.html doesn't emit form.media on its own).
+    template_name = 'netbox_map/custommarkertype_edit.html'
 
 
 @register_model_view(CustomMarkerType, 'delete')
@@ -854,13 +920,30 @@ class SiteMapView(LoginRequiredMixin, View):
         # Apply filters from GET params (status, region, cf_* custom fields, etc.)
         filter_params = request.GET.copy()
         filter_params.pop('q', None)  # q is used for lat/lng focus — don't pass to filterset
-        site_filterset = SiteFilterSet(data=filter_params or None, queryset=base_qs)
-        all_sites = site_filterset.qs
 
-        # Device role filter — not in SiteFilterSet, applied separately
-        device_role_ids = request.GET.getlist('device_role_id')
-        if device_role_ids:
-            all_sites = all_sites.filter(devices__role__id__in=device_role_ids).distinct()
+        # #65 — Site Map load-empty mode. When enabled and the user hasn't
+        # applied any narrowing filter, render zero sites so the browser
+        # doesn't try to draw thousands of markers up-front. Real filters
+        # bypass this short-circuit and behave normally.
+        load_empty = MapSettings.load().site_map_load_empty
+        narrowing_filter_keys = (
+            'status', 'region_id', 'group_id', 'tenant_id',
+            'device_role_id', 'tag', 'cf_',  # cf_* matches any custom field
+        )
+        has_narrowing_filter = any(
+            k == nk or k.startswith(nk) if nk.endswith('_') else k == nk
+            for k in filter_params for nk in narrowing_filter_keys
+        )
+        if load_empty and not has_narrowing_filter:
+            all_sites = base_qs.none()
+        else:
+            site_filterset = SiteFilterSet(data=filter_params or None, queryset=base_qs)
+            all_sites = site_filterset.qs
+
+            # Device role filter — not in SiteFilterSet, applied separately
+            device_role_ids = request.GET.getlist('device_role_id')
+            if device_role_ids:
+                all_sites = all_sites.filter(devices__role__id__in=device_role_ids).distinct()
 
         filter_form = forms.SiteMapFilterForm(data=request.GET or None)
 
@@ -1047,9 +1130,16 @@ class SiteMapView(LoginRequiredMixin, View):
                 except (ValueError, IndexError):
                     pass
 
+        # #63 — flag hidden types for the site map sidebar chip tray
+        # (uses the Site Map-specific list, not the Floor Plan one)
+        sm_hidden = set(MapSettings.load().hidden_tile_types_sitemap or [])
         type_configs = get_all_type_configs()
+        for tc in type_configs:
+            tc['hidden'] = tc['slug'] in sm_hidden
+        sm_hidden_count = sum(1 for tc in type_configs if tc['hidden'])
 
         return render(request, 'netbox_map/site_map.html', {
+            'hidden_tile_type_count': sm_hidden_count,
             'placed_sites_json': json.dumps(placed_sites),
             'unplaced_sites_json': json.dumps(unplaced_sites),
             'locations_json': json.dumps(locations_data),
@@ -1181,6 +1271,10 @@ class FloorPlanView(generic.ObjectView):
 class FloorPlanEditView(generic.ObjectEditView):
     queryset = FloorPlan.objects.all()
     form = forms.FloorPlanForm
+    # #52 — custom template that adds the grid-autosuggest JS. NetBox's
+    # generic object_edit.html doesn't emit {{ form.media }}, so the form's
+    # Media class can't pull in our script on its own.
+    template_name = 'netbox_map/floorplan_edit.html'
 
 
 @register_model_view(FloorPlan, 'delete')
@@ -1233,7 +1327,13 @@ class FloorPlanVisualizationView(generic.ObjectView):
         popover_config = {'default': settings.popover_fields}
         popover_config.update(settings.tile_popover_config or {})
 
+        # #63 — type_configs flag hidden types. The editor template hides
+        # the chip for any type with `hidden: True` but the renderer still
+        # draws existing tiles of those types normally.
+        hidden = set(settings.hidden_tile_types or [])
         type_configs = get_all_type_configs()
+        for tc in type_configs:
+            tc['hidden'] = tc['slug'] in hidden
 
         return {
             'tile_data_json': json.dumps(tile_data),
@@ -1246,6 +1346,7 @@ class FloorPlanVisualizationView(generic.ObjectView):
             'popover_fields_json': json.dumps(popover_config),
             'type_configs': type_configs,
             'type_configs_json': json.dumps(type_configs),
+            'hidden_tile_type_count': len(hidden),
         }
 
 
@@ -2927,9 +3028,11 @@ class MapSettingsView(LoginRequiredMixin, PermissionRequiredMixin, View):
         ]
 
     def _get_context(self, form):
+        from . import MapConfig  # PluginConfig holds version + metadata
         return {
             'form': form,
             'tile_popover_types': self._build_tile_popover_types(),
+            'plugin_version': MapConfig.version,
         }
 
     def get(self, request):
