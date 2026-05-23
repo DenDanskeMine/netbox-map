@@ -96,7 +96,10 @@ class CustomMarkerType(NetBoxModel):
         max_length=10,
         choices=ICON_FG_CHOICES,
         default=ICON_FG_AUTO,
-        help_text=_('Icon color on top of the background. "Auto" picks light or dark based on the background brightness.'),
+        help_text=_(
+            'Icon color on top of the background. "Auto" picks light or '
+            'dark based on the background brightness.'
+        ),
     )
     description = models.CharField(
         verbose_name=_('description'),
@@ -114,7 +117,9 @@ class CustomMarkerType(NetBoxModel):
         if len(c) != 6:
             return self.ICON_FG_LIGHT
         try:
-            r = int(c[0:2], 16); g = int(c[2:4], 16); b = int(c[4:6], 16)
+            r = int(c[0:2], 16)
+            g = int(c[2:4], 16)
+            b = int(c[4:6], 16)
         except ValueError:
             return self.ICON_FG_LIGHT
         # Standard relative luminance — anything <128 is "dark" enough to
@@ -771,7 +776,11 @@ class MapSettings(models.Model):
     site_map_load_empty = models.BooleanField(
         default=False,
         verbose_name=_('Site Map — Load Empty'),
-        help_text=_('Start the Site Map with no markers. Sites only appear once a region/group/tenant/tag filter is applied. Recommended for instances with thousands of sites.'),
+        help_text=_(
+            'Start the Site Map with no markers. Sites only appear once a '
+            'region/group/tenant/tag filter is applied. Recommended for '
+            'instances with thousands of sites.'
+        ),
     )
 
     # #63 — Tile type slugs hidden from the floor-plan editor toolbar.
@@ -785,7 +794,11 @@ class MapSettings(models.Model):
         default=list,
         blank=True,
         verbose_name=_('Hidden Tile Types (Floor Plan)'),
-        help_text=_('Tile-type slugs hidden from the floor-plan editor toolbar. Existing tiles of these types still render normally — only the editor chip is hidden.'),
+        help_text=_(
+            'Tile-type slugs hidden from the floor-plan editor toolbar. '
+            'Existing tiles of these types still render normally — '
+            'only the editor chip is hidden.'
+        ),
     )
     # #63 — separate visibility list for the Site Map create-chip tray, so
     # admins can show fiber/marker types on the Site Map but not on individual
@@ -795,7 +808,10 @@ class MapSettings(models.Model):
         default=list,
         blank=True,
         verbose_name=_('Hidden Tile Types (Site Map)'),
-        help_text=_('Tile-type slugs hidden from the Site Map create-chip tray. Existing markers of these types still render normally.'),
+        help_text=_(
+            'Tile-type slugs hidden from the Site Map create-chip tray. '
+            'Existing markers of these types still render normally.'
+        ),
     )
 
     class Meta:

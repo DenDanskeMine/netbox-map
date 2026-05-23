@@ -11,15 +11,15 @@ from . import models, views
 # Map: (model_name, url_prefix) — url_prefix matches the kebab-cased path
 # used elsewhere in this file.
 _plugin_extensible_models = (
-    ('floorplan',             'floorplans'),
-    ('floorplantile',         'floorplan-tiles'),
-    ('mapmarker',             'map-markers'),
-    ('custommarkertype',      'custom-marker-types'),
-    ('cablepath',             'cable-paths'),
-    ('topologysavedview',     'topology-saved-views'),
-    ('applicationgroup',      'application-groups'),
-    ('applicationtemplate',   'application-templates'),
-    ('application',           'applications'),
+    ('floorplan', 'floorplans'),
+    ('floorplantile', 'floorplan-tiles'),
+    ('mapmarker', 'map-markers'),
+    ('custommarkertype', 'custom-marker-types'),
+    ('cablepath', 'cable-paths'),
+    ('topologysavedview', 'topology-saved-views'),
+    ('applicationgroup', 'application-groups'),
+    ('applicationtemplate', 'application-templates'),
+    ('application', 'applications'),
     ('applicationdeployment', 'application-deployments'),
     ('applicationdependency', 'application-dependencies'),
 )

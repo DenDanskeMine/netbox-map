@@ -93,7 +93,10 @@ class FloorPlanForm(NetBoxModelForm):
     autofill_grid = forms.BooleanField(
         required=False,
         label=_('Auto-fill grid from background'),
-        help_text=_('When checked, picking a new background image (or PDF) auto-fills the grid width/height based on the image dimensions and tile size.'),
+        help_text=_(
+            'When checked, picking a new background image (or PDF) auto-fills '
+            'the grid width/height based on the image dimensions and tile size.'
+        ),
     )
 
     fieldsets = (
@@ -1133,19 +1136,26 @@ class MapSettingsForm(forms.ModelForm):
     # toolbar. The model field stores the inverse (hidden list) so adding
     # new types in future plugin versions keeps them visible by default.
     # `form-check-input` is the Bootstrap class NetBox uses for checkboxes.
+    _cbm_attrs = {'class': 'form-check-input'}
     visible_tile_types = forms.MultipleChoiceField(
         choices=(),  # populated dynamically in __init__
-        widget=forms.CheckboxSelectMultiple(attrs={'class': 'form-check-input'}),
+        widget=forms.CheckboxSelectMultiple(attrs=_cbm_attrs),
         required=False,
         label=_('Active Tile Types — Floor Plan'),
-        help_text=_('Ticked types appear in the floor-plan editor toolbar. Existing tiles of unticked types still render normally.'),
+        help_text=_(
+            'Ticked types appear in the floor-plan editor toolbar. '
+            'Existing tiles of unticked types still render normally.'
+        ),
     )
     visible_tile_types_sitemap = forms.MultipleChoiceField(
         choices=(),  # populated dynamically in __init__
-        widget=forms.CheckboxSelectMultiple(attrs={'class': 'form-check-input'}),
+        widget=forms.CheckboxSelectMultiple(attrs=_cbm_attrs),
         required=False,
         label=_('Active Tile Types — Site Map'),
-        help_text=_('Ticked types appear in the Site Map create-chip tray. Existing markers of unticked types still render normally.'),
+        help_text=_(
+            'Ticked types appear in the Site Map create-chip tray. '
+            'Existing markers of unticked types still render normally.'
+        ),
     )
 
     class Meta:
