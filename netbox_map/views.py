@@ -127,6 +127,48 @@ class TopologySavedViewDeleteView(generic.ObjectDeleteView):
     queryset = TopologySavedView.objects.all()
 
 
+class PdfDimensionsView(LoginRequiredMixin, View):
+    """#67 — return the natural pixel dimensions of an uploaded PDF's first
+    page (treating 1pt = 1px, i.e. 72 DPI) so the FloorPlan grid
+    auto-suggest works for PDFs the same way it does for raster images.
+
+    Browser-side rendering via PDF.js handles the actual high-resolution
+    drawing; this endpoint is purely a metadata lookup so we can divide
+    natural width by tile_size to suggest grid_width.
+
+    Accepts POST multipart with a `file` field. Returns JSON:
+        {"width": <px>, "height": <px>, "pages": <count>}
+    """
+
+    def post(self, request):
+        f = request.FILES.get('file')
+        if not f:
+            return JsonResponse({'error': 'No file uploaded'}, status=400)
+        # pypdfium2 is the lightest way to read PDF metadata. It's already a
+        # dependency for the floor-plan PDF rendering feature.
+        try:
+            import pypdfium2 as pdfium
+        except ImportError:
+            return JsonResponse({'error': 'pypdfium2 not installed'}, status=500)
+        try:
+            pdf = pdfium.PdfDocument(f.read())
+        except pdfium.PdfiumError as exc:
+            return JsonResponse({'error': f'Could not read PDF: {exc}'}, status=400)
+        if len(pdf) == 0:
+            pdf.close()
+            return JsonResponse({'error': 'PDF has no pages'}, status=400)
+        page = pdf[0]
+        size = page.get_size()  # (width_pt, height_pt) in PDF points = pixels at 72 DPI
+        page.close()
+        page_count = len(pdf)
+        pdf.close()
+        return JsonResponse({
+            'width': int(round(size[0])),
+            'height': int(round(size[1])),
+            'pages': page_count,
+        })
+
+
 class TopologySaveLayoutView(LoginRequiredMixin, View):
     """AJAX endpoint to save/create topology layout."""
 

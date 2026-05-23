@@ -87,6 +87,15 @@ class FloorPlanForm(NetBoxModelForm):
     )
     comments = CommentField()
 
+    # #52 / #67 — opt-in checkbox for the JS auto-suggest. Default ON for
+    # new plans (you usually want the suggestion) and OFF when editing an
+    # existing plan (so you don't accidentally overwrite a custom grid).
+    autofill_grid = forms.BooleanField(
+        required=False,
+        label=_('Auto-fill grid from background'),
+        help_text=_('When checked, picking a new background image (or PDF) auto-fills the grid width/height based on the image dimensions and tile size.'),
+    )
+
     fieldsets = (
         FieldSet(
             'site', 'location', 'name', 'description', 'tags',
@@ -97,7 +106,7 @@ class FloorPlanForm(NetBoxModelForm):
             name=_('Grid Configuration')
         ),
         FieldSet(
-            'background_image',
+            'background_image', 'autofill_grid',
             name=_('Background')
         ),
     )
@@ -113,6 +122,40 @@ class FloorPlanForm(NetBoxModelForm):
             'site', 'location', 'name', 'grid_width', 'grid_height',
             'tile_size', 'background_image', 'description', 'comments', 'tags',
         ]
+
+    # Allowed background_image content types — raster images plus PDF.
+    # PDF is intercepted and rasterized in clean_background_image() before
+    # the file ever hits storage, so everything downstream still sees a PNG.
+    _ALLOWED_IMAGE_EXTS = {'.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.tif', '.tiff'}
+    _ALLOWED_EXTS = _ALLOWED_IMAGE_EXTS | {'.pdf'}
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Default autofill_grid: ON for new plans, OFF when editing
+        if self.instance and not self.instance.pk:
+            self.fields['autofill_grid'].initial = True
+
+    def clean_background_image(self):
+        """Accept image OR PDF — store both as-is.
+
+        PDFs are rendered to canvas in the browser via PDF.js at the user's
+        current zoom level, which keeps them sharp at any scale instead of
+        the blurry rasterized PNG approach we used before. Server-side we
+        only validate the file extension; the actual file bytes go straight
+        to FileStorage.
+        """
+        f = self.cleaned_data.get('background_image')
+        if not f or not hasattr(f, 'name'):
+            return f
+        import os
+        ext = os.path.splitext(f.name)[1].lower()
+        if ext not in self._ALLOWED_EXTS:
+            raise forms.ValidationError(
+                _('Unsupported file type. Allowed: %(exts)s.') % {
+                    'exts': ', '.join(sorted(self._ALLOWED_EXTS)),
+                }
+            )
+        return f
 
 
 class FloorPlanFilterForm(NetBoxModelFilterSetForm):

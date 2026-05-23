@@ -19,6 +19,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - New **icon picker** for Custom Marker Types: searches the entire MDI catalog (~7000+ icons, parsed from the loaded stylesheet at runtime — zero new bytes shipped) with a live preview chip and a curated quick-pick set.
   - New **icon color** option on Custom Marker Types: `Auto` (default — picks light/dark based on background luma), `Light (white)`, or `Dark (black)`. Affects Site Map markers, Floor Plan tiles, drag ghosts, and chip trays.
 - **About tab in Map Settings** — version, author, license, source/docs/issues links, and a NetBox + Python compatibility matrix.
+- **PDF backgrounds on Floor Plans (#67)** — `FloorPlan.background_image` now accepts PDF uploads alongside PNG / JPEG / GIF / WEBP. PDFs are stored as-is and rendered to canvas in the browser via **PDF.js** at 3x the world resolution, so they stay crisp when you zoom in — none of the blurriness you get with a pre-rasterized PNG. The PDF.js bundle (~1.7MB) is loaded lazily, so plans with raster backgrounds pay nothing for the feature. New server dependency: `pypdfium2>=4.0` (Apache-2.0 + BSD, prebuilt pure-Python wheels, no system packages required) — used only for the grid auto-suggest endpoint that reads PDF page dimensions.
 - **Hide patch panels: speed-aware coloring** — virtual passthrough edges now use the real endpoint port speed colors. When both ends match speed → the speed color; when they differ → an orange "speed mismatch" warning color + label.
 - **Add connected devices: pull intermediate patch panels** — the right-click "Add connected devices" action now also adds devices that sit on the cable trace between the source and the far endpoint, so cables don't go missing when traces run through a patch panel.
 
@@ -40,6 +41,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `0028_mapsettings_hidden_tile_types_sitemap` (#63)
 - `0029_backfill_hidden_tile_types_sitemap` (#63) — copies existing floor-plan list to site-map list.
 - `0030_custommarkertype_icon_foreground` (#63)
+- `0031_alter_floorplan_background_image` (#67) — switches `background_image` from `ImageField` to `FileField` to allow PDFs. No data change; existing rasters keep working unchanged.
 
 [0.12.0]: https://github.com/DenDanskeMine/netbox-map/compare/v0.11.0...v0.12.0
 

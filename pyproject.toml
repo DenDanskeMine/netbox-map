@@ -18,7 +18,11 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.12",
 ]
-dependencies = []
+dependencies = [
+    # #67 — rasterize PDF background images at upload time. Pure-Python
+    # wheels available for every supported platform (Apache-2.0 + BSD).
+    "pypdfium2>=4.0",
+]
 
 [project.optional-dependencies]
 dev = ["ruff"]

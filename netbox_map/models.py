@@ -183,11 +183,17 @@ class FloorPlan(NetBoxModel):
         validators=[MinValueValidator(5), MaxValueValidator(200)],
         help_text=_('Size of each tile in pixels for rendering')
     )
-    background_image = models.ImageField(
+    # #67 — FileField (not ImageField) so PDFs can be uploaded too.
+    # PDF uploads are rasterized to PNG at form-clean time (see
+    # FloorPlanForm.clean_background_image) before they ever hit storage,
+    # so anything stored on disk is always a raster image the renderer
+    # already understands.
+    background_image = models.FileField(
         upload_to='floorplan-backgrounds/',
         blank=True,
         null=True,
-        verbose_name=_('background image')
+        verbose_name=_('background image'),
+        help_text=_('PNG, JPEG, GIF, WEBP or PDF. PDFs are rasterized at upload (page 1).'),
     )
     description = models.CharField(
         verbose_name=_('description'),

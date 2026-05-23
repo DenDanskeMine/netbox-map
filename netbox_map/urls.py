@@ -107,6 +107,14 @@ urlpatterns = (
         views.TopologySaveLayoutView.as_view(),
         name='topology_save_layout',
     ),
+    # #67 — return rasterized pixel dimensions for an uploaded PDF so the
+    # FloorPlan form's grid auto-suggest can fire for PDFs the same way it
+    # already does for raster images. Plain login auth — metadata only.
+    path(
+        'api/pdf-dimensions/',
+        views.PdfDimensionsView.as_view(),
+        name='pdf_dimensions',
+    ),
 
     # Topology Saved Views
     path(

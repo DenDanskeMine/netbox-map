@@ -482,10 +482,26 @@
         ctx.fillText(Math.round(s.zoom * 100) + '%', cw - 8, ch - 6);
     };
 
-    /** Load background image asynchronously. Calls callback when done (or immediately if none). */
+    /** Load background image asynchronously. Calls callback when done (or immediately if none).
+     *  Supports raster images via <img> AND PDFs via PDF.js (#67) — for
+     *  PDFs we render page 1 to an offscreen canvas at 3x the world
+     *  dimensions so the result stays sharp when the user zooms in.
+     *  The canvas is then used as the bgImg, which the rest of the
+     *  renderer treats identically to an Image. */
     Renderer.prototype.loadBackgroundImage = function(callback) {
         var self = this;
-        if (this.state.backgroundImageUrl) {
+        var url = this.state.backgroundImageUrl;
+        if (!url) {
+            if (callback) callback();
+            return;
+        }
+        var isPdf = /\.pdf(?:\?|#|$)/i.test(url);
+        if (isPdf) {
+            loadPdfBackground(url, function(canvas) {
+                if (canvas) self.bgImg = canvas;
+                if (callback) callback();
+            });
+        } else {
             var img = new Image();
             img.onload = function() {
                 self.bgImg = img;
@@ -495,11 +511,60 @@
                 console.warn('Failed to load background image');
                 if (callback) callback();
             };
-            img.src = this.state.backgroundImageUrl;
-        } else {
-            if (callback) callback();
+            img.src = url;
         }
     };
+
+    // #67 — Lazy-loaded PDF.js. We only fetch the (~340KB + ~1.4MB worker)
+    // bundle when the user actually has a PDF background, so plans with
+    // raster or no background pay nothing.
+    var _pdfjsPromise = null;
+    function loadPdfjs() {
+        if (_pdfjsPromise) return _pdfjsPromise;
+        _pdfjsPromise = import('/static/netbox_map/js/pdfjs/pdf.min.mjs').then(function(mod) {
+            mod.GlobalWorkerOptions.workerSrc = '/static/netbox_map/js/pdfjs/pdf.worker.min.mjs';
+            return mod;
+        });
+        return _pdfjsPromise;
+    }
+
+    function loadPdfBackground(url, callback) {
+        loadPdfjs().then(function(pdfjsLib) {
+            pdfjsLib.getDocument(url).promise.then(function(pdf) {
+                pdf.getPage(1).then(function(page) {
+                    // Render at scale=3 so the bitmap has 3x the resolution
+                    // of the world dimensions. The renderer then `scale`s
+                    // it down/up via the main canvas transform — at 1:1
+                    // zoom you see ~3x oversampled crispness; you can zoom
+                    // to ~300% before any softness appears.
+                    var SCALE = 3.0;
+                    var viewport = page.getViewport({ scale: SCALE });
+                    var canvas = document.createElement('canvas');
+                    canvas.width = Math.floor(viewport.width);
+                    canvas.height = Math.floor(viewport.height);
+                    var ctx = canvas.getContext('2d');
+                    page.render({
+                        canvasContext: ctx,
+                        viewport: viewport,
+                    }).promise.then(function() {
+                        callback(canvas);
+                    }).catch(function(err) {
+                        console.warn('PDF render failed:', err);
+                        callback(null);
+                    });
+                }).catch(function(err) {
+                    console.warn('PDF getPage(1) failed:', err);
+                    callback(null);
+                });
+            }).catch(function(err) {
+                console.warn('PDF load failed:', err);
+                callback(null);
+            });
+        }).catch(function(err) {
+            console.warn('Failed to load PDF.js:', err);
+            callback(null);
+        });
+    }
 
     App.Renderer = Renderer;
 
