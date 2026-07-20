@@ -61,8 +61,16 @@
             return -1;
         }
 
-        // Check if any role hints match
-        var hasHints = nodeData.some(function(n) { return roleHint(n.role_slug) >= 0; });
+        // Only trust role hints when they cover a meaningful share of the graph.
+        // A single incidentally-matching role (e.g. one device with role "Server"
+        // among otherwise unrelated custom role names) used to be enough to flip
+        // the *entire* graph into hint mode, even though only that one device had
+        // a real hint. Everything else fell through the unassigned-node pass below
+        // with no resolved neighbor yet and collapsed onto the same default layer,
+        // producing a single-column layout for graphs that don't actually use this
+        // hint vocabulary.
+        var hintedCount = nodeData.filter(function(n) { return roleHint(n.role_slug) >= 0; }).length;
+        var hasHints = nodeData.length > 0 && (hintedCount / nodeData.length) >= 0.15;
 
         if (hasHints) {
             // Use role hints — group by hint value, unmatched roles get assigned
@@ -97,45 +105,62 @@
             return layers;
         }
 
-        // No role hints — use pure BFS from lowest-degree nodes
-        var sorted = nodeData.slice().sort(function(a, b) {
-            return (degree[a.id] || 0) - (degree[b.id] || 0);
-        });
-
-        // BFS from the node with fewest connections
+        // No role hints — BFS from the lowest-degree node of each connected
+        // component independently, rather than once from a single global
+        // root. Real device graphs are rarely one connected mesh — they're
+        // typically several independent stars (one per switch/gateway) plus
+        // a large number of fully isolated devices (unused ports, spare
+        // equipment). A single BFS run only ever explores the one component
+        // its root belongs to; everything else used to be dumped into one
+        // shared fallback layer, collapsing the whole diagram into a single
+        // column whenever most devices weren't part of that one component.
+        // Layering each component on its own (all restarting at layer 0)
+        // keeps every component's own depth/hierarchy intact while still
+        // letting independent components share layer columns as siblings.
         var visited = {};
         var layers = {};
-        var queue = [];
 
-        // Start from lowest-degree node
-        if (sorted.length > 0) {
-            var root = sorted[0];
-            queue.push({ node: root, level: 0 });
-            visited[root.id] = true;
-        }
+        nodeData.forEach(function(seedNode) {
+            if (visited[seedNode.id]) return;
 
-        while (queue.length > 0) {
-            var item = queue.shift();
-            var lvl = item.level;
-            if (!layers[lvl]) layers[lvl] = [];
-            layers[lvl].push(item.node);
-            item.node._layer = lvl;
+            // Collect this connected component.
+            var component = [];
+            var componentVisited = {};
+            var stack = [seedNode.id];
+            componentVisited[seedNode.id] = true;
+            while (stack.length > 0) {
+                var id = stack.pop();
+                component.push(nodeIds[id]);
+                (adj[id] || []).forEach(function(nid) {
+                    if (!componentVisited[nid] && nodeIds[nid]) {
+                        componentVisited[nid] = true;
+                        stack.push(nid);
+                    }
+                });
+            }
+            component.forEach(function(n) { visited[n.id] = true; });
 
-            (adj[item.node.id] || []).forEach(function(nid) {
-                if (!visited[nid] && nodeIds[nid]) {
-                    visited[nid] = true;
-                    queue.push({ node: nodeIds[nid], level: lvl + 1 });
-                }
+            // BFS-layer this component from its own lowest-degree node.
+            var compSorted = component.slice().sort(function(a, b) {
+                return (degree[a.id] || 0) - (degree[b.id] || 0);
             });
-        }
+            var localVisited = {};
+            var queue = [{ node: compSorted[0], level: 0 }];
+            localVisited[compSorted[0].id] = true;
 
-        // Handle disconnected nodes
-        nodeData.forEach(function(n) {
-            if (!visited[n.id]) {
-                var maxLayer = Object.keys(layers).length;
-                if (!layers[maxLayer]) layers[maxLayer] = [];
-                layers[maxLayer].push(n);
-                n._layer = maxLayer;
+            while (queue.length > 0) {
+                var item = queue.shift();
+                var lvl = item.level;
+                if (!layers[lvl]) layers[lvl] = [];
+                layers[lvl].push(item.node);
+                item.node._layer = lvl;
+
+                (adj[item.node.id] || []).forEach(function(nid) {
+                    if (!localVisited[nid] && nodeIds[nid]) {
+                        localVisited[nid] = true;
+                        queue.push({ node: nodeIds[nid], level: lvl + 1 });
+                    }
+                });
             }
         });
 
