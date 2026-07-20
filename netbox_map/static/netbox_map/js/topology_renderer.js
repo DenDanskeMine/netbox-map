@@ -1785,7 +1785,31 @@
     Renderer.prototype.zoomIn = function() { this.svg.transition().duration(300).call(this.zoom.scaleBy, 1.3); };
     Renderer.prototype.zoomOut = function() { this.svg.transition().duration(300).call(this.zoom.scaleBy, 0.7); };
     Renderer.prototype.resize = function() { this._updateSize(); };
-    Renderer.prototype.switchView = function(m) { this.state.viewMode = m; this.render(this.state.nodes, this.state.edges, true); };
+    Renderer.prototype.switchView = function(m) {
+        if (this.state.viewMode === m) return;
+        this.state.viewMode = m;
+
+        // Stencil (card) view and Node (circle) view use fundamentally different
+        // layout strategies — hierarchical columns vs. a force simulation — but
+        // share the same underlying node objects for x/y. Carrying one view's
+        // positions over as the other's starting point produces nonsense: e.g.
+        // Node View's force simulation inheriting Stencil View's single-file
+        // column as its initial shape, which repulsion alone can't break out of.
+        // Clear non-pinned positions on every mode switch — same thing the
+        // "Reset Layout" button does — so each view always computes its own
+        // fresh layout instead of inheriting the other's.
+        var pinLayout = {};
+        this.state.nodes.forEach(function(n) {
+            if (n._pinned && n.x !== undefined) {
+                pinLayout[n.id] = { x: n.x, y: n.y };
+            } else {
+                delete n.x; delete n.y;
+            }
+        });
+        this.state.savedLayout = pinLayout;
+
+        this.render(this.state.nodes, this.state.edges, true);
+    };
     Renderer.prototype.switchLayout = function() { this.render(this.state.nodes, this.state.edges, true); };
     Renderer.prototype.switchCableStyle = function(style) { this.state.cableStyle = style; this.render(this.state.nodes, this.state.edges, true); };
 
