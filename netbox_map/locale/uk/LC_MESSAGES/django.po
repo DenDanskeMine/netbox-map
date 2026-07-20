@@ -1,0 +1,1763 @@
+# Ukrainian translation for netbox-map.
+msgid ""
+msgstr ""
+"Project-Id-Version: netbox-map\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-07-20 06:51+0000\n"
+"PO-Revision-Date: 2026-07-20 07:01+0000\n"
+"Last-Translator: netbox-map contributors\n"
+"Language-Team: Ukrainian\n"
+"Language: uk\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=4; plural=(n % 1 == 0 && n % 10 == 1 && n % 100 != 11 ? 0 : n % 1 == 0 && n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14) ? 1 : n % 1 == 0 && (n % 10 ==0 || (n % 10 >=5 && n % 10 <=9) || (n % 100 >=11 && n % 100 <=14 )) ? 2: 3);\n"
+
+msgid "Rack"
+msgstr "Стійка"
+
+msgid "Aisle"
+msgstr "Прохід"
+
+msgid "Wall"
+msgstr "Стіна"
+
+msgid "Column"
+msgstr "Колонка"
+
+msgid "Door"
+msgstr "Двері"
+
+msgid "Cooling"
+msgstr "Охолодження"
+
+msgid "Power"
+msgstr "Електрика"
+
+msgid "Empty"
+msgstr "Порожньо"
+
+msgid "Reserved"
+msgstr "Зарезервовано"
+
+msgid "Access Point"
+msgstr "Точка доступу"
+
+msgid "Camera"
+msgstr "Камера"
+
+msgid "Printer"
+msgstr "Принтер"
+
+msgid "Floor Plan Link"
+msgstr "Посилання на план поверху"
+
+msgid "Drop"
+msgstr "Розетка"
+
+msgid "Switch"
+msgstr "Комутатор"
+
+msgid "UPS"
+msgstr "ДБЖ"
+
+msgid "Active"
+msgstr "Активний"
+
+msgid "Planned"
+msgstr "Заплановано"
+
+msgid "Decommissioned"
+msgstr "Виведені з експлуатації"
+
+msgid "In Progress"
+msgstr "В процесі"
+
+msgid "Inactive"
+msgstr "Неактивний"
+
+msgid "Deprecated"
+msgstr "Застарілий"
+
+msgid "Low"
+msgstr "Низький"
+
+msgid "Medium"
+msgstr "Середній"
+
+msgid "High"
+msgstr "Високий"
+
+msgid "Critical"
+msgstr "Критичний"
+
+msgid "Production"
+msgstr "Продакшн"
+
+msgid "Staging"
+msgstr "Підготовка"
+
+msgid "Development"
+msgstr "Розробка"
+
+msgid "Testing"
+msgstr "Тестування"
+
+msgid "Hard"
+msgstr "Жорстка"
+
+msgid "Soft"
+msgstr "М'яка"
+
+msgid "API (HTTP/REST)"
+msgstr "API (HTTP/REST)"
+
+msgid "Database"
+msgstr "База даних"
+
+msgid "Messaging/Queue"
+msgstr "Обмін повідомленнями/Черга"
+
+msgid "gRPC"
+msgstr "gRPC"
+
+msgid "Filesystem/NFS"
+msgstr "Файлова система/NFS"
+
+msgid "Other"
+msgstr "Інше"
+
+msgid "Primary"
+msgstr "Первинний"
+
+msgid "Replica"
+msgstr "Репліка"
+
+msgid "Worker"
+msgstr "Робочий процес"
+
+msgid "Standby"
+msgstr "Резерв"
+
+msgid "Application Health"
+msgstr "Стан застосунків"
+
+msgid "Shows application health summary from the topology view"
+msgstr "Показує зведення стану застосунків з перегляду топології"
+
+msgid "Max items to show"
+msgstr "Максимальна кількість елементів для показу"
+
+msgid "Maximum number of impacted apps to display"
+msgstr "Максимальна кількість уражених застосунків для відображення"
+
+msgid "Site (ID)"
+msgstr "Тех. майданчик (ідентифікатор)"
+
+msgid "Site (slug)"
+msgstr "Тех. майданчик (скорочення)"
+
+msgid "Location (ID)"
+msgstr "Місцезнаходження (ідентифікатор)"
+
+msgid "Floor Plan (ID)"
+msgstr "План поверху (ID)"
+
+msgid "Object Type"
+msgstr "Тип об'єкта"
+
+msgid "Tile Type"
+msgstr "Тип плитки"
+
+msgid "Status"
+msgstr "Статус"
+
+msgid "Tile (ID)"
+msgstr "Плитка (ID)"
+
+msgid "Cable Type"
+msgstr "Тип кабелю"
+
+msgid "Fiber Count"
+msgstr "Кількість волокон"
+
+msgid "Start Marker (ID)"
+msgstr "Початковий маркер (ID)"
+
+msgid "End Marker (ID)"
+msgstr "Кінцевий маркер (ID)"
+
+msgid "Marker Type"
+msgstr "Тип маркера"
+
+msgid "Criticality"
+msgstr "Критичність"
+
+msgid "Environment"
+msgstr "Середовище"
+
+msgid "Tenant (ID)"
+msgstr "Орендар (ідентифікатор)"
+
+msgid "Group (ID)"
+msgstr "Група (ідентифікатор)"
+
+msgid "Application (ID)"
+msgstr "Застосунок (ID)"
+
+msgid "Role"
+msgstr "Роль"
+
+msgid "Source Application (ID)"
+msgstr "Вихідний застосунок (ID)"
+
+msgid "Target Application (ID)"
+msgstr "Цільовий застосунок (ID)"
+
+msgid "Dependency Type"
+msgstr "Тип залежності"
+
+msgid "Protocol"
+msgstr "Протокол"
+
+msgid "Site"
+msgstr "Тех. майданчик"
+
+msgid "Location"
+msgstr "Розташування"
+
+msgid "Auto-fill grid from background"
+msgstr "Автозаповнення сітки за фоновим зображенням"
+
+msgid ""
+"When checked, picking a new background image (or PDF) auto-fills the grid "
+"width/height based on the image dimensions and tile size."
+msgstr ""
+"Якщо позначено, вибір нового фонового зображення (або PDF) автоматично "
+"заповнює ширину/висоту сітки на основі розмірів зображення та розміру "
+"плитки."
+
+msgid "Floor Plan"
+msgstr "План поверху"
+
+msgid "Grid Configuration"
+msgstr "Налаштування сітки"
+
+msgid "Background"
+msgstr "Фон"
+
+#, python-format
+msgid "Unsupported file type. Allowed: %(exts)s."
+msgstr "Непідтримуваний тип файлу. Дозволено: %(exts)s."
+
+msgid "Site name"
+msgstr "Назва сайту"
+
+msgid "Location name"
+msgstr "Назва локації"
+
+msgid "Custom Marker Type"
+msgstr "Власний тип маркера"
+
+msgid ""
+"Click an icon below or type any Material Design Icons (mdi-) name. Browse "
+"the full set at https://pictogrammers.com/library/mdi/."
+msgstr ""
+"Натисніть на піктограму нижче або введіть будь-яку назву Material Design "
+"Icons (mdi-). Переглянути повний набір можна на "
+"https://pictogrammers.com/library/mdi/."
+
+msgid "Leave blank to auto-generate from name. Will be prefixed with \"custom_\"."
+msgstr ""
+"Залиште порожнім для автоматичного створення з назви. Буде додано префікс "
+"\"custom_\"."
+
+msgid "Linked Floor Plan"
+msgstr "Пов'язаний план поверху"
+
+msgid "Select the type of object to assign (Rack, Device, etc.)"
+msgstr "Виберіть тип об'єкта для призначення (стійка, пристрій тощо)"
+
+msgid "Device"
+msgstr "Пристрій"
+
+msgid "Power Panel"
+msgstr "Панель живлення"
+
+msgid "Power Feed"
+msgstr "Живлення живлення"
+
+msgid "Rear Port"
+msgstr "Порт ззаду"
+
+msgid "Front Port"
+msgstr "Передній порт"
+
+msgid "Position"
+msgstr "Позиція"
+
+msgid "Tile"
+msgstr "Плитка"
+
+msgid "Camera FOV Settings"
+msgstr "Налаштування поля зору камери"
+
+msgid "Assigned Object"
+msgstr "Призначений об'єкт"
+
+msgid "Floor plan name"
+msgstr "Назва плану поверху"
+
+msgid "Tile type (key or display name, e.g. \"ap\" or \"Access Point\")"
+msgstr "Тип плитки (ключ або відображувана назва, напр. \"ap\" або \"Access Point\")"
+
+msgid "Status (key or display name, e.g. \"active\" or \"Active\")"
+msgstr "Статус (ключ або відображувана назва, напр. \"active\" або \"Active\")"
+
+msgid "Linked floor plan name (for floorplan_link tiles)"
+msgstr "Назва пов'язаного плану поверху (для плиток floorplan_link)"
+
+msgid "Object type in app_label.model format (e.g. dcim.rack)"
+msgstr "Тип об'єкта у форматі app_label.model (напр. dcim.rack)"
+
+msgid "Primary key of the assigned object"
+msgstr "Первинний ключ призначеного об'єкта"
+
+msgid "Invalid format. Use app_label.model (e.g. dcim.rack)."
+msgstr ""
+"Неправильний формат. Використовуйте app_label.model (напр. dcim.rack)."
+
+msgid "Select the type of object to assign"
+msgstr "Виберіть тип об'єкта для призначення"
+
+msgid "Map Marker"
+msgstr "Маркер карти"
+
+msgid "Description"
+msgstr "Опис"
+
+msgid "Marker type (key or display name, e.g. \"camera\" or \"Camera\")"
+msgstr "Тип маркера (ключ або відображувана назва, напр. \"camera\" або \"Camera\")"
+
+msgid "Start Marker"
+msgstr "Початковий маркер"
+
+msgid "End Marker"
+msgstr "Кінцевий маркер"
+
+msgid "Cable Path"
+msgstr "Кабельний маршрут"
+
+msgid "Appearance"
+msgstr "Зовнішній вигляд"
+
+msgid "Connections"
+msgstr "З'єднання"
+
+msgid "Cable type (e.g. cat6a, smf-os2)"
+msgstr "Тип кабелю (напр. cat6a, smf-os2)"
+
+msgid "Start marker ID"
+msgstr "ID початкового маркера"
+
+msgid "End marker ID"
+msgstr "ID кінцевого маркера"
+
+msgid "Device Type"
+msgstr "Тип пристрою"
+
+msgid "Platform"
+msgstr "Платформа"
+
+msgid "Serial"
+msgstr "Серійний"
+
+msgid "Asset Tag"
+msgstr "Інвентарний номер"
+
+msgid "Tenant"
+msgstr "Орендар"
+
+msgid "Face"
+msgstr "Лицева сторона"
+
+msgid "Airflow"
+msgstr "Потік повітря"
+
+msgid "Primary IPv4"
+msgstr "Первинна адреса IPv4"
+
+msgid "Primary IPv6"
+msgstr "Первинна адреса IPv6"
+
+msgid "OOB IP"
+msgstr "OOB IP"
+
+msgid "Cluster"
+msgstr "Кластер"
+
+msgid "Virtual Chassis"
+msgstr "Віртуальне шасі"
+
+msgid "VC Position"
+msgstr "Позиція віртуальної шасі"
+
+msgid "Facility ID"
+msgstr "Ідентифікатор об'єкта"
+
+msgid "U Height"
+msgstr "Висота юніта(U)"
+
+msgid "Width"
+msgstr "Ширина"
+
+msgid "Type"
+msgstr "Тип"
+
+msgid "Weight"
+msgstr "Вага"
+
+msgid "Max Weight"
+msgstr "Максимальна вага"
+
+msgid "Supply"
+msgstr "Постачання"
+
+msgid "Voltage"
+msgstr "Напруга"
+
+msgid "Amperage"
+msgstr "Сила струму"
+
+msgid "Max Utilization"
+msgstr "Максимальне використання (живлення)"
+
+msgid "Label"
+msgstr "Етикетка"
+
+msgid "Object Type & Name"
+msgstr "Тип та назва об'єкта"
+
+msgid "IP Address"
+msgstr "IP-адреса"
+
+msgid "MAC Address"
+msgstr "MAC-адреса"
+
+msgid "Utilization"
+msgstr "Утилізація"
+
+msgid "Size"
+msgstr "Розмір"
+
+msgid "Orientation"
+msgstr "Орієнтація"
+
+msgid "Cable Trace (Simple)"
+msgstr "Трасування кабелю (просте)"
+
+msgid "Cable Trace (Full)"
+msgstr "Трасування кабелю (повне)"
+
+msgid "Device Fields"
+msgstr "Поля пристрою"
+
+msgid "Rack Fields"
+msgstr "Поля стійки"
+
+msgid "Power Panel Fields"
+msgstr "Поля панелі живлення"
+
+msgid "Power Feed Fields"
+msgstr "Поля вводу живлення"
+
+msgid "Popover Fields"
+msgstr "Поля спливаючої підказки"
+
+msgid "Active Tile Types — Floor Plan"
+msgstr "Активні типи плиток — план поверху"
+
+msgid ""
+"Ticked types appear in the floor-plan editor toolbar. Existing tiles of "
+"unticked types still render normally."
+msgstr ""
+"Позначені типи з'являються на панелі інструментів редактора плану поверху. "
+"Наявні плитки непозначених типів усе одно відображаються звичайно."
+
+msgid "Active Tile Types — Site Map"
+msgstr "Активні типи плиток — карта сайтів"
+
+msgid ""
+"Ticked types appear in the Site Map create-chip tray. Existing markers of "
+"unticked types still render normally."
+msgstr ""
+"Позначені типи з'являються на панелі створення карти сайтів. Наявні маркери "
+"непозначених типів усе одно відображаються звичайно."
+
+#, python-format
+msgid "%s Popover Fields"
+msgstr "Поля спливаючої підказки %s"
+
+msgid "Region"
+msgstr "Регіон"
+
+msgid "Site Group"
+msgstr "Група тех. майданчиків"
+
+msgid "Device Role"
+msgstr "Роль пристрою"
+
+msgid "Only show sites that have devices with these roles"
+msgstr "Показувати лише сайти, що мають пристрої з цими ролями"
+
+msgid "Cable type"
+msgstr "Тип кабелю"
+
+msgid "Include sub-locations"
+msgstr "Включити дочірні локації"
+
+msgid "When a Location is selected, also include its descendants."
+msgstr "Якщо вибрано локацію, включати також її дочірні елементи."
+
+msgid "Include sub-roles"
+msgstr "Включити дочірні ролі"
+
+msgid "When Device Role(s) are selected, also include their descendants."
+msgstr "Якщо вибрано роль(і) пристрою, включати також їхні дочірні елементи."
+
+msgid "Tag"
+msgstr "Мітка"
+
+msgid "Saved View"
+msgstr "Збережений перегляд"
+
+msgid "Tags"
+msgstr "Мітки"
+
+msgid "Application Group"
+msgstr "Група застосунків"
+
+msgid "Template"
+msgstr "Шаблон"
+
+msgid "Application Defaults"
+msgstr "Параметри застосунку за замовчуванням"
+
+msgid "Deployment Defaults"
+msgstr "Параметри розгортання за замовчуванням"
+
+msgid "Instance Naming"
+msgstr "Іменування екземплярів"
+
+msgid "Group"
+msgstr "Група"
+
+msgid "Devices"
+msgstr "Пристрої"
+
+msgid "Virtual Machines"
+msgstr "Віртуальні машини"
+
+msgid "Primary IP"
+msgstr "Первинний IP"
+
+msgid "Application"
+msgstr "Застосунок"
+
+msgid "Service Defaults"
+msgstr "Параметри служби за замовчуванням"
+
+msgid "Assignment"
+msgstr "Призначення"
+
+msgid "Links"
+msgstr "Посилання"
+
+msgid "Tenant name"
+msgstr "Назва орендаря"
+
+msgid "Application group name"
+msgstr "Назва групи застосунків"
+
+msgid "From Template"
+msgstr "З шаблону"
+
+msgid ""
+"Select a template to auto-create an application. Leave empty to use an "
+"existing application."
+msgstr ""
+"Виберіть шаблон для автоматичного створення застосунку. Залиште порожнім, "
+"щоб використати наявний застосунок."
+
+msgid "Host Type"
+msgstr "Тип хоста"
+
+msgid "Select Device or Virtual Machine"
+msgstr "Виберіть пристрій або віртуальну машину"
+
+msgid "Host ID"
+msgstr "ID хоста"
+
+msgid "Virtual Machine"
+msgstr "Віртуальна машина"
+
+msgid "Service"
+msgstr "Сервіс"
+
+msgid "Link to an existing NetBox application service"
+msgstr "Посилання на наявну службу застосунку NetBox"
+
+msgid "Deployment"
+msgstr "Розгортання"
+
+msgid "Host"
+msgstr "Ведучий"
+
+msgid "Separate instances (one app per host)"
+msgstr "Окремі екземпляри (один застосунок на хост)"
+
+msgid "Shared (one app, multiple hosts)"
+msgstr "Спільний (один застосунок, кілька хостів)"
+
+msgid "Deploy Mode"
+msgstr "Режим розгортання"
+
+msgid ""
+"Separate: creates a copy of this app for each host — independent status per "
+"host. Shared: links this single app to all selected hosts."
+msgstr ""
+"Окремий: створює копію цього застосунку для кожного хоста — незалежний "
+"статус для кожного хоста. Спільний: пов'язує цей один застосунок з усіма "
+"вибраними хостами."
+
+msgid "Port"
+msgstr "Порт"
+
+msgid "Instance Name Format"
+msgstr "Формат назви екземпляра"
+
+#, python-brace-format
+msgid ""
+"Name for each instance. Use {app} for app name, {host} for hostname. "
+"Example: \"{app} ({host})\" → \"Redis (srv-db-01)\". Leave as \"{app}\" to "
+"keep the original name."
+msgstr ""
+"Назва для кожного екземпляра. Використовуйте {app} для назви застосунку, "
+"{host} для назви хоста. Приклад: \"{app} ({host})\" → \"Redis (srv-db-01)\"."
+" Залиште \"{app}\", щоб зберегти оригінальну назву."
+
+msgid "Source Application"
+msgstr "Вихідний застосунок"
+
+msgid "Target Application"
+msgstr "Цільовий застосунок"
+
+msgid "Dependency"
+msgstr "Залежність"
+
+msgid "name"
+msgstr "назва"
+
+msgid "slug"
+msgstr "скорочення"
+
+msgid ""
+"Slug must start with \"custom_\" and contain only lowercase letters, "
+"numbers, and underscores."
+msgstr ""
+"Слаг має починатися з \"custom_\" і містити лише малі літери, цифри та "
+"підкреслення."
+
+msgid "Auto-prefixed with \"custom_\". Used as tile_type/marker_type value."
+msgstr ""
+"Автоматично додається префікс \"custom_\". Використовується як значення "
+"tile_type/marker_type."
+
+msgid "color"
+msgstr "колір"
+
+msgid "Enter a valid hex color (e.g. #ff5733)."
+msgstr "Введіть дійсний hex-колір (напр. #ff5733)."
+
+msgid "Hex color code (e.g. #ff5733)"
+msgstr "Hex-код кольору (напр. #ff5733)"
+
+msgid "icon"
+msgstr "піктограма"
+
+msgid "MDI icon class (e.g. mdi-server-network)"
+msgstr "Клас піктограми MDI (напр. mdi-server-network)"
+
+msgid "Auto (contrast with background)"
+msgstr "Авто (контраст із фоном)"
+
+msgid "Light (white)"
+msgstr "Світлий (білий)"
+
+msgid "Dark (black)"
+msgstr "Темний (чорний)"
+
+msgid "icon color"
+msgstr "колір піктограми"
+
+msgid ""
+"Icon color on top of the background. \"Auto\" picks light or dark based on "
+"the background brightness."
+msgstr ""
+"Колір піктограми поверх фону. \"Авто\" обирає світлий або темний залежно від"
+" яскравості фону."
+
+msgid "description"
+msgstr "опис"
+
+msgid "custom marker type"
+msgstr "власний тип маркера"
+
+msgid "custom marker types"
+msgstr "власні типи маркерів"
+
+msgid "This slug conflicts with a built-in type."
+msgstr "Цей слаг конфліктує з вбудованим типом."
+
+msgid "grid width"
+msgstr "ширина сітки"
+
+msgid "Width of the grid in tiles"
+msgstr "Ширина сітки в плитках"
+
+msgid "grid height"
+msgstr "висота сітки"
+
+msgid "Height of the grid in tiles"
+msgstr "Висота сітки в плитках"
+
+msgid "tile size"
+msgstr "розмір плитки"
+
+msgid "Size of each tile in pixels for rendering"
+msgstr "Розмір кожної плитки в пікселях для відображення"
+
+msgid "background image"
+msgstr "фонове зображення"
+
+msgid "PNG, JPEG, GIF, WEBP or PDF. PDFs are rasterized at upload (page 1)."
+msgstr ""
+"PNG, JPEG, GIF, WEBP або PDF. PDF растеризується під час завантаження "
+"(сторінка 1)."
+
+msgid "comments"
+msgstr "коментарі"
+
+msgid "floor plan"
+msgstr "план поверху"
+
+msgid "floor plans"
+msgstr "плани поверхів"
+
+msgid "X position"
+msgstr "Позиція X"
+
+msgid "X coordinate on the grid (0-indexed)"
+msgstr "Координата X на сітці (нумерація з 0)"
+
+msgid "Y position"
+msgstr "Позиція Y"
+
+msgid "Y coordinate on the grid (0-indexed)"
+msgstr "Координата Y на сітці (нумерація з 0)"
+
+msgid "width"
+msgstr "ширина"
+
+msgid "Width in grid cells"
+msgstr "Ширина в клітинках сітки"
+
+msgid "height"
+msgstr "висота"
+
+msgid "Height in grid cells"
+msgstr "Висота в клітинках сітки"
+
+msgid "Type of assigned object"
+msgstr "Тип призначеного об'єкта"
+
+msgid "ID of assigned object"
+msgstr "ID призначеного об'єкта"
+
+msgid "label"
+msgstr "етикетка"
+
+msgid "Custom label (overrides assigned object name)"
+msgstr "Власна мітка (замінює назву призначеного об'єкта)"
+
+msgid "tile type"
+msgstr "тип плитки"
+
+msgid "status"
+msgstr "статус"
+
+msgid "orientation"
+msgstr "орієнтація"
+
+msgid "Rotation in degrees (0, 90, 180, 270)"
+msgstr "Обертання в градусах (0, 90, 180, 270)"
+
+msgid "linked floor plan"
+msgstr "пов'язаний план поверху"
+
+msgid "Floor plan to navigate to when this tile is clicked"
+msgstr "План поверху, на який переходити при натисканні цієї плитки"
+
+msgid "FOV direction"
+msgstr "Напрямок поля зору"
+
+msgid ""
+"Camera viewing direction in degrees (0=north, 90=east, 180=south, 270=west)"
+msgstr ""
+"Напрямок огляду камери в градусах (0=північ, 90=схід, 180=південь, "
+"270=захід)"
+
+msgid "FOV angle"
+msgstr "Кут поля зору"
+
+msgid "Camera field of view width in degrees"
+msgstr "Ширина поля зору камери в градусах"
+
+msgid "FOV distance"
+msgstr "Дальність поля зору"
+
+msgid "Camera view distance in grid cells"
+msgstr "Дальність огляду камери в клітинках сітки"
+
+msgid "floor plan tile"
+msgstr "плитка плану поверху"
+
+msgid "floor plan tiles"
+msgstr "плитки плану поверху"
+
+msgid "latitude"
+msgstr "широта"
+
+msgid "Latitude for global map placement (-90 to 90)"
+msgstr "Широта для розміщення на глобальній карті (від -90 до 90)"
+
+msgid "longitude"
+msgstr "довгота"
+
+msgid "Longitude for global map placement (-180 to 180)"
+msgstr "Довгота для розміщення на глобальній карті (від -180 до 180)"
+
+msgid "tile port assignment"
+msgstr "призначення порту плитки"
+
+msgid "tile port assignments"
+msgstr "призначення портів плитки"
+
+msgid "Port assignments can only be added to drop tiles."
+msgstr "Призначення портів можна додавати лише до плиток-розеток."
+
+msgid "Latitude (-90 to 90)"
+msgstr "Широта (від -90 до 90)"
+
+msgid "Longitude (-180 to 180)"
+msgstr "Довгота (від -180 до 180)"
+
+msgid "location coordinates"
+msgstr "координати локації"
+
+msgid "Display label for this marker"
+msgstr "Відображувана мітка для цього маркера"
+
+msgid "marker type"
+msgstr "тип маркера"
+
+msgid "Camera viewing direction in degrees (0=north, 90=east)"
+msgstr "Напрямок огляду камери в градусах (0=північ, 90=схід)"
+
+msgid "Camera view distance (1 unit ≈ 50m)"
+msgstr "Дальність огляду камери (1 одиниця ≈ 50м)"
+
+msgid "map marker"
+msgstr "маркер карти"
+
+msgid "map markers"
+msgstr "маркери карти"
+
+msgid "path coordinates"
+msgstr "координати маршруту"
+
+msgid "Array of [lat, lng] coordinate pairs"
+msgstr "Масив пар координат [широта, довгота]"
+
+msgid "fiber count"
+msgstr "кількість волокон"
+
+msgid "cable type"
+msgstr "тип кабелю"
+
+msgid "start marker"
+msgstr "початковий маркер"
+
+msgid "end marker"
+msgstr "кінцевий маркер"
+
+msgid "Hex color override (blank = use status color)"
+msgstr "Перевизначення hex-кольору (порожньо = використати колір статусу)"
+
+msgid "line weight"
+msgstr "товщина лінії"
+
+msgid "Line thickness on the map (1-10)"
+msgstr "Товщина лінії на карті (1-10)"
+
+msgid "cable path"
+msgstr "кабельний шлях"
+
+msgid "cable paths"
+msgstr "кабельні шляхи"
+
+msgid "Show MAC Address"
+msgstr "Показувати MAC-адресу"
+
+msgid "Display MAC address for devices in the detail panel"
+msgstr "Відображати MAC-адресу пристроїв на панелі деталей"
+
+msgid "Show Custom Fields"
+msgstr "Показувати власні поля"
+
+msgid "Display custom fields in the detail panel"
+msgstr "Відображати власні поля на панелі деталей"
+
+msgid "Sync Device GPS"
+msgstr "Синхронізувати GPS пристрою"
+
+msgid "Automatically update device latitude/longitude when placed on a map"
+msgstr ""
+"Автоматично оновлювати широту/довготу пристрою при розміщенні на карті"
+
+msgid "Standard fields to show for devices"
+msgstr "Стандартні поля для відображення пристроїв"
+
+msgid "Standard fields to show for racks"
+msgstr "Стандартні поля для відображення стійок"
+
+msgid "Standard fields to show for power panels"
+msgstr "Стандартні поля для відображення панелей живлення"
+
+msgid "Standard fields to show for power feeds"
+msgstr "Стандартні поля для відображення вводів живлення"
+
+msgid "Fields to display in the hover popover on the floor plan"
+msgstr "Поля для відображення у спливній підказці на плані поверху"
+
+msgid "Tile Popover Configuration"
+msgstr "Налаштування спливної підказки плитки"
+
+msgid "Per-tile-type popover field configuration"
+msgstr "Налаштування полів підказки для кожного типу плитки"
+
+msgid "Site Map — Load Empty"
+msgstr "Карта сайтів — завантажувати порожньою"
+
+msgid ""
+"Start the Site Map with no markers. Sites only appear once a "
+"region/group/tenant/tag filter is applied. Recommended for instances with "
+"thousands of sites."
+msgstr ""
+"Запускати карту сайтів без маркерів. Сайти з'являються лише після "
+"застосування фільтра регіону/групи/орендаря/тегу. Рекомендовано для "
+"інсталяцій із тисячами сайтів."
+
+msgid "Hidden Tile Types (Floor Plan)"
+msgstr "Приховані типи плиток (план поверху)"
+
+msgid ""
+"Tile-type slugs hidden from the floor-plan editor toolbar. Existing tiles of"
+" these types still render normally — only the editor chip is hidden."
+msgstr ""
+"Слаги типів плиток, приховані з панелі інструментів редактора плану поверху."
+" Наявні плитки цих типів усе одно відображаються звичайно — приховано лише "
+"елемент у редакторі."
+
+msgid "Hidden Tile Types (Site Map)"
+msgstr "Приховані типи плиток (карта сайтів)"
+
+msgid ""
+"Tile-type slugs hidden from the Site Map create-chip tray. Existing markers "
+"of these types still render normally."
+msgstr ""
+"Слаги типів плиток, приховані з панелі створення карти сайтів. Наявні "
+"маркери цих типів усе одно відображаються звичайно."
+
+msgid "Map Settings"
+msgstr "Налаштування карти"
+
+msgid "Topology Saved View"
+msgstr "Збережений перегляд топології"
+
+msgid "Topology Saved Views"
+msgstr "Збережені перегляди топології"
+
+msgid "Enter a valid hex color."
+msgstr "Введіть дійсний hex-колір."
+
+msgid "application group"
+msgstr "група застосунків"
+
+msgid "application groups"
+msgstr "групи застосунків"
+
+#, python-brace-format
+msgid "Use {app} for template name, {host} for hostname"
+msgstr "Використовуйте {app} для назви шаблону, {host} для назви хоста"
+
+msgid "application template"
+msgstr "шаблон застосунку"
+
+msgid "application templates"
+msgstr "шаблони застосунків"
+
+msgid "URL to docs, dashboard, or entry point"
+msgstr "URL на документацію, панель або точку входу"
+
+msgid "Default port this application listens on"
+msgstr "Порт за замовчуванням, який прослуховує цей застосунок"
+
+msgid "Default protocol (e.g., HTTP, TCP, gRPC)"
+msgstr "Протокол за замовчуванням (напр., HTTP, TCP, gRPC)"
+
+msgid "Primary IP address for this application"
+msgstr "Основна IP-адреса цього застосунку"
+
+msgid "application"
+msgstr "застосунок"
+
+msgid "applications"
+msgstr "застосунки"
+
+msgid "IP address this deployment listens on"
+msgstr "IP-адреса, яку прослуховує це розгортання"
+
+msgid "NetBox application service linked to this deployment"
+msgstr "Служба застосунку NetBox, пов'язана з цим розгортанням"
+
+msgid "application deployment"
+msgstr "розгортання застосунку"
+
+msgid "application deployments"
+msgstr "розгортання застосунків"
+
+msgid "The application that depends on the target"
+msgstr "Застосунок, який залежить від цілі"
+
+msgid "The application being depended upon"
+msgstr "Застосунок, від якого залежать"
+
+msgid "application dependency"
+msgstr "залежність застосунку"
+
+msgid "application dependencies"
+msgstr "залежності застосунків"
+
+msgid "An application cannot depend on itself."
+msgstr "Застосунок не може залежати сам від себе."
+
+msgid "Add"
+msgstr "Додати"
+
+msgid "Floor Plans"
+msgstr "Плани поверхів"
+
+msgid "Maps"
+msgstr "Карти"
+
+msgid "Site Map"
+msgstr "Карта сайтів"
+
+msgid "Topology View"
+msgstr "Перегляд топології"
+
+msgid "Catalogs"
+msgstr "Каталоги"
+
+msgid "Map Markers"
+msgstr "Маркери карти"
+
+msgid "Cable Paths"
+msgstr "Кабельні маршрути"
+
+msgid "Floor Plan Tiles"
+msgstr "Плитки плану поверху"
+
+msgid "Saved Topology Views"
+msgstr "Збережені перегляди топології"
+
+msgid "Custom Marker Types"
+msgstr "Власні типи маркерів"
+
+msgid "Applications (Beta)"
+msgstr "Застосунки (Бета)"
+
+msgid "Applications"
+msgstr "Застосунки"
+
+msgid "Groups"
+msgstr "Групи"
+
+msgid "Templates"
+msgstr "Шаблони"
+
+msgid "Deployments"
+msgstr "Розгортання"
+
+msgid "Dependencies"
+msgstr "Залежності"
+
+msgid "Configuration"
+msgstr "Конфігурація"
+
+msgid "Settings"
+msgstr "Налаштування"
+
+msgid "Name"
+msgstr "Назва"
+
+msgid "Grid Size"
+msgstr "Розмір сітки"
+
+msgid "grid_width"
+msgstr ""
+
+msgid "grid_height"
+msgstr ""
+
+msgid "tile_size"
+msgstr ""
+
+msgid "Tiles"
+msgstr "Плитки"
+
+msgid "x_position"
+msgstr ""
+
+msgid "y_position"
+msgstr ""
+
+msgid "Assigned Object ID"
+msgstr "ID призначеного об'єкта"
+
+msgid "Latitude"
+msgstr "Широта"
+
+msgid "Longitude"
+msgstr "Довгота"
+
+msgid "Slug"
+msgstr "Скорочення"
+
+msgid "Color"
+msgstr "Колір"
+
+msgid "Icon"
+msgstr "Піктограма"
+
+msgid "View Mode"
+msgstr "Режим перегляду"
+
+msgid "Source"
+msgstr "Джерело"
+
+msgid "Target"
+msgstr "Ціль"
+
+msgid "Version"
+msgstr "Версія"
+
+msgid "External URL"
+msgstr "Зовнішній URL"
+
+msgid "Deployed Hosts"
+msgstr "Розгорнуті хости"
+
+msgid "Not deployed to any hosts."
+msgstr "Не розгорнуто на жодному хості."
+
+msgid "Actions"
+msgstr "Дії"
+
+msgid "View in Topology"
+msgstr "Переглянути в топології"
+
+msgid "View Dependencies"
+msgstr "Переглянути залежності"
+
+msgid "Bulk Deploy to Hosts"
+msgstr "Масове розгортання на хости"
+
+msgid "Bulk Deploy"
+msgstr "Масове розгортання"
+
+msgid "Deploy"
+msgstr "Розгорнути"
+
+msgid "to hosts"
+msgstr "на хости"
+
+msgid "Select Hosts"
+msgstr "Виберіть хости"
+
+msgid "Deployment Settings"
+msgstr "Налаштування розгортання"
+
+msgid "Cancel"
+msgstr "Скасувати"
+
+msgid "Template Source"
+msgstr "Джерело шаблону"
+
+msgid "Instances mode"
+msgstr "Режим екземплярів"
+
+msgid ""
+"Creates a new application per host, copying these settings. Each instance "
+"has independent status — if one host goes down, only its instance is "
+"impacted."
+msgstr ""
+"Створює новий застосунок для кожного хоста, копіюючи ці налаштування. Кожен "
+"екземпляр має незалежний статус — якщо один хост вийде з ладу, це вплине "
+"лише на його екземпляр."
+
+msgid "Shared mode"
+msgstr "Спільний режим"
+
+msgid ""
+"Links this single application to all selected hosts. One card on the "
+"topology connected to multiple devices."
+msgstr ""
+"Пов'язує цей єдиний застосунок з усіма вибраними хостами. Одна картка на "
+"топології, з'єднана з кількома пристроями."
+
+msgid "Application Dependency"
+msgstr "Залежність застосунку"
+
+msgid "Application Deployment"
+msgstr "Розгортання застосунку"
+
+msgid "Name Format"
+msgstr "Формат назви"
+
+msgid "Deploy to Hosts"
+msgstr "Розгорнути на хости"
+
+msgid ""
+"Deploy this template to one or more devices. A new application instance will"
+" be created for each host using the template defaults."
+msgstr ""
+"Розгорніть цей шаблон на один або кілька пристроїв. Для кожного хоста буде "
+"створено новий екземпляр застосунку з параметрами шаблону за замовчуванням."
+
+msgid "Deployed Instances"
+msgstr "Розгорнуті екземпляри"
+
+msgid "No instances deployed yet."
+msgstr "Екземпляри ще не розгорнуто."
+
+msgid "Defaults"
+msgstr "Типові значення"
+
+msgid "Deploy Template"
+msgstr "Розгорнути шаблон"
+
+msgid ""
+"Select devices to deploy this template to. A new application will be created"
+" for each host using the name format:"
+msgstr ""
+"Виберіть пристрої, на які розгорнути цей шаблон. Для кожного хоста буде "
+"створено новий застосунок із форматом назви:"
+
+msgid "Template Defaults"
+msgstr "Параметри шаблону за замовчуванням"
+
+msgid "Cable Path Details"
+msgstr "Деталі кабельного маршруту"
+
+msgid "Coordinates"
+msgstr "Координати"
+
+msgid "View on Site Map"
+msgstr "Переглянути на карті сайтів"
+
+msgid "Assign Application"
+msgstr "Призначити застосунок"
+
+msgid "Map Locations"
+msgstr "Локації на карті"
+
+msgid "View"
+msgstr "Перегляд"
+
+msgid "via rack"
+msgstr "через стійку"
+
+msgid "This device has not been placed on any floor plans or map markers."
+msgstr "Цей пристрій не розміщено на жодному плані поверху чи маркері карти."
+
+msgid "Tile Size"
+msgstr "Розмір плитки"
+
+msgid "Statistics"
+msgstr "Статистика"
+
+msgid "Total Tiles"
+msgstr "Усього плиток"
+
+msgid "Linked Objects"
+msgstr "Пов'язані об'єкти"
+
+msgid "View Floor Plan"
+msgstr "Переглянути план поверху"
+
+msgid "Edit Layout"
+msgstr "Редагувати макет"
+
+msgid "Edit Mode"
+msgstr "Режим редагування"
+
+msgid "Floor map"
+msgstr "Карта поверху"
+
+#, python-format
+msgid "%(counter)s tile type hidden — enable in Map Settings → Tile Types"
+msgid_plural ""
+"%(counter)s tile types hidden — enable in Map Settings → Tile Types"
+msgstr[0] ""
+msgstr[1] ""
+
+msgid "Height"
+msgstr "Висота"
+
+msgid "Text Orientation"
+msgstr "Орієнтація тексту"
+
+msgid "Dir"
+msgstr "Напрям"
+
+msgid "FOV Direction (degrees)"
+msgstr "Напрямок поля зору (градуси)"
+
+msgid "Angle"
+msgstr "Кут"
+
+msgid "FOV Angle Width"
+msgstr "Ширина кута поля зору"
+
+msgid "Range"
+msgstr "Діапазон"
+
+msgid "FOV Distance (cells)"
+msgstr "Дальність поля зору (клітинки)"
+
+msgid "Delete"
+msgstr "Видалити"
+
+msgid "Dbl-click: place | Click: select | Drag tile: move"
+msgstr ""
+"Подвійний клік: розмістити | Клік: вибрати | Перетягування плитки: "
+"перемістити"
+
+msgid "Zoom In"
+msgstr "Наблизити"
+
+msgid "Zoom Out"
+msgstr "Віддалити"
+
+msgid "Fit to View"
+msgstr "Вписати у вікно"
+
+msgid "Export PDF"
+msgstr "Експортувати PDF"
+
+msgid "Click a tile to select"
+msgstr "Натисніть на плитку, щоб вибрати"
+
+msgid "Search tiles..."
+msgstr "Пошук плиток..."
+
+msgid "FOV"
+msgstr "Поле зору"
+
+msgid "Back to list"
+msgstr "Назад до списку"
+
+msgid "Tile Details"
+msgstr "Деталі плитки"
+
+msgid "Edit label"
+msgstr "Редагувати мітку"
+
+msgid "Resize"
+msgstr "Змінити розмір"
+
+msgid "Set"
+msgstr "Встановити"
+
+msgid "Linked Object"
+msgstr "Пов'язаний об'єкт"
+
+msgid "Camera FOV"
+msgstr "Поле зору камери"
+
+msgid "Direction"
+msgstr "Напрямок"
+
+msgid "cells"
+msgstr "клітинки"
+
+msgid "Save"
+msgstr "Зберегти"
+
+msgid "Rack Elevation"
+msgstr "Розгортка стійки"
+
+msgid "Front"
+msgstr "Спереду"
+
+msgid "Rear"
+msgstr "Ззаду"
+
+msgid "Loading..."
+msgstr "Завантаження..."
+
+msgid "Ports"
+msgstr "Порти"
+
+msgid "Link Floor Plan"
+msgstr "Пов'язати план поверху"
+
+msgid "Select Floor Plan"
+msgstr "Виберіть план поверху"
+
+msgid "Link"
+msgstr "Посилання"
+
+msgid "Unlink"
+msgstr "Відв'язати"
+
+msgid "Link Object"
+msgstr "Пов'язати об'єкт"
+
+msgid "Select Type"
+msgstr "Виберіть тип"
+
+msgid "Select object type first"
+msgstr "Спочатку виберіть тип об'єкта"
+
+msgid "Drop Ports"
+msgstr "Порти розетки"
+
+msgid "Select Port Type"
+msgstr "Виберіть тип порту"
+
+msgid "Select port type first"
+msgstr "Спочатку виберіть тип порту"
+
+msgid "Add Port"
+msgstr "Додати порт"
+
+msgid "Assigned Ports"
+msgstr "Призначені порти"
+
+msgid "View on Floor Plan"
+msgstr "Переглянути на плані поверху"
+
+msgid "Assign"
+msgstr "Призначити"
+
+msgid "View all"
+msgstr "Переглянути всі"
+
+msgid "No applications assigned"
+msgstr "Немає призначених застосунків"
+
+msgid "Via Rack"
+msgstr "Через стійку"
+
+msgid "No applications using this IP address."
+msgstr "Немає застосунків, що використовують цю IP-адресу."
+
+msgid "Application Deployments"
+msgstr "Розгортання застосунків"
+
+msgid "No application deployments linked"
+msgstr "Немає пов'язаних розгортань застосунків"
+
+msgid "None"
+msgstr "Жодного"
+
+msgid "Marker Details"
+msgstr "Деталі маркера"
+
+msgid "Distance"
+msgstr "Відстань"
+
+msgid ""
+"\n"
+"            Tick the tile types you want available in the floor-plan editor toolbar.\n"
+"            Existing tiles of unticked types still render normally — only the toolbar\n"
+"            chip is hidden, so nothing breaks if a type is in use on an existing plan.\n"
+"            Fresh installs hide the FTTH/fiber types by default; tick them here to enable.\n"
+"            "
+msgstr ""
+"\n"
+"            Позначте типи плиток, які мають бути доступні на панелі інструментів редактора\n"
+"            плану поверху. Наявні плитки непозначених типів усе одно відображаються звичайно —\n"
+"            приховується лише елемент на панелі інструментів, тому нічого не зламається, якщо\n"
+"            тип уже використовується на наявному плані.\n"
+"            Під час нової інсталяції типи FTTH/оптоволокно приховано за замовчуванням; позначте\n"
+"            їх тут, щоб увімкнути.\n"
+"            "
+
+msgid ""
+"\n"
+"            Tick the marker types available in the Site Map create-chip tray. This\n"
+"            list is independent of the floor-plan one — e.g. you can show fiber\n"
+"            markers on the Site Map but hide them in individual floor plans, or\n"
+"            vice versa.\n"
+"            "
+msgstr ""
+"\n"
+"            Позначте типи маркерів, доступні на панелі створення карти сайтів. Цей\n"
+"            список не залежить від списку плану поверху — наприклад, ви можете показувати\n"
+"            оптоволоконні маркери на карті сайтів, але приховати їх на окремих планах\n"
+"            поверхів, або навпаки.\n"
+"            "
+
+msgid "About netbox-map"
+msgstr "Про netbox-map"
+
+msgid "Author"
+msgstr "Автор"
+
+msgid "License"
+msgstr "Ліцензія"
+
+msgid "Docs"
+msgstr "Документація"
+
+msgid "Report an issue"
+msgstr "Повідомити про проблему"
+
+msgid "Compatibility"
+msgstr "Сумісність"
+
+msgid ""
+"The plugin's <code>min_version</code> is enforced by NetBox at startup. If "
+"you upgrade NetBox to a version above the matrix, the plugin will continue "
+"to load but is not formally tested there."
+msgstr ""
+"Значення <code>min_version</code> плагіна перевіряється NetBox під час "
+"запуску. Якщо ви оновите NetBox до версії, вищої за вказану в таблиці "
+"сумісності, плагін продовжить завантажуватися, але офіційно не тестувався "
+"для цієї версії."
+
+msgid "Filter Sites"
+msgstr "Фільтрувати сайти"
+
+msgid "Clear"
+msgstr "Очистити"
+
+msgid "Sites with devices of these roles"
+msgstr "Сайти з пристроями цих ролей"
+
+msgid "Apply"
+msgstr "Застосувати"
+
+msgid "Reset"
+msgstr "Скинути"
+
+msgid "Place on Map"
+msgstr "Розмістити на карті"
+
+msgid "All items placed"
+msgstr "Усі елементи розміщено"
+
+msgid "Create"
+msgstr "Створити"
+
+#, python-format
+msgid "%(counter)s marker type hidden — enable in Map Settings → Tile Types"
+msgid_plural ""
+"%(counter)s marker types hidden — enable in Map Settings → Tile Types"
+msgstr[0] ""
+msgstr[1] ""
+
+msgid "Cable"
+msgstr "Кабель"
+
+msgid "Search markers..."
+msgstr "Пошук маркерів..."
+
+msgid "Markers"
+msgstr "Маркери"
+
+msgid "Cables"
+msgstr "Кабелі"
+
+msgid "Network Topology"
+msgstr "Топологія мережі"
+
+msgid "Include sub-locations (children of selected Location)"
+msgstr "Включити дочірні локації (нащадки вибраної локації)"
+
+msgid "Include sub-roles (children of selected Role)"
+msgstr "Включити дочірні ролі (нащадки вибраної ролі)"
+
+msgid "Clear filters"
+msgstr "Очистити фільтри"
+
+msgid "devices"
+msgstr "пристрої"
+
+msgid "cables"
+msgstr "кабелів"
+
+msgid "Views"
+msgstr "Перегляди"
+
+msgid "New View"
+msgstr "Новий перегляд"
+
+msgid "Manage Views"
+msgstr "Керувати переглядами"
+
+msgid "Save Layout"
+msgstr "Зберегти макет"
+
+msgid "Save As New View"
+msgstr "Зберегти як новий перегляд"
+
+msgid "Application Map (Beta)"
+msgstr "Карта застосунків (Бета)"
+
+msgid "Mixed View (Beta)"
+msgstr "Змішаний перегляд (Бета)"
+
+msgid "Stencil View"
+msgstr "Трафаретний перегляд"
+
+msgid "Node View"
+msgstr "Перегляд вузлів"
+
+msgid "Add individual devices to canvas"
+msgstr "Додати окремі пристрої на полотно"
+
+msgid "Configure role layer order for auto-layout"
+msgstr "Налаштувати порядок шарів ролей для автоматичного розташування"
+
+msgid "Auto-sort interfaces to minimize cable crossings (updates on drag)"
+msgstr ""
+"Автосортування інтерфейсів для мінімізації перетинів кабелів (оновлюється "
+"під час перетягування)"
+
+msgid "Snap to grid (or hold Shift while dragging)"
+msgstr "Прив'язка до сітки (або утримуйте Shift під час перетягування)"
+
+msgid "Reset layout — auto-arrange devices by role hierarchy"
+msgstr "Скинути макет — автоматично розташувати пристрої за ієрархією ролей"
+
+msgid ""
+"Hide patch panels and show end-to-end connections. Cables through patch "
+"panels are shown as dashed lines since they represent traced paths, not real"
+" single cables."
+msgstr ""
+"Приховати патч-панелі та показувати наскрізні з'єднання. Кабелі через патч-"
+"панелі показано пунктирними лініями, оскільки вони являють собою трасовані "
+"шляхи, а не реальні окремі кабелі."
+
+msgid ""
+"Hide ports not connected within current filtered view — collapses device "
+"cards to only show ports going to other visible devices."
+msgstr ""
+"Приховати порти, не з'єднані в межах поточного відфільтрованого перегляду — "
+"згортає картки пристроїв, показуючи лише порти, з'єднані з іншими видимими "
+"пристроями."
+
+msgid "Color by cable type"
+msgstr "Колір за типом кабелю"
+
+msgid "Color by interface speed"
+msgstr "Колір за швидкістю інтерфейсу"
+
+msgid "Curved Cables"
+msgstr "Вигнуті кабелі"
+
+msgid "Straight Cables"
+msgstr "Прямі кабелі"
+
+msgid "Cable Labels"
+msgstr "Мітки кабелів"
+
+msgid "Loading topology..."
+msgstr "Завантаження топології..."
+
+msgid "Use a filter or click"
+msgstr "Використайте фільтр або натисніть"
+
+msgid "to add devices to the canvas."
+msgstr "щоб додати пристрої на полотно."
+
+msgid "Role Layer Order"
+msgstr "Порядок шарів ролей"
+
+msgid ""
+"Drag roles to reorder. Top = left side of topology (upstream), bottom = "
+"right side (downstream). Click Apply to re-layout."
+msgstr ""
+"Перетягуйте ролі для зміни порядку. Верх = ліва сторона топології (вище за "
+"потоком), низ = права сторона (нижче за потоком). Натисніть «Застосувати» "
+"для перерозташування."
+
+msgid "Auto-detect"
+msgstr "Автоматичне виявлення"
+
+msgid "Add Devices"
+msgstr "Додати пристрої"
+
+msgid "Search by name..."
+msgstr "Пошук за назвою..."
+
+msgid "All Sites"
+msgstr "Усі сайти"
+
+msgid "All Roles"
+msgstr "Усі ролі"
+
+msgid "Search for devices to add"
+msgstr "Пошук пристроїв для додавання"
+
+msgid "added"
+msgstr "додано"
+
+msgid "Search devices..."
+msgstr "Пошук пристроїв..."
+
+msgid "Speed"
+msgstr "Швидкість"
+
+msgid "Deployed on"
+msgstr "Розгорнуто на"
+
+msgid "Simulation"
+msgstr "Симуляція"
+
+msgid "Failed"
+msgstr "Збій"
+
+msgid "Impacted"
+msgstr "Уражені"
+
+msgid "Open in Topology View"
+msgstr "Відкрити в перегляді топології"
+
+msgid "Visualization"
+msgstr "Візуалізація"
