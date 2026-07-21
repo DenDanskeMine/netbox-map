@@ -92,7 +92,10 @@
 
         var mod = e.ctrlKey || e.metaKey;
 
-        if ((e.key === 'Delete' || e.key === 'Del') && !mod) {
+        // Backspace, not just Delete: on Mac laptop keyboards the key labeled
+        // "delete" reports as Backspace (e.key 'Delete' only fires for
+        // Fn+Delete / forward-delete, which most Mac users never press).
+        if ((e.key === 'Delete' || e.key === 'Backspace') && !mod) {
             e.preventDefault();
             doDelete();
             return;
