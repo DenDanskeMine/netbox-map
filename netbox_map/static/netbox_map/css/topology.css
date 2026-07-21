@@ -88,7 +88,12 @@
     min-width: 110px;
 }
 
-.topo-filter-field select,
+/* :not(.ts-hidden-accessible) keeps this from overriding Tom Select's own
+ * visually-hidden sizing (width:1px) on the original <select> it keeps in
+ * the DOM for accessibility — matching here forced that select back to its
+ * native content-driven width, which sat in-flow and pushed the page's
+ * scrollable width out by however wide its widest <option> was. */
+.topo-filter-field select:not(.ts-hidden-accessible),
 .topo-filter-field .ts-wrapper {
     font-size: 12px !important;
     min-height: 28px !important;
@@ -103,6 +108,20 @@
     /* Let selected items wrap inside the control so the field grows
      * vertically before it gets cut off. */
     flex-wrap: wrap;
+    align-items: center;
+}
+
+/* Tom Select's "clear all" icon (shown once a value is picked) is an MDI
+ * icon glyph with its own explicit font-size that isn't affected by the
+ * 12px set above (font-size on .ts-control only styles its own text, not
+ * a descendant icon's own declared size). Left unconstrained it renders at
+ * MDI's default size, inflating this field's content height — which then
+ * gets stretched onto every sibling in the same flex row (default
+ * align-items: stretch), making the whole row look taller than fields with
+ * nothing selected yet (they never show this icon). */
+.topo-filter-field .ts-wrapper .ts-control .clear-button {
+    font-size: 13px !important;
+    line-height: 1 !important;
 }
 
 .topo-toolbar-info {
@@ -123,6 +142,8 @@
 
 .topo-toolbar-actions {
     flex-shrink: 0;
+    width: 100%;
+    flex-wrap: wrap;
 }
 
 .topo-toolbar-divider {
