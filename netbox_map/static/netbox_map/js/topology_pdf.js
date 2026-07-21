@@ -1,13 +1,11 @@
 /* NetBox Map — Topology PDF Export */
-/* Renders topology as vector PDF using jsPDF direct drawing */
+/* Converts the already-rendered topology SVG straight to a vector PDF via
+ * svg2pdf.js, instead of replaying it as thousands of manual jsPDF draw
+ * calls. Custom header/footer chrome (title, legend) is still drawn by hand
+ * since it isn't part of the on-screen SVG. */
 
 (function() {
     'use strict';
-
-    var CARD_W = 200;
-    var HEADER_H = 38;
-    var PORT_H = 24;
-    var PORT_GAP = 3;
 
     function hexToRgb(hex) {
         if (!hex) return { r: 108, g: 117, b: 125 };
@@ -18,60 +16,203 @@
         return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
     }
 
-    function speedColor(kbps) {
-        if (!kbps) return '#6c757d';
-        if (kbps >= 100000000) return '#e91e63';
-        if (kbps >= 40000000) return '#e74c3c';
-        if (kbps >= 25000000) return '#9b59b6';
-        if (kbps >= 10000000) return '#3498db';
-        if (kbps >= 1000000) return '#2ecc71';
-        return '#f39c12';
-    }
-
-    function formatSpeed(kbps) {
-        if (!kbps) return '';
-        if (kbps >= 1000000) return (kbps / 1000000) + 'G';
-        if (kbps >= 1000) return (kbps / 1000) + 'M';
-        return kbps + 'K';
-    }
-
-    function portColorHex(port) {
-        if (port.port_class === 'front-port') return '#ff9800';
-        if (port.port_class === 'rear-port') return '#795548';
-        return port.speed ? speedColor(port.speed) : '#6c757d';
-    }
-
-    function portBadge(port) {
-        if (port.speed) return formatSpeed(port.speed);
-        if (port.port_class === 'front-port') return 'FP';
-        if (port.port_class === 'rear-port') return 'RP';
-        return '';
-    }
-
-    function sampleBezier(x0, y0, cx0, cy0, cx1, cy1, x1, y1, n) {
-        var pts = [];
-        for (var i = 0; i <= n; i++) {
-            var t = i / n, mt = 1 - t;
-            pts.push({
-                x: mt*mt*mt*x0 + 3*mt*mt*t*cx0 + 3*mt*t*t*cx1 + t*t*t*x1,
-                y: mt*mt*mt*y0 + 3*mt*mt*t*cy0 + 3*mt*t*t*cy1 + t*t*t*y1,
-            });
-        }
-        return pts;
-    }
-
-    function bezierMidpoint(x0, y0, cx0, cy0, cx1, cy1, x1, y1) {
-        var t = 0.5, mt = 0.5;
-        var mx = mt*mt*mt*x0 + 3*mt*mt*t*cx0 + 3*mt*t*t*cx1 + t*t*t*x1;
-        var my = mt*mt*mt*y0 + 3*mt*mt*t*cy0 + 3*mt*t*t*cy1 + t*t*t*y1;
-        var dx = 3*mt*mt*(cx0-x0) + 6*mt*t*(cx1-cx0) + 3*t*t*(x1-cx1);
-        var dy = 3*mt*mt*(cy0-y0) + 6*mt*t*(cy1-cy0) + 3*t*t*(y1-cy1);
-        var angle = Math.atan2(dy, dx) * 180 / Math.PI;
-        return { x: mx, y: my, angle: angle };
-    }
-
     function edgeSourceId(e) { return typeof e.source === 'object' ? e.source.id : e.source; }
     function edgeTargetId(e) { return typeof e.target === 'object' ? e.target.id : e.target; }
+
+    /* The on-screen SVG uses the Material Design Icons webfont for role
+     * icons (Node view) and the pin indicator (pinned cards) — all of which
+     * live at codepoints above U+FFFF (the Supplementary Private Use Area).
+     * jsPDF's own TTF embedding only implements cmap format 4 (BMP-only —
+     * its cmap subtable parser has no case for format 12), so it can never
+     * resolve these glyphs directly, and registering the full 1.3MB webfont
+     * produces a PDF with a corrupt/empty embedded font instead (its ~7500
+     * glyphs also force the "long" loca table format, which trips up naive
+     * TTF embedding same as jsPDF's).
+     *
+     * mdi-pdf-icons.ttf works around both problems: it's a tiny subset (the
+     * ~20 icons this plugin actually uses) with its cmap rewritten onto
+     * sequential BMP Private-Use-Area codepoints (U+E000+) that jsPDF's
+     * parser can read. ICON_CODEPOINT_MAP below remaps each icon's real MDI
+     * codepoint to its matching PUA codepoint in the *cloned* SVG right
+     * before conversion — the on-screen SVG keeps using the real webfont
+     * and real codepoints untouched. Regenerate both via
+     * build_pdf_icon_font.py at the repo root if new icons are added. */
+    var ICON_CODEPOINT_MAP = {
+        '\u{F0003}': '\uE000', '\u{F0079}': '\uE001', '\u{F0100}': '\uE002',
+        '\u{F018D}': '\uE003', '\u{F01BC}': '\uE004', '\u{F0200}': '\uE005',
+        '\u{F02CA}': '\uE006', '\u{F0317}': '\uE007', '\u{F035B}': '\uE008',
+        '\u{F0361}': '\uE009', '\u{F0379}': '\uE00A', '\u{F03F2}': '\uE00B',
+        '\u{F0403}': '\uE00C', '\u{F0427}': '\uE00D', '\u{F042A}': '\uE00E',
+        '\u{F0430}': '\uE00F', '\u{F048B}': '\uE010', '\u{F059F}': '\uE011',
+        '\u{F08C6}': '\uE012', '\u{F099D}': '\uE013', '\u{F0BC4}': '\uE014',
+        '\u{F109B}': '\uE015', '\u{F11E2}': '\uE016',
+    };
+
+    // Resolve the font's URL relative to this script's own <script src>,
+    // rather than hardcoding /static/... — robust regardless of how NetBox
+    // is mounted or whether static file hashing is ever added later.
+    // document.currentScript only reflects *this* script during synchronous,
+    // non-module, non-dynamically-inserted execution — true for a plain
+    // <script src> tag, but fragile in general, so fall back to scanning
+    // all script tags on the page for one whose src matches this file.
+    var PDF_ICON_FONT_URL = (function() {
+        var script = document.currentScript;
+        if (!script || !script.src) {
+            var scripts = document.querySelectorAll('script[src*="topology_pdf.js"]');
+            script = scripts.length > 0 ? scripts[scripts.length - 1] : null;
+        }
+        if (script && script.src) {
+            return script.src.replace(/\/js\/topology_pdf\.js(\?.*)?$/, '/fonts/mdi-pdf-icons.ttf');
+        }
+        return null;
+    })();
+
+    function arrayBufferToBase64(buf) {
+        var bytes = new Uint8Array(buf);
+        var chunkSize = 8192;
+        var chunks = [];
+        for (var i = 0; i < bytes.length; i += chunkSize) {
+            chunks.push(String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize)));
+        }
+        return btoa(chunks.join(''));
+    }
+
+    // The font-family name used for remapped icon glyphs in the exported
+    // SVG clone. Deliberately *not* 'Material Design Icons' (the name the
+    // on-screen font uses): svg2pdf measures text width by creating a
+    // hidden DOM <text> node styled with the element's own font-family and
+    // reading the browser's own layout metrics (see getMeasurementTextNode
+    // in svg2pdf.umd.min.js) — it does not ask jsPDF at all for this. If the
+    // clone kept claiming 'Material Design Icons', the browser would
+    // resolve that name to the *real*, full MDI webfont (registered
+    // site-wide by NetBox core) to measure it — which has no glyph for our
+    // remapped Private-Use-Area codepoints, so the browser fell back to
+    // some unrelated notdef/default width instead of this font's real
+    // (uniform, 512/512em) advance width. Glyph *shapes* still came out
+    // correct because those are drawn straight from jsPDF's own embedded
+    // copy of this font, so this bug only ever showed up as mispositioned
+    // (not misshapen) icons — worst on asymmetric glyphs like the phone
+    // icon, invisible on symmetric ones like the monitor icon, which is
+    // what made it easy to mistake for the glyph's own artwork at first.
+    // Using a name unique to this font, and registering a matching
+    // FontFace so the *browser* can resolve and measure it too, makes both
+    // halves (jsPDF's rendering and svg2pdf's browser-side measurement)
+    // agree on the same real metrics.
+    var PDF_ICON_FONT_FAMILY = 'MDI PDF Icons';
+
+    // jsPDF's "middle"/"central" text baseline computes its vertical shift
+    // generically from font-size and line-height factor alone (see
+    // jspdf.umd.min.js, jsPDF.text()'s baseline switch) — it never reads
+    // the embedded font's own OS/2 vertical metrics, so the shift it
+    // applies undershoots this font's true center-above-baseline and every
+    // icon renders measurably too high. Calibrated empirically against this
+    // exact font/pipeline by rendering known glyphs and measuring the pixel
+    // offset directly (not derived from theory, which undershot the real
+    // effect by ~5x) — recalibrate with the same method if mdi-pdf-icons.ttf
+    // is rebuilt from a different source font.
+    var PDF_ICON_VERTICAL_CORRECTION_EM = 0.088;
+
+    // Fetching + base64-encoding the (tiny, ~4KB) font only needs to happen
+    // once per page load — cache the promise across exports. jsPDF fonts
+    // are registered per-document though, so registerMdiFont() below still
+    // runs for every new jsPDF instance, just reusing this cached data.
+    var _mdiFontDataPromise = null;
+    function getMdiFontData() {
+        if (_mdiFontDataPromise) return _mdiFontDataPromise;
+        if (!PDF_ICON_FONT_URL) {
+            console.warn('PDF export: could not resolve mdi-pdf-icons.ttf URL (no matching <script> tag found) — icons will render as garbage instead of vector glyphs.');
+            _mdiFontDataPromise = Promise.resolve(null);
+            return _mdiFontDataPromise;
+        }
+        console.log('PDF export: loading icon font from', PDF_ICON_FONT_URL);
+        _mdiFontDataPromise = fetch(PDF_ICON_FONT_URL)
+            .then(function(r) {
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                return r.arrayBuffer();
+            })
+            .then(function(buf) {
+                console.log('PDF export: icon font loaded,', buf.byteLength, 'bytes');
+                return { arrayBuffer: buf, base64: arrayBufferToBase64(buf) };
+            })
+            .catch(function(e) {
+                console.error('PDF export: failed to load icon font from ' + PDF_ICON_FONT_URL + ' — icons will render as garbage instead of vector glyphs:', e);
+                return null;
+            });
+        return _mdiFontDataPromise;
+    }
+
+    // Register the icon font with jsPDF (so it can draw the glyph outlines
+    // into the PDF) *and* with the browser's own font registry (so
+    // svg2pdf's DOM-based text-width measurement resolves the same real
+    // metrics instead of silently falling back — see PDF_ICON_FONT_FAMILY
+    // above). Both must be done before doc.svg() runs.
+    var _browserFontLoadPromise = null;
+    function registerMdiFont(doc, fontData) {
+        if (!fontData) return Promise.resolve();
+        doc.addFileToVFS('MaterialDesignIconsPdf.ttf', fontData.base64);
+        doc.addFont('MaterialDesignIconsPdf.ttf', PDF_ICON_FONT_FAMILY, 'normal');
+        if (!_browserFontLoadPromise) {
+            var fontFace = new FontFace(PDF_ICON_FONT_FAMILY, fontData.arrayBuffer);
+            document.fonts.add(fontFace);
+            _browserFontLoadPromise = fontFace.load().catch(function(e) {
+                console.error('PDF export: browser FontFace registration failed — icon centering may be off:', e);
+            });
+        }
+        return _browserFontLoadPromise;
+    }
+
+    // Rewrite icon glyphs in the cloned SVG from their real MDI codepoint to
+    // the matching PUA codepoint in mdi-pdf-icons.ttf (see block comment
+    // above), and force their styling inline. Text elements not using an
+    // icon font, or using a glyph outside ICON_CODEPOINT_MAP, are untouched.
+    //
+    // svg2pdf only reads <style>/<link> elements that are descendants of the
+    // SVG root passed to it — it never consults the page's own linked
+    // stylesheets. .node-icon gets its font-family, fill, size and
+    // positioning entirely from topology.css (an external, page-level
+    // stylesheet) with no inline attributes at all, so none of that would
+    // be visible to svg2pdf: wrong/default font (the original bug — garbled
+    // glyphs) *and* wrong color/position (icons rendering dim and
+    // off-center once the codepoint itself was fixed). liveRoot (the actual
+    // on-screen SVG, still attached and fully styled) is used to read the
+    // real applied values via getComputedStyle so this doesn't hardcode
+    // anything that could drift from topology.css — including which value
+    // is correct for the current dark/light theme.
+    function remapIconGlyphs(root, liveRoot) {
+        var liveIcon = liveRoot.querySelector('.node-icon');
+        var iconStyle = liveIcon ? getComputedStyle(liveIcon) : null;
+
+        var els = root.querySelectorAll('.node-icon, [font-family="Material Design Icons"]');
+        for (var i = 0; i < els.length; i++) {
+            var el = els[i];
+            var text = el.textContent;
+            var mapped = ICON_CODEPOINT_MAP[text];
+            if (!mapped) continue;
+            el.textContent = mapped;
+            el.setAttribute('font-family', PDF_ICON_FONT_FAMILY);
+            if (el.classList.contains('node-icon') && iconStyle) {
+                el.setAttribute('text-anchor', iconStyle.getPropertyValue('text-anchor') || 'middle');
+                // svg2pdf only reads the older SVG 1.1 "alignment-baseline"
+                // property for vertical text positioning — it has no
+                // handling at all for "dominant-baseline" (the modern CSS
+                // Text 3 / SVG2 property topology.css actually uses), so it
+                // was silently ignored and every icon fell back to default
+                // (roughly baseline-aligned, i.e. shifted up-left instead
+                // of centered) regardless of what dominant-baseline said.
+                el.setAttribute('dominant-baseline', iconStyle.getPropertyValue('dominant-baseline') || 'central');
+                el.setAttribute('alignment-baseline', iconStyle.getPropertyValue('dominant-baseline') || 'central');
+                el.setAttribute('fill', iconStyle.getPropertyValue('fill'));
+                el.setAttribute('font-size', iconStyle.getPropertyValue('font-size'));
+                // jsPDF's "middle"/"central" baseline vertical offset (the
+                // PDF_ICON_VERTICAL_CORRECTION_EM constant below) is a fixed
+                // fraction of font-size, not derived from this font's real
+                // OS/2 vertical metrics — it renders glyphs measurably too
+                // high. Empirically calibrated against this exact font/
+                // pipeline (see calibrate_pdf_icon_vertical_offset.py).
+                el.setAttribute('dy', PDF_ICON_VERTICAL_CORRECTION_EM + 'em');
+            }
+        }
+    }
 
     /* ===== Constructor ===== */
 
@@ -121,33 +262,6 @@
         if (text) btn.appendChild(document.createTextNode(' ' + text));
     };
 
-    /* Yield to the browser so it can paint and stay responsive.
-     * Wrap a heavy synchronous loop in async chunks of `batchSize` items. */
-    TopologyPDF.prototype._chunked = function(items, perItem, batchSize, label) {
-        var self = this;
-        return new Promise(function(resolve) {
-            if (!items || items.length === 0) { resolve(); return; }
-            var i = 0;
-            var total = items.length;
-            function step() {
-                var end = Math.min(i + batchSize, total);
-                for (; i < end; i++) perItem(items[i], i);
-                if (label) {
-                    var pct = Math.round((i / total) * 100);
-                    self._setExportProgress(label + ' ' + pct + '%');
-                }
-                if (i < total) {
-                    // RAF gives the browser a chance to repaint and dismisses
-                    // any "Page Unresponsive" warnings on large topologies.
-                    requestAnimationFrame(step);
-                } else {
-                    resolve();
-                }
-            }
-            step();
-        });
-    };
-
     TopologyPDF.prototype.exportPDF = function() {
         if (this.state.topologyMode === 'apps') {
             return this.exportAppPDF();
@@ -155,112 +269,126 @@
         return this._exportNetworkPDF();
     };
 
+    /* svg2pdf.js measures text width by creating a hidden <svg><text> node
+     * (position:absolute; visibility:hidden) and appending it straight to
+     * document.body — then caches it on its own internal render context
+     * for reuse *within that context* but never removes it afterward. Since
+     * an <svg> with no explicit width/height gets a default 300x150 intrinsic
+     * box, every export leaves a permanent, invisible element sitting off
+     * <body>, inflating the page's scrollable width (visible as empty
+     * horizontal scroll space that grows with each export). We can't patch
+     * the vendored/minified library, so snapshot body's children before
+     * conversion and sweep away anything new it left behind afterward. */
+    function snapshotBodyChildren() {
+        return new Set(document.body.children);
+    }
+
+    function sweepLeakedBodyChildren(before) {
+        var current = Array.prototype.slice.call(document.body.children);
+        for (var i = 0; i < current.length; i++) {
+            if (!before.has(current[i])) document.body.removeChild(current[i]);
+        }
+    }
+
+    /* Clone the live, already-rendered <g> (edges + node cards/circles) and
+     * strip its pan/zoom transform so the clone is in plain "data space",
+     * independent of whatever the user currently has panned/zoomed to.
+     * getBBox() on the live group is used for sizing — it ignores the
+     * element's own transform, so it already reports the full data-space
+     * extent regardless of current pan/zoom or which view (Stencil/Node) is
+     * currently rendered. */
+    function cloneSvgForExport(rendererSvg, rendererG) {
+        var bbox = null;
+        try { bbox = rendererG.getBBox(); } catch (e) { /* empty/detached SVG */ }
+        if (!bbox || bbox.width === 0 || bbox.height === 0) return null;
+
+        var pad = 20;
+        var x0 = bbox.x - pad, y0 = bbox.y - pad;
+        var w = bbox.width + pad * 2, h = bbox.height + pad * 2;
+
+        var clone = rendererSvg.cloneNode(true);
+        var cloneG = clone.querySelector('g');
+        if (cloneG) cloneG.removeAttribute('transform');
+        remapIconGlyphs(clone, rendererSvg);
+        clone.setAttribute('viewBox', x0 + ' ' + y0 + ' ' + w + ' ' + h);
+        clone.setAttribute('width', w);
+        clone.setAttribute('height', h);
+        clone.style.position = 'fixed';
+        clone.style.left = '-99999px';
+        clone.style.top = '0';
+        document.body.appendChild(clone);
+
+        return { element: clone, width: w, height: h };
+    }
+
+    /* ===== Network Topology PDF Export ===== */
+
     TopologyPDF.prototype._exportNetworkPDF = function() {
         var jsPDF = window.jspdf && window.jspdf.jsPDF;
         if (!jsPDF) { alert('jsPDF not loaded'); return; }
+        if (!jsPDF.API || typeof jsPDF.API.svg !== 'function') { alert('svg2pdf not loaded'); return; }
         var self = this;
 
         var state = this.state;
         var nodeData = this.renderer._stencilNodeData;
         if (!nodeData || nodeData.length === 0) { alert('No topology data to export'); return; }
 
-        // Filter to only what's currently visible on screen
-        // Respects: hidden nodes (eye toggle), role filter (sidebar toggles),
-        // isolation (right-click isolate), and any other visibility state
-        var visibleNodes = nodeData.filter(function(n) {
-            if (state.hiddenNodes.has(n.id)) return false;
-            // Check if node is dimmed/filtered by checking SVG opacity
-            var svgNode = d3.select('#topology-svg .node-layer [transform]')
-                ? null : null; // fallback
-            return true;
-        });
-
-        // If role visibility filter is active, also check sidebar role toggles
+        // Filter to what's currently visible, for the header count and size
+        // warning only — the SVG conversion itself just captures whatever's
+        // actually on screen, so it doesn't need this list.
+        var visibleNodes = nodeData.filter(function(n) { return !state.hiddenNodes.has(n.id); });
         if (state.visibleRoles && state.visibleRoles.size > 0) {
-            var allRolesCount = 0;
             var roles = {};
             nodeData.forEach(function(n) { if (n.role) roles[n.role] = true; });
-            allRolesCount = Object.keys(roles).length;
-            // Only filter if not all roles are visible
-            if (state.visibleRoles.size < allRolesCount) {
+            if (state.visibleRoles.size < Object.keys(roles).length) {
                 visibleNodes = visibleNodes.filter(function(n) {
                     return !n.role || state.visibleRoles.has(n.role);
                 });
             }
         }
-
         var visibleIds = new Set(visibleNodes.map(function(n) { return n.id; }));
         var visibleEdges = state.edges.filter(function(e) {
             return visibleIds.has(edgeSourceId(e)) && visibleIds.has(edgeTargetId(e));
         });
 
-        // Warn the user before kicking off a very large render — these can
-        // take 30-60s and produce huge PDFs.
-        var totalOps = visibleNodes.length + visibleEdges.length;
-        if (totalOps > 600) {
+        if (visibleNodes.length === 0) { alert('No visible devices to export'); return; }
+
+        // Warn on very large exports — a file-size/legibility heads-up now,
+        // not a render-time one: we convert the already-rendered SVG in a
+        // single svg2pdf call instead of replaying thousands of manual
+        // jsPDF draw calls per device/port, which used to scale badly
+        // enough to freeze the tab for minutes on topologies like this one
+        // (609 devices / ~1500 ports).
+        if (visibleNodes.length + visibleEdges.length > 800) {
             var ok = confirm(
                 'This topology has ' + visibleNodes.length + ' devices and '
-                + visibleEdges.length + ' cables. The PDF export may take '
-                + 'a while and produce a large file. Continue?'
+                + visibleEdges.length + ' cables. The exported PDF may be large. Continue?'
             );
             if (!ok) return Promise.resolve();
         }
 
-        // Lookups
-        var nodeById = {};
-        visibleNodes.forEach(function(n) { nodeById[n.id] = n; });
-        var portToNode = {};
-        visibleNodes.forEach(function(n) {
-            (n.ports || []).forEach(function(p) { portToNode[p.id] = n; });
-        });
-
-        function getPortPos(pid, otherNid) {
-            var nd = portToNode[pid];
-            if (!nd) return null;
-            var idx = -1;
-            for (var i = 0; i < nd.ports.length; i++) {
-                if (nd.ports[i].id === pid) { idx = i; break; }
-            }
-            if (idx < 0) return null;
-            var other = otherNid ? nodeById[otherNid] : null;
-            var side = (!other || other.x >= nd.x) ? 'right' : 'left';
-            return {
-                x: side === 'right' ? nd.x + CARD_W : nd.x,
-                y: nd.y + HEADER_H + idx * (PORT_H + PORT_GAP) + PORT_H / 2,
-                side: side,
-            };
+        var bodyChildrenBefore = snapshotBodyChildren();
+        var clonedSvg = cloneSvgForExport(self.renderer.svg.node(), self.renderer.g.node());
+        if (!clonedSvg) {
+            alert('Nothing to export — the topology canvas is empty.');
+            return Promise.resolve();
         }
-
-        // Bounding box
-        var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-        visibleNodes.forEach(function(n) {
-            minX = Math.min(minX, n.x);
-            minY = Math.min(minY, n.y);
-            maxX = Math.max(maxX, n.x + CARD_W);
-            maxY = Math.max(maxY, n.y + (n._cardH || 60));
-        });
+        var svgW = clonedSvg.width, svgH = clonedSvg.height;
 
         // Page setup
         var margin = 15, hdrH = 18, ftrH = 14;
-        var svgW = maxX - minX + 40;
-        var svgH = maxY - minY + 40;
         var format = visibleNodes.length > 30 ? 'a3' : 'a4';
         var orientation = (svgW / Math.max(svgH, 1)) > 0.9 ? 'landscape' : 'portrait';
 
-        var doc = new jsPDF({ orientation: orientation, unit: 'mm', format: format });
+        var doc = new jsPDF({ orientation: orientation, unit: 'mm', format: format, compress: true });
         var pageW = doc.internal.pageSize.getWidth();
         var pageH = doc.internal.pageSize.getHeight();
         var bodyW = pageW - margin * 2;
         var bodyH = pageH - margin * 2 - hdrH - ftrH;
-
         var scale = Math.min(bodyW / svgW, bodyH / svgH);
-        var offsetX = margin + (bodyW - svgW * scale) / 2;
-        var offsetY = margin + hdrH + (bodyH - svgH * scale) / 2;
-
-        function tx(x) { return offsetX + (x - minX + 20) * scale; }
-        function ty(y) { return offsetY + (y - minY + 20) * scale; }
-        function ts(v) { return v * scale; }
-        function fs(svgSize) { return Math.max(ts(svgSize) * 0.3, 2.5); }
+        var drawW = svgW * scale, drawH = svgH * scale;
+        var offsetX = margin + (bodyW - drawW) / 2;
+        var offsetY = margin + hdrH + (bodyH - drawH) / 2;
 
         // ===== Header =====
         doc.setFontSize(13);
@@ -272,196 +400,23 @@
         doc.setFont('helvetica', 'normal');
         doc.setTextColor(130, 130, 130);
         doc.text('Exported: ' + new Date().toLocaleString(), pageW - margin, margin + 6, { align: 'right' });
-        doc.text(visibleNodes.length + ' devices  \u00B7  ' + visibleEdges.length + ' cables', pageW - margin, margin + 11, { align: 'right' });
+        doc.text(visibleNodes.length + ' devices  ·  ' + visibleEdges.length + ' cables', pageW - margin, margin + 11, { align: 'right' });
         doc.setDrawColor(210, 210, 210);
         doc.setLineWidth(0.2);
         doc.line(margin, margin + hdrH - 2, pageW - margin, margin + hdrH - 2);
 
-        // ===== Cables =====
-        // Reduce bezier samples on big topologies — visually identical at PDF
-        // scale and cuts per-edge ops by 50%.
-        var bezierSamples = visibleEdges.length > 200 ? 10 : 16;
+        self._setExportProgress('Rendering…');
 
-        function drawCable(edge) {
-            var sid = edgeSourceId(edge), tid = edgeTargetId(edge);
-            var sp = getPortPos(edge.source_port, tid);
-            var tp = getPortPos(edge.target_port, sid);
-            if (!sp || !tp) return;
-
-            var rgb = hexToRgb(edge.color);
-            doc.setDrawColor(rgb.r, rgb.g, rgb.b);
-            doc.setLineWidth(Math.max(ts(1.5), 0.25));
-            if (edge.status_value === 'planned') doc.setLineDashPattern([1.5, 1]);
-            else doc.setLineDashPattern([]);
-
-            if (state.cableStyle === 'ortho') {
-                var sD = sp.side === 'right' ? 1 : -1;
-                var tD = tp.side === 'right' ? 1 : -1;
-                var out = Math.max(Math.abs(tp.x - sp.x) * 0.2, 30);
-                var sx2 = sp.x + out * sD, tx2 = tp.x + out * tD;
-                var mY = (sp.y + tp.y) / 2;
-                doc.line(tx(sp.x), ty(sp.y), tx(sx2), ty(sp.y));
-                doc.line(tx(sx2), ty(sp.y), tx(sx2), ty(mY));
-                doc.line(tx(sx2), ty(mY), tx(tx2), ty(mY));
-                doc.line(tx(tx2), ty(mY), tx(tx2), ty(tp.y));
-                doc.line(tx(tx2), ty(tp.y), tx(tp.x), ty(tp.y));
-            } else {
-                var dx = Math.abs(tp.x - sp.x);
-                var cp = Math.max(dx * 0.45, 60);
-                var sD2 = sp.side === 'right' ? 1 : -1;
-                var tD2 = tp.side === 'right' ? 1 : -1;
-                var pts = sampleBezier(sp.x, sp.y, sp.x+cp*sD2, sp.y, tp.x+cp*tD2, tp.y, tp.x, tp.y, bezierSamples);
-                for (var i = 0; i < pts.length - 1; i++) {
-                    doc.line(tx(pts[i].x), ty(pts[i].y), tx(pts[i+1].x), ty(pts[i+1].y));
-                }
-            }
-            doc.setLineDashPattern([]);
-
-            // Connector dots
-            doc.setFillColor(rgb.r, rgb.g, rgb.b);
-            doc.circle(tx(sp.x), ty(sp.y), Math.max(ts(2.5), 0.4), 'F');
-            doc.circle(tx(tp.x), ty(tp.y), Math.max(ts(2.5), 0.4), 'F');
-        }
-
-        // ===== Cable Labels (only if toggle is ON in the web UI) =====
-        var edgeLayer = document.querySelector('.edge-layer');
-        var showLabels = edgeLayer && edgeLayer.classList.contains('show-cable-labels');
-        var labelT = [0.3, 0.5, 0.7, 0.35, 0.65, 0.4, 0.6, 0.45, 0.55];
-
-        function drawCableLabel(edge, idx) {
-            var sid = edgeSourceId(edge), tid = edgeTargetId(edge);
-            var sp = getPortPos(edge.source_port, tid);
-            var tp = getPortPos(edge.target_port, sid);
-            if (!sp || !tp) return;
-
-            // Short label: just #ID + abbreviated type
-            var label = '#' + edge.cable_id;
-            if (edge.cable_type) {
-                var ct = edge.cable_type;
-                ct = ct.replace('Single-mode Fiber', 'SMF').replace('Multimode Fiber', 'MMF');
-                label += ' ' + ct;
-            }
-
-            var t = labelT[idx % labelT.length];
-            var lx, ly;
-
-            if (state.cableStyle === 'ortho') {
-                lx = sp.x + (tp.x - sp.x) * t;
-                ly = (sp.y + tp.y) / 2;
-            } else {
-                var dx = Math.abs(tp.x - sp.x);
-                var cp = Math.max(dx * 0.45, 60);
-                var sD = sp.side === 'right' ? 1 : -1;
-                var tD = tp.side === 'right' ? 1 : -1;
-                var mt = 1 - t;
-                lx = mt*mt*mt*sp.x + 3*mt*mt*t*(sp.x+cp*sD) + 3*mt*t*t*(tp.x+cp*tD) + t*t*t*tp.x;
-                ly = mt*mt*mt*sp.y + 3*mt*mt*t*sp.y + 3*mt*t*t*tp.y + t*t*t*tp.y;
-            }
-
-            doc.setFontSize(Math.max(fs(5), 1.3));
-            doc.setFont('helvetica', 'normal');
-
-            var tw = doc.getTextWidth(label);
-            var th = doc.getFontSize() * 0.35;
-
-            doc.setFillColor(255, 255, 255);
-            doc.rect(tx(lx) - tw/2 - 0.3, ty(ly) - th - 0.2, tw + 0.6, th + 0.4, 'F');
-            doc.setTextColor(80, 80, 90);
-            doc.text(label, tx(lx), ty(ly), { align: 'center' });
-        }
-
-        // ===== Device Cards =====
-        function drawDeviceCard(node) {
-            var cx = tx(node.x), cy = ty(node.y);
-            var cw = ts(CARD_W), ch = ts(node._cardH || 60);
-            var cr = Math.max(ts(5), 0.4);
-
-            // Card body — clean white with thin border
-            doc.setFillColor(255, 255, 255);
-            doc.setDrawColor(210, 210, 215);
-            doc.setLineWidth(0.15);
-            doc.roundedRect(cx, cy, cw, ch, cr, cr, 'FD');
-
-            // Role stripe — thin 2px line at top
-            var rRgb = hexToRgb(node.role_color);
-            doc.setFillColor(rRgb.r, rRgb.g, rRgb.b);
-            doc.rect(cx, cy, cw, Math.max(ts(3), 0.4), 'F');
-
-            // Name — shrink font until it fits, show full text
-            var name = node.name || '';
-            var maxNameW = cw - ts(6);
-            doc.setFont('helvetica', 'bold');
-            doc.setTextColor(25, 25, 30);
-            // Start at normal size and shrink until it fits
-            var nameSizes = [Math.max(fs(11), 3.5), Math.max(fs(9), 3), Math.max(fs(7.5), 2.5), Math.max(fs(6), 2), Math.max(fs(5), 1.8)];
-            for (var ni = 0; ni < nameSizes.length; ni++) {
-                doc.setFontSize(nameSizes[ni]);
-                if (doc.getTextWidth(name) <= maxNameW) break;
-            }
-            doc.text(name, cx + cw / 2, cy + ts(16), { align: 'center' });
-
-            // Type — same shrink approach
-            var typeStr = node.device_type || '';
-            doc.setFont('helvetica', 'normal');
-            doc.setTextColor(130, 130, 145);
-            var typeSizes = [Math.max(fs(8), 2.5), Math.max(fs(6.5), 2), Math.max(fs(5), 1.8)];
-            for (var ti = 0; ti < typeSizes.length; ti++) {
-                doc.setFontSize(typeSizes[ti]);
-                if (doc.getTextWidth(typeStr) <= maxNameW) break;
-            }
-            doc.text(typeStr, cx + cw / 2, cy + ts(27), { align: 'center' });
-
-            // Separator — subtle line
-            doc.setDrawColor(230, 230, 235);
-            doc.setLineWidth(0.08);
-            doc.line(cx + ts(4), cy + ts(HEADER_H - 2), cx + cw - ts(4), cy + ts(HEADER_H - 2));
-
-            // Ports
-            (node.ports || []).forEach(function(port, i) {
-                var py = cy + ts(HEADER_H + i * (PORT_H + PORT_GAP));
-                var ph = ts(PORT_H);
-
-                // Alternating row
-                doc.setFillColor(i % 2 === 0 ? 248 : 253, i % 2 === 0 ? 248 : 253, i % 2 === 0 ? 251 : 255);
-                doc.rect(cx, py, cw, ph, 'F');
-
-                // Accent bar
-                var pRgb = hexToRgb(portColorHex(port));
-                doc.setFillColor(pRgb.r, pRgb.g, pRgb.b);
-                doc.rect(cx, py + ts(2), Math.max(ts(3), 0.3), Math.max(ph - ts(4), 0.8), 'F');
-
-                // Port name
-                doc.setFontSize(Math.max(fs(9), 2));
-                doc.setFont('courier', 'normal');
-                doc.setTextColor(40, 40, 50);
-                var pn = port.name;
-                var maxPortW = cw * 0.55;
-                while (doc.getTextWidth(pn) > maxPortW && pn.length > 3) {
-                    pn = pn.substring(0, pn.length - 2) + '..';
-                }
-                doc.text(pn, cx + ts(8), py + ph * 0.62);
-
-                // Speed text
-                var badge = portBadge(port);
-                if (badge) {
-                    doc.setFontSize(Math.max(fs(8), 1.8));
-                    doc.setFont('helvetica', 'bold');
-                    doc.setTextColor(pRgb.r, pRgb.g, pRgb.b);
-                    doc.text(badge, cx + cw - ts(6), py + ph * 0.62, { align: 'right' });
-                }
-            });
-        }
-
-        // ===== Async chunked render — keeps the browser responsive on
-        // large topologies (#43). Each phase yields to the event loop
-        // between batches via requestAnimationFrame.
-        return self._chunked(visibleEdges, drawCable, 60, 'Cables')
-            .then(function() {
-                if (!showLabels) return;
-                return self._chunked(visibleEdges, drawCableLabel, 100, 'Labels');
+        return getMdiFontData()
+            .then(function(fontData) {
+                return registerMdiFont(doc, fontData);
             })
             .then(function() {
-                return self._chunked(visibleNodes, drawDeviceCard, 25, 'Devices');
+                return doc.svg(clonedSvg.element, { x: offsetX, y: offsetY, width: drawW, height: drawH });
+            })
+            .finally(function() {
+                document.body.removeChild(clonedSvg.element);
+                sweepLeakedBodyChildren(bodyChildrenBefore);
             })
             .then(function() {
                 self._setExportProgress('Finalizing…');
@@ -470,59 +425,58 @@
             });
 
         function drawNetworkFooter() {
-        // ===== Footer Legend =====
-        var ly = pageH - margin - ftrH + 6;
-        doc.setDrawColor(210, 210, 210);
-        doc.setLineWidth(0.2);
-        doc.line(margin, ly - 4, pageW - margin, ly - 4);
+            // ===== Footer Legend =====
+            var ly = pageH - margin - ftrH + 6;
+            doc.setDrawColor(210, 210, 210);
+            doc.setLineWidth(0.2);
+            doc.line(margin, ly - 4, pageW - margin, ly - 4);
 
-        var lx = margin;
-        doc.setFontSize(5.5);
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(120, 120, 120);
-        doc.text('SPEED', lx, ly); lx += 13;
+            var lx = margin;
+            doc.setFontSize(5.5);
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(120, 120, 120);
+            doc.text('SPEED', lx, ly); lx += 13;
 
-        [['100M','#f39c12'],['1G','#2ecc71'],['10G','#3498db'],['25G','#9b59b6'],['40G','#e74c3c'],['100G','#e91e63']].forEach(function(s) {
-            var c = hexToRgb(s[1]);
-            doc.setFillColor(c.r, c.g, c.b);
-            doc.circle(lx, ly - 1, 1, 'F');
-            doc.setFont('helvetica', 'normal');
-            doc.setTextColor(80, 80, 80);
-            doc.text(s[0], lx + 2.5, ly);
-            lx += doc.getTextWidth(s[0]) + 6;
-        });
+            [['100M','#f39c12'],['1G','#2ecc71'],['10G','#3498db'],['25G','#9b59b6'],['40G','#e74c3c'],['100G','#e91e63']].forEach(function(s) {
+                var c = hexToRgb(s[1]);
+                doc.setFillColor(c.r, c.g, c.b);
+                doc.circle(lx, ly - 1, 1, 'F');
+                doc.setFont('helvetica', 'normal');
+                doc.setTextColor(80, 80, 80);
+                doc.text(s[0], lx + 2.5, ly);
+                lx += doc.getTextWidth(s[0]) + 6;
+            });
 
-        lx += 6;
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(120, 120, 120);
-        doc.text('PORT', lx, ly); lx += 10;
+            lx += 6;
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(120, 120, 120);
+            doc.text('PORT', lx, ly); lx += 10;
 
-        [['Front','#ff9800'],['Rear','#795548']].forEach(function(p) {
-            var c = hexToRgb(p[1]);
-            doc.setFillColor(c.r, c.g, c.b);
-            doc.circle(lx, ly - 1, 1, 'F');
-            doc.setFont('helvetica', 'normal');
-            doc.setTextColor(80, 80, 80);
-            doc.text(p[0], lx + 2.5, ly);
-            lx += doc.getTextWidth(p[0]) + 6;
-        });
-        }  // end drawNetworkFooter
+            [['Front','#ff9800'],['Rear','#795548']].forEach(function(p) {
+                var c = hexToRgb(p[1]);
+                doc.setFillColor(c.r, c.g, c.b);
+                doc.circle(lx, ly - 1, 1, 'F');
+                doc.setFont('helvetica', 'normal');
+                doc.setTextColor(80, 80, 80);
+                doc.text(p[0], lx + 2.5, ly);
+                lx += doc.getTextWidth(p[0]) + 6;
+            });
+        }
     };
 
-    /* ===== App Topology PDF Export ===== */
-
-    var APP_W = 220, APP_HEADER = 40, APP_PORT_H = 16, APP_PORT_GAP = 1, APP_PORT_PAD = 4;
+    /* ===== Application Topology PDF Export ===== */
 
     TopologyPDF.prototype.exportAppPDF = function() {
         var jsPDF = window.jspdf && window.jspdf.jsPDF;
         if (!jsPDF) { alert('jsPDF not loaded'); return; }
+        if (!jsPDF.API || typeof jsPDF.API.svg !== 'function') { alert('svg2pdf not loaded'); return; }
         var self = this;
 
         var state = this.state;
         var nodeData = this.renderer._stencilNodeData;
         if (!nodeData || nodeData.length === 0) { alert('No topology data to export'); return; }
 
-        // Filter to apps only
+        // Filter to apps only, for the header count and size warning
         var nodes = nodeData.filter(function(n) {
             return n.node_type === 'application' && !state.hiddenNodes.has(n.id);
         });
@@ -532,48 +486,38 @@
                 nodeIds.has(edgeSourceId(e)) && nodeIds.has(edgeTargetId(e));
         });
 
-        // Warn the user before kicking off a very large render (#43)
-        if (nodes.length + edges.length > 600) {
+        if (nodes.length === 0) { alert('No visible apps to export'); return; }
+
+        if (nodes.length + edges.length > 800) {
             var ok = confirm(
                 'This topology has ' + nodes.length + ' apps and '
-                + edges.length + ' dependencies. The PDF export may take '
-                + 'a while. Continue?'
+                + edges.length + ' dependencies. The exported PDF may be large. Continue?'
             );
             if (!ok) return Promise.resolve();
         }
 
-        var nodeById = {};
-        nodes.forEach(function(n) { nodeById[n.id] = n; });
-
-        // Bounding box
-        var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-        nodes.forEach(function(n) {
-            minX = Math.min(minX, n.x);
-            minY = Math.min(minY, n.y);
-            maxX = Math.max(maxX, n.x + APP_W);
-            maxY = Math.max(maxY, n.y + (n._h || n._cardH || 60));
-        });
+        var bodyChildrenBefore = snapshotBodyChildren();
+        var clonedSvg = cloneSvgForExport(self.renderer.svg.node(), self.renderer.g.node());
+        if (!clonedSvg) {
+            alert('Nothing to export — the topology canvas is empty.');
+            return Promise.resolve();
+        }
+        var svgW = clonedSvg.width, svgH = clonedSvg.height;
 
         // Page setup
         var margin = 15, hdrH = 18, ftrH = 14;
-        var svgW = maxX - minX + 40;
-        var svgH = maxY - minY + 40;
         var format = nodes.length > 25 ? 'a3' : 'a4';
         var orientation = (svgW / Math.max(svgH, 1)) > 0.9 ? 'landscape' : 'portrait';
 
-        var doc = new jsPDF({ orientation: orientation, unit: 'mm', format: format });
+        var doc = new jsPDF({ orientation: orientation, unit: 'mm', format: format, compress: true });
         var pageW = doc.internal.pageSize.getWidth();
         var pageH = doc.internal.pageSize.getHeight();
         var bodyW = pageW - margin * 2;
         var bodyH = pageH - margin * 2 - hdrH - ftrH;
         var scale = Math.min(bodyW / svgW, bodyH / svgH);
-        var offsetX = margin + (bodyW - svgW * scale) / 2;
-        var offsetY = margin + hdrH + (bodyH - svgH * scale) / 2;
-
-        function tx(x) { return offsetX + (x - minX + 20) * scale; }
-        function ty(y) { return offsetY + (y - minY + 20) * scale; }
-        function ts(v) { return v * scale; }
-        function fs(sz) { return Math.max(ts(sz) * 0.3, 2); }
+        var drawW = svgW * scale, drawH = svgH * scale;
+        var offsetX = margin + (bodyW - drawW) / 2;
+        var offsetY = margin + hdrH + (bodyH - drawH) / 2;
 
         // ── Header ──
         doc.setFontSize(13);
@@ -585,172 +529,23 @@
         doc.setFont('helvetica', 'normal');
         doc.setTextColor(130, 130, 130);
         doc.text('Exported: ' + new Date().toLocaleString(), pageW - margin, margin + 6, { align: 'right' });
-        doc.text(nodes.length + ' apps  \u00B7  ' + edges.length + ' dependencies', pageW - margin, margin + 11, { align: 'right' });
+        doc.text(nodes.length + ' apps  ·  ' + edges.length + ' dependencies', pageW - margin, margin + 11, { align: 'right' });
         doc.setDrawColor(210, 210, 210);
         doc.setLineWidth(0.2);
         doc.line(margin, margin + hdrH - 2, pageW - margin, margin + hdrH - 2);
 
-        // ── Edges (bezier) ──
-        // Reduce sample count on big topologies (#43)
-        var appBezierSamples = edges.length > 200 ? 12 : 18;
+        self._setExportProgress('Rendering…');
 
-        function drawAppEdge(e) {
-            var sn = nodeById[edgeSourceId(e)];
-            var tn = nodeById[edgeTargetId(e)];
-            if (!sn || !tn) return;
-
-            var rgb = hexToRgb(e.color);
-            doc.setDrawColor(rgb.r, rgb.g, rgb.b);
-            doc.setLineWidth(Math.max(ts(e.dependency_type === 'soft' ? 0.8 : 1.2), 0.15));
-            if (e.dependency_type === 'soft') doc.setLineDashPattern([1.5, 1]);
-            else doc.setLineDashPattern([]);
-
-            // Bezier curves — each edge gets a unique path
-            var sx, stx, sDir, tDir;
-            if (sn.x + APP_W <= tn.x) {
-                sx = sn.x + APP_W; stx = tn.x; sDir = 1; tDir = -1;
-            } else if (tn.x + APP_W <= sn.x) {
-                sx = sn.x; stx = tn.x + APP_W; sDir = -1; tDir = 1;
-            } else {
-                sx = sn.x + APP_W; stx = tn.x; sDir = 1; tDir = -1;
-            }
-
-            // Use port Y if available, else card center
-            var sy = sn.y + (sn._h || 60) / 2;
-            var sty = tn.y + (tn._h || 60) / 2;
-            if (e.source_port && sn._portById && sn._portById[e.source_port]) {
-                sy = sn.y + sn._portById[e.source_port]._y;
-            }
-            if (e.target_port && tn._portById && tn._portById[e.target_port]) {
-                sty = tn.y + tn._portById[e.target_port]._y;
-            }
-
-            var dx = Math.abs(stx - sx);
-            var cp = Math.max(dx * 0.4, 40);
-            var pts = sampleBezier(sx, sy, sx + cp * sDir, sy, stx + cp * tDir, sty, stx, sty, appBezierSamples);
-            for (var pi = 0; pi < pts.length - 1; pi++) {
-                doc.line(tx(pts[pi].x), ty(pts[pi].y), tx(pts[pi + 1].x), ty(pts[pi + 1].y));
-            }
-
-            // Arrow at target
-            var arrSize = Math.max(ts(4), 0.6);
-            doc.setFillColor(rgb.r, rgb.g, rgb.b);
-            if (e.dependency_type !== 'soft') {
-                doc.triangle(
-                    tx(stx), ty(sty),
-                    tx(stx) + arrSize * tDir, ty(sty) - arrSize * 0.5,
-                    tx(stx) + arrSize * tDir, ty(sty) + arrSize * 0.5,
-                    'F'
-                );
-            }
-            doc.setLineDashPattern([]);
-        }
-
-        // ── App Cards ──
-        function drawAppCard(n) {
-            var cx = tx(n.x), cy = ty(n.y);
-            var cw = ts(APP_W), ch = ts(n._h || n._cardH || 60);
-            var cr = Math.max(ts(4), 0.3);
-
-            // Card body
-            doc.setFillColor(255, 255, 255);
-            doc.setDrawColor(210, 210, 215);
-            doc.setLineWidth(0.12);
-            doc.roundedRect(cx, cy, cw, ch, cr, cr, 'FD');
-
-            // Left accent bar (group/criticality color)
-            var accentRgb = hexToRgb(n.category_color || n.role_color || n.criticality_color);
-            doc.setFillColor(accentRgb.r, accentRgb.g, accentRgb.b);
-            doc.rect(cx, cy + cr, Math.max(ts(3), 0.3), ch - cr * 2, 'F');
-
-            // Name
-            var name = n.name || '';
-            doc.setFont('helvetica', 'bold');
-            doc.setTextColor(25, 25, 30);
-            var nameSize = Math.max(fs(12), 3);
-            doc.setFontSize(nameSize);
-            var maxNameW = cw - ts(12);
-            while (doc.getTextWidth(name) > maxNameW && name.length > 3) {
-                name = name.substring(0, name.length - 2) + '\u2026';
-            }
-            doc.text(name, cx + ts(8), cy + ts(15));
-
-            // Status pill
-            var hs = n.host_status || 'healthy';
-            if (hs === 'down' || hs === 'degraded') {
-                var pillText = hs === 'down' ? 'DOWN' : 'DEGRADED';
-                var pillColor = hs === 'down' ? hexToRgb('#ef4444') : hexToRgb('#f97316');
-                doc.setFontSize(Math.max(fs(7), 1.8));
-                doc.setFont('helvetica', 'bold');
-                var pw = doc.getTextWidth(pillText) + ts(4);
-                var px = cx + cw - pw - ts(4);
-                // Light tinted pill background
-                doc.setFillColor(
-                    Math.min(255, pillColor.r + 180),
-                    Math.min(255, pillColor.g + 180),
-                    Math.min(255, pillColor.b + 180)
-                );
-                doc.roundedRect(px, cy + ts(4), pw, ts(10), 1, 1, 'F');
-                doc.setTextColor(pillColor.r, pillColor.g, pillColor.b);
-                doc.text(pillText, px + pw / 2, cy + ts(11), { align: 'center' });
-            }
-
-            // Subtitle (group · env)
-            var sub = [n.group, n.environment].filter(Boolean).join(' \u00B7 ');
-            doc.setFontSize(Math.max(fs(8), 2));
-            doc.setFont('helvetica', 'normal');
-            doc.setTextColor(130, 130, 145);
-            doc.text(sub, cx + ts(8), cy + ts(28));
-
-            // Separator
-            if (n._portsL && n._portsL.length > 0 || n._portsR && n._portsR.length > 0) {
-                doc.setDrawColor(230, 230, 235);
-                doc.setLineWidth(0.08);
-                doc.line(cx + ts(6), cy + ts(APP_HEADER), cx + cw - ts(6), cy + ts(APP_HEADER));
-
-                // Section headers
-                doc.setFontSize(Math.max(fs(7), 1.5));
-                doc.setFont('helvetica', 'bold');
-                doc.setTextColor(160, 160, 170);
-                if (n._portsL && n._portsL.length > 0) {
-                    doc.text('DEPENDS ON', cx + ts(6), cy + ts(APP_HEADER + 8));
-                }
-                if (n._portsR && n._portsR.length > 0) {
-                    doc.text('NEEDED BY', cx + cw - ts(6), cy + ts(APP_HEADER + 8), { align: 'right' });
-                }
-
-                // Port labels
-                doc.setFontSize(Math.max(fs(8), 1.8));
-                doc.setFont('helvetica', 'normal');
-                doc.setTextColor(80, 80, 90);
-
-                (n._portsL || []).forEach(function(p) {
-                    var portName = p.name || '';
-                    if (portName.length > 14) portName = portName.substring(0, 12) + '..';
-                    doc.text(portName, cx + ts(6), cy + ts(p._y + 3));
-                });
-                (n._portsR || []).forEach(function(p) {
-                    var portName = p.name || '';
-                    if (portName.length > 14) portName = portName.substring(0, 12) + '..';
-                    doc.text(portName, cx + cw - ts(6), cy + ts(p._y + 3), { align: 'right' });
-                });
-            }
-
-            // Footer (host count)
-            if (n.deploy_count > 0) {
-                var footerText = n.deploy_count + (n.deploy_count === 1 ? ' host' : ' hosts');
-                doc.setFontSize(Math.max(fs(7), 1.5));
-                doc.setFont('helvetica', 'normal');
-                doc.setTextColor(160, 160, 170);
-                doc.text(footerText, cx + cw / 2, cy + ch - ts(4), { align: 'center' });
-            }
-        }
-
-        // ===== Async chunked render — keeps the browser responsive on
-        // large topologies (#43)
-        return self._chunked(edges, drawAppEdge, 50, 'Edges')
+        return getMdiFontData()
+            .then(function(fontData) {
+                return registerMdiFont(doc, fontData);
+            })
             .then(function() {
-                return self._chunked(nodes, drawAppCard, 25, 'Apps');
+                return doc.svg(clonedSvg.element, { x: offsetX, y: offsetY, width: drawW, height: drawH });
+            })
+            .finally(function() {
+                document.body.removeChild(clonedSvg.element);
+                sweepLeakedBodyChildren(bodyChildrenBefore);
             })
             .then(function() {
                 self._setExportProgress('Finalizing…');
@@ -759,49 +554,49 @@
             });
 
         function drawAppFooter() {
-        // ── Footer Legend ──
-        var ly = pageH - margin - ftrH + 6;
-        doc.setDrawColor(210, 210, 210);
-        doc.setLineWidth(0.2);
-        doc.line(margin, ly - 4, pageW - margin, ly - 4);
+            // ── Footer Legend ──
+            var ly = pageH - margin - ftrH + 6;
+            doc.setDrawColor(210, 210, 210);
+            doc.setLineWidth(0.2);
+            doc.line(margin, ly - 4, pageW - margin, ly - 4);
 
-        var lx = margin;
-        doc.setFontSize(5.5);
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(120, 120, 120);
-        doc.text('DEPENDENCY', lx, ly); lx += 22;
+            var lx = margin;
+            doc.setFontSize(5.5);
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(120, 120, 120);
+            doc.text('DEPENDENCY', lx, ly); lx += 22;
 
-        // Hard line
-        doc.setDrawColor(231, 76, 60);
-        doc.setLineWidth(0.3);
-        doc.setLineDashPattern([]);
-        doc.line(lx, ly - 1, lx + 8, ly - 1);
-        doc.setFont('helvetica', 'normal');
-        doc.setTextColor(80, 80, 80);
-        doc.text('Hard', lx + 10, ly); lx += 20;
-
-        // Soft line
-        doc.setDrawColor(230, 126, 34);
-        doc.setLineDashPattern([1, 0.8]);
-        doc.line(lx, ly - 1, lx + 8, ly - 1);
-        doc.setLineDashPattern([]);
-        doc.text('Soft', lx + 10, ly); lx += 20;
-
-        lx += 6;
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(120, 120, 120);
-        doc.text('STATUS', lx, ly); lx += 14;
-
-        [['Down','#ef4444'],['Degraded','#f97316'],['Active','#2ecc71']].forEach(function(s) {
-            var c = hexToRgb(s[1]);
-            doc.setFillColor(c.r, c.g, c.b);
-            doc.circle(lx, ly - 1, 1, 'F');
+            // Hard line
+            doc.setDrawColor(231, 76, 60);
+            doc.setLineWidth(0.3);
+            doc.setLineDashPattern([]);
+            doc.line(lx, ly - 1, lx + 8, ly - 1);
             doc.setFont('helvetica', 'normal');
             doc.setTextColor(80, 80, 80);
-            doc.text(s[0], lx + 2.5, ly);
-            lx += doc.getTextWidth(s[0]) + 6;
-        });
-        }  // end drawAppFooter
+            doc.text('Hard', lx + 10, ly); lx += 20;
+
+            // Soft line
+            doc.setDrawColor(230, 126, 34);
+            doc.setLineDashPattern([1, 0.8]);
+            doc.line(lx, ly - 1, lx + 8, ly - 1);
+            doc.setLineDashPattern([]);
+            doc.text('Soft', lx + 10, ly); lx += 20;
+
+            lx += 6;
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(120, 120, 120);
+            doc.text('STATUS', lx, ly); lx += 14;
+
+            [['Down','#ef4444'],['Degraded','#f97316'],['Active','#2ecc71']].forEach(function(s) {
+                var c = hexToRgb(s[1]);
+                doc.setFillColor(c.r, c.g, c.b);
+                doc.circle(lx, ly - 1, 1, 'F');
+                doc.setFont('helvetica', 'normal');
+                doc.setTextColor(80, 80, 80);
+                doc.text(s[0], lx + 2.5, ly);
+                lx += doc.getTextWidth(s[0]) + 6;
+            });
+        }
     };
 
     window.TopologyPDF = TopologyPDF;

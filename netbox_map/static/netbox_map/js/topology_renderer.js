@@ -1177,7 +1177,7 @@
                             .attr('x', CARD_W - 14).attr('y', 16)
                             .attr('font-family', 'Material Design Icons')
                             .attr('font-size', 14).attr('fill', '#f39c12')
-                            .text('\uF403');
+                            .text('\u{F0403}'); // mdi-pin
                     } else {
                         cardEl.select('.stencil-bg')
                             .attr('stroke', null)

@@ -192,36 +192,43 @@ window.TopologyApp = (function() {
         }
     }
 
-    // Map device role slugs to MDI icon Unicode codepoints
-    var ROLE_ICONS = {
-        'router': '\uF522',          // mdi-router
-        'core-router': '\uF522',
-        'switch': '\uF1B3',          // mdi-lan
-        'core-switch': '\uF1B3',
-        'access-switch': '\uF1B3',
-        'distribution-switch': '\uF1B3',
-        'firewall': '\uF587',        // mdi-shield-lock
-        'server': '\uF4B8',          // mdi-server
-        'storage': '\uF1DA',         // mdi-harddisk
-        'access-point': '\uF5A8',    // mdi-access-point
-        'wireless': '\uF5A8',
-        'pdu': '\uF192C',            // mdi-power-plug
-        'ups': '\uF06D5',            // mdi-battery
-        'console-server': '\uF120',  // mdi-console
-        'patch-panel': '\uF0C73',    // mdi-ethernet
-        'phone': '\uF03F2',          // mdi-phone
-        'camera': '\uF0124',         // mdi-camera
-        'printer': '\uF042A',        // mdi-printer
+    // Map device role slugs to MDI icon Unicode codepoints. Verified against
+    // the currently-bundled Material Design Icons 7.4.47 (NetBox core's own
+    // netbox-external.css) \u2014 most MDI icons live in the Supplementary
+    // Private Use Area (codepoints > U+FFFF) and need the \u{XXXXX} code
+    // point escape, not \uXXXXX, which silently truncates to \uXXXX plus a
+    // stray literal trailing character (#XX, garbled text in exports where
+    // it isn't clipped by a small on-screen circle).
+    const ROLE_ICONS = {
+        'router': '\u{F11E2}',          // mdi-router
+        'core-router': '\u{F11E2}',
+        'switch': '\u{F0317}',          // mdi-lan
+        'core-switch': '\u{F0317}',
+        'access-switch': '\u{F0317}',
+        'distribution-switch': '\u{F0317}',
+        'firewall': '\u{F099D}',        // mdi-shield-lock
+        'server': '\u{F048B}',          // mdi-server
+        'storage': '\u{F02CA}',         // mdi-harddisk
+        'access-point': '\u{F0003}',    // mdi-access-point
+        'wireless': '\u{F0003}',
+        'pdu': '\u{F0427}',             // mdi-power-socket
+        'ups': '\u{F0079}',             // mdi-battery
+        'console-server': '\u{F018D}',  // mdi-console
+        'patch-panel': '\u{F0200}',     // mdi-ethernet
+        'phone': '\u{F03F2}',           // mdi-phone
+        'camera': '\u{F0100}',          // mdi-camera
+        'printer': '\u{F042A}',         // mdi-printer
     };
+    const ROLE_ICON_DEFAULT = '\u{F0379}'; // mdi-monitor
 
     function roleIcon(roleSlug) {
-        if (!roleSlug) return '\uF1A7';  // mdi-monitor (default)
+        if (!roleSlug) return ROLE_ICON_DEFAULT;
         // Try exact match, then partial
         if (ROLE_ICONS[roleSlug]) return ROLE_ICONS[roleSlug];
         for (var key in ROLE_ICONS) {
             if (roleSlug.indexOf(key) !== -1) return ROLE_ICONS[key];
         }
-        return '\uF1A7';  // mdi-monitor
+        return ROLE_ICON_DEFAULT;
     }
 
     /* ===== Application Utilities ===== */
@@ -231,14 +238,20 @@ window.TopologyApp = (function() {
         return colors[level] || '#6c757d';
     }
 
-    var APP_TYPE_ICONS = {
-        'web-app': '\uF59F', 'database': '\uF1BC', 'api': '\uF0106',
-        'messaging': '\uF0361', 'cache': '\uF0E8C', 'monitoring': '\uF0239',
-        'storage': '\uF1DA', 'auth': '\uF0587',
+    const APP_TYPE_ICONS = {
+        'web-app': '\u{F059F}',    // mdi-web
+        'database': '\u{F01BC}',   // mdi-database
+        'api': '\u{F109B}',        // mdi-api
+        'messaging': '\u{F0361}',  // mdi-message
+        'cache': '\u{F035B}',      // mdi-memory
+        'monitoring': '\u{F0430}', // mdi-pulse
+        'storage': '\u{F02CA}',    // mdi-harddisk
+        'auth': '\u{F0BC4}',       // mdi-shield-key
     };
+    const APP_TYPE_ICON_DEFAULT = '\u{F08C6}'; // mdi-application
 
     function appTypeIcon(type) {
-        return APP_TYPE_ICONS[type] || '\uF0379'; // mdi-application default
+        return APP_TYPE_ICONS[type] || APP_TYPE_ICON_DEFAULT;
     }
 
     return {
