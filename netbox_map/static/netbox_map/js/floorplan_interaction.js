@@ -26,6 +26,17 @@
         this._dragOrigX = 0;
         this._dragOrigY = 0;
 
+        // Tile resize state (edit mode — drag the corner handle)
+        this._isResizingTile = false;
+        this._resizeTile = null;
+        this._resizeOrigW = 0;
+        this._resizeOrigH = 0;
+
+        // Tile rotate state (edit mode — drag the offset circle handle)
+        this._isRotatingTile = false;
+        this._rotateTile = null;
+        this._rotateOrigOrient = 0;
+
         this._bindEvents();
     }
 
@@ -37,6 +48,26 @@
             x: e.clientX - rect.left,
             y: e.clientY - rect.top
         };
+    };
+
+    /** Which handle (if any) of the currently-selected tile is under this world point. */
+    Interaction.prototype._handleAt = function(wx, wy) {
+        var s = this.state;
+        if (!s.editMode || !s.selectedTile) return null;
+        if (!s.visibleTypes.has(s.selectedTile.type)) return null;
+
+        var handles = this.renderer.getTileHandles(s.selectedTile);
+
+        var rot = handles.rotate;
+        var rdx = wx - rot.x, rdy = wy - rot.y;
+        // Slightly generous hit radius (2x drawn size) — a tiny circle is hard to hit precisely.
+        if (rdx * rdx + rdy * rdy <= (rot.radius * 2) * (rot.radius * 2)) return 'rotate';
+
+        var rs = handles.resize;
+        if (wx >= rs.x - rs.halfSize * 2 && wx <= rs.x + rs.halfSize * 2 &&
+            wy >= rs.y - rs.halfSize * 2 && wy <= rs.y + rs.halfSize * 2) return 'resize';
+
+        return null;
     };
 
     // ─── Event Binding ────────────────────────────────────────────
@@ -129,6 +160,24 @@
         if (e.button === 0) {
             var pos = this._getMousePos(e);
             var world = this.renderer.screenToWorld(pos.x, pos.y);
+
+            var handle = this._handleAt(world.x, world.y);
+            if (handle === 'resize') {
+                this._isResizingTile = true;
+                this._resizeTile = s.selectedTile;
+                this._resizeOrigW = s.selectedTile.w;
+                this._resizeOrigH = s.selectedTile.h;
+                this._didDrag = false;
+                return;
+            }
+            if (handle === 'rotate') {
+                this._isRotatingTile = true;
+                this._rotateTile = s.selectedTile;
+                this._rotateOrigOrient = s.selectedTile.orientation || 0;
+                this._didDrag = false;
+                return;
+            }
+
             var tileUnder = this.renderer.findTileAt(world.x, world.y);
 
             if (s.editMode && tileUnder) {
@@ -157,6 +206,51 @@
     Interaction.prototype._onMouseMove = function(e) {
         var s = this.state;
 
+        // Tile resize (edit mode — drag the corner handle)
+        if (this._isResizingTile && this._resizeTile) {
+            this._didDrag = true;
+            this.canvas.style.cursor = 'nwse-resize';
+            var tile = this._resizeTile;
+            var pos = this._getMousePos(e);
+            var world = this.renderer.screenToWorld(pos.x, pos.y);
+
+            var newW = Math.round((world.x - tile.x * s.tileSize) / s.tileSize);
+            var newH = Math.round((world.y - tile.y * s.tileSize) / s.tileSize);
+            newW = Math.max(1, Math.min(s.tileMaxSize, s.gridWidth - tile.x, newW));
+            newH = Math.max(1, Math.min(s.tileMaxSize, s.gridHeight - tile.y, newH));
+
+            if ((newW !== tile.w || newH !== tile.h) &&
+                !App.isPositionOccupied(s, tile.x, tile.y, newW, newH, tile.id)) {
+                tile.w = newW;
+                tile.h = newH;
+                this.events.emit('render');
+            }
+            return;
+        }
+
+        // Tile rotate (edit mode — drag the offset circle handle)
+        if (this._isRotatingTile && this._rotateTile) {
+            this._didDrag = true;
+            this.canvas.style.cursor = 'grabbing';
+            var rtile = this._rotateTile;
+            var rpos = this._getMousePos(e);
+            var rworld = this.renderer.screenToWorld(rpos.x, rpos.y);
+            var center = this.renderer.getTileHandles(rtile).center;
+
+            var angleDeg = Math.atan2(rworld.y - center.y, rworld.x - center.x) * 180 / Math.PI;
+            // The rotate handle rests above the tile (world "up", atan2 = -90°);
+            // treat that as orientation 0 and increase clockwise as the handle
+            // is dragged clockwise, snapped to the four steps the field supports.
+            var rotFromUp = ((angleDeg + 90) % 360 + 360) % 360;
+            var snapped = Math.round(rotFromUp / 90) * 90 % 360;
+
+            if (snapped !== (rtile.orientation || 0)) {
+                rtile.orientation = snapped;
+                this.events.emit('render');
+            }
+            return;
+        }
+
         // Tile drag (edit mode)
         if (this._isDraggingTile && this._dragTile) {
             var dx = e.clientX - this._panStartX;
@@ -171,7 +265,8 @@
             var newX = Math.max(0, Math.min(s.gridWidth - this._dragTile.w, this._dragOrigX + cellDx));
             var newY = Math.max(0, Math.min(s.gridHeight - this._dragTile.h, this._dragOrigY + cellDy));
 
-            if (this._dragTile.x !== newX || this._dragTile.y !== newY) {
+            if ((this._dragTile.x !== newX || this._dragTile.y !== newY) &&
+                !App.isPositionOccupied(s, newX, newY, this._dragTile.w, this._dragTile.h, this._dragTile.id)) {
                 this._dragTile.x = newX;
                 this._dragTile.y = newY;
                 this.events.emit('render');
@@ -198,6 +293,54 @@
     Interaction.prototype._onMouseUp = function(e) {
         var s = this.state;
 
+        // Finish tile resize — PATCH the new size
+        if (this._isResizingTile && this._resizeTile) {
+            var rtile = this._resizeTile;
+            var newW = rtile.w, newH = rtile.h;
+            var origW = this._resizeOrigW, origH = this._resizeOrigH;
+            this._isResizingTile = false;
+            this._resizeTile = null;
+            this.canvas.style.cursor = '';
+
+            if (newW !== origW || newH !== origH) {
+                var self = this;
+                App.patchTileFields(s, this.events, rtile, { w: newW, h: newH })
+                .then(function() {
+                    self.events.emit('sidebar:rebuild');
+                    App.pushFieldHistory(s, self.events, rtile, { w: newW, h: newH }, { w: origW, h: origH });
+                }).catch(function(err) {
+                    rtile.w = origW;
+                    rtile.h = origH;
+                    self.events.emit('render');
+                    alert('Resize failed: ' + (err.detail ? JSON.stringify(err.detail) : err.message));
+                });
+            }
+            return;
+        }
+
+        // Finish tile rotate — PATCH the new orientation
+        if (this._isRotatingTile && this._rotateTile) {
+            var otile = this._rotateTile;
+            var newOrient = otile.orientation || 0;
+            var origOrient = this._rotateOrigOrient;
+            this._isRotatingTile = false;
+            this._rotateTile = null;
+            this.canvas.style.cursor = '';
+
+            if (newOrient !== origOrient) {
+                var oself = this;
+                App.patchTileFields(s, this.events, otile, { orientation: newOrient })
+                .then(function() {
+                    App.pushFieldHistory(s, oself.events, otile, { orientation: newOrient }, { orientation: origOrient });
+                }).catch(function(err) {
+                    otile.orientation = origOrient;
+                    oself.events.emit('render');
+                    alert('Rotate failed: ' + (err.detail ? JSON.stringify(err.detail) : err.message));
+                });
+            }
+            return;
+        }
+
         // Finish tile drag — PATCH the new position
         if (this._isDraggingTile && this._dragTile && this._didDrag) {
             var tile = this._dragTile;
@@ -210,14 +353,10 @@
 
             // Only PATCH if position actually changed
             if (newX !== origX || newY !== origY) {
-                var api = new App.API(s);
                 var self = this;
-                api.patch(s.apiUrl + tile.id + '/', {
-                    x_position: newX,
-                    y_position: newY
-                }).then(function() {
-                    // Success — emit update
-                    self.events.emit('tile:update', tile);
+                App.patchTileFields(s, this.events, tile, { x: newX, y: newY })
+                .then(function() {
+                    App.pushFieldHistory(s, self.events, tile, { x: newX, y: newY }, { x: origX, y: origY });
                 }).catch(function(err) {
                     // Revert on failure
                     tile.x = origX;
@@ -267,13 +406,26 @@
     // ─── Canvas Hover ─────────────────────────────────────────────
 
     Interaction.prototype._onCanvasHover = function(e) {
-        if (this._isPanning || this._isDraggingTile) {
+        if (this._isPanning || this._isDraggingTile || this._isResizingTile || this._isRotatingTile) {
             this.events.emit('hover', { tile: null, x: 0, y: 0 });
             return;
         }
 
         var pos = this._getMousePos(e);
         var world = this.renderer.screenToWorld(pos.x, pos.y);
+
+        var handle = this._handleAt(world.x, world.y);
+        if (handle === 'resize') {
+            this.canvas.style.cursor = 'nwse-resize';
+            this.events.emit('hover', { tile: null, x: 0, y: 0 });
+            return;
+        }
+        if (handle === 'rotate') {
+            this.canvas.style.cursor = 'grab';
+            this.events.emit('hover', { tile: null, x: 0, y: 0 });
+            return;
+        }
+
         var tile = this.renderer.findTileAt(world.x, world.y);
 
         this.canvas.style.cursor = tile ? 'pointer' : 'default';

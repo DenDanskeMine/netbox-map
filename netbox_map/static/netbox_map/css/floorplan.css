@@ -698,8 +698,25 @@
     border: 1px solid var(--fp-input-border);
     color: var(--fp-input-text);
     border-radius: 4px;
-    padding: 4px 8px;
+    /* Matches Bootstrap's .form-control-sm vertical padding (the toolbar's
+     * number/text inputs use that class and get it for free) so selects
+     * and inputs in this row come out the same height instead of selects
+     * being 2px shorter. */
+    padding: 5px 8px;
     font-size: 13px;
+}
+
+/* Only the floor-plan picker needs room for potentially long names —
+ * this used to be a bare ".floorplan-header select" rule, which also
+ * forced #tile-orientation-select (a 4-option "0°"/"90°"/"180°"/"270°"
+ * picker sharing the same header) to the same 180px, far wider than its
+ * content ever needs. Explicit width:auto because Bootstrap's
+ * .form-select (added alongside form-select-sm so this picks up the same
+ * line-height as the rest of the toolbar row) defaults to width:100%,
+ * which — with no width of its own to constrain it — stretched across
+ * the entire flex row and pushed everything else onto a second line. */
+#floorplan-selector {
+    width: auto;
     min-width: 180px;
 }
 

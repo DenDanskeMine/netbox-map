@@ -19,6 +19,7 @@ from ..models import (
     MapSettings,
     TilePortAssignment,
     TopologySavedView,
+    tile_assigned_object_prefetch,
 )
 from .serializers import (
     ApplicationDependencySerializer,
@@ -51,7 +52,9 @@ class FloorPlanViewSet(NetBoxModelViewSet):
 
 
 class FloorPlanTileViewSet(NetBoxModelViewSet):
-    queryset = FloorPlanTile.objects.select_related('floorplan', 'assigned_object_type')
+    queryset = FloorPlanTile.objects.select_related(
+        'floorplan', 'assigned_object_type'
+    ).prefetch_related(tile_assigned_object_prefetch())
     serializer_class = FloorPlanTileSerializer
     filterset_class = filtersets.FloorPlanTileFilterSet
 

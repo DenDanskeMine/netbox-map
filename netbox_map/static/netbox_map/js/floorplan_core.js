@@ -26,6 +26,47 @@ window.FloorplanApp = (function() {
         }
     };
 
+    // ─── History (undo/redo) ───────────────────────────────────────
+    // Plain command-pattern stack: each entry is {undo, redo} — a pair of
+    // functions that already close over whatever they need (tile refs, old/
+    // new values) to reverse or reapply one editor action. Callers push an
+    // entry right after an action's API call succeeds; push() clears the
+    // redo stack, matching standard undo/redo semantics (a fresh action
+    // invalidates any "future" you could have redone into).
+    //
+    // Only covers actions with a clear before/after PATCH-able state:
+    // create, delete, move, resize, rotate, paste. Panel-driven changes
+    // (link object, FOV, label, port assignments) aren't recorded here yet.
+    var HISTORY_MAX = 50;
+
+    function History(events) {
+        this.events = events;
+        this.undoStack = [];
+        this.redoStack = [];
+    }
+    History.prototype.push = function(action) {
+        this.undoStack.push(action);
+        if (this.undoStack.length > HISTORY_MAX) this.undoStack.shift();
+        this.redoStack.length = 0;
+        if (this.events) this.events.emit('history:change');
+    };
+    History.prototype.undo = function() {
+        var action = this.undoStack.pop();
+        if (!action) return false;
+        action.undo();
+        this.redoStack.push(action);
+        if (this.events) this.events.emit('history:change');
+        return true;
+    };
+    History.prototype.redo = function() {
+        var action = this.redoStack.pop();
+        if (!action) return false;
+        action.redo();
+        this.undoStack.push(action);
+        if (this.events) this.events.emit('history:change');
+        return true;
+    };
+
     // ─── State ───────────────────────────────────────────────────
     function State(config, tiles, events) {
         this.events = events;
@@ -48,6 +89,18 @@ window.FloorplanApp = (function() {
         this.tileSize = config.tileSize;
         this.worldWidth = config.gridWidth * config.tileSize;
         this.worldHeight = config.gridHeight * config.tileSize;
+        // Largest a tile's width/height (in grid cells) can be — mirrors
+        // FloorPlanTile.width/height's MaxValueValidator server-side (see
+        // TILE_MAX_SIZE in models.py, the actual source of truth). Passed
+        // through so the create/resize forms and mouse-driven resize all
+        // enforce the same limit instead of guessing a duplicated constant.
+        this.tileMaxSize = config.tileMaxSize;
+        // Purely architectural tile types (wall, aisle, ...) that can never
+        // carry an assigned object — mirrors STRUCTURAL_TILE_TYPES in
+        // choices.py, the source of truth (also enforced server-side in
+        // FloorPlanTile.clean()). Used to hide the "Link Object" panel for
+        // these types instead of offering a link that the API would reject.
+        this.structuralTileTypes = new Set(config.structuralTileTypes || []);
 
         // Type configuration (from server — includes custom types)
         this.typeConfigs = config.typeConfigs || [];
@@ -223,6 +276,98 @@ window.FloorplanApp = (function() {
         return colorMap[slug] || '#444';
     }
 
+    /**
+     * True if a gridX/gridY/width/height footprint overlaps any other tile
+     * in state.tiles. Shared by the create/resize forms (floorplan_editor.js)
+     * and mouse-driven move/resize (floorplan_interaction.js) so all of them
+     * enforce the same rule.
+     *
+     * Deliberately does NOT exempt tiles whose type is currently toggled off
+     * in the visibility filter — that toggle only controls what's drawn, not
+     * what physically occupies the grid. Skipping hidden types here used to
+     * let a resize or move silently overlap them with no warning at all.
+     */
+    function isPositionOccupied(state, gridX, gridY, newWidth, newHeight, excludeId) {
+        for (var i = 0; i < state.tiles.length; i++) {
+            var t = state.tiles[i];
+            if (excludeId !== undefined && t.id === excludeId) continue;
+            if (gridX < t.x + t.w && gridX + newWidth > t.x &&
+                gridY < t.y + t.h && gridY + newHeight > t.y) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // JS tile objects use short field names (x/y/w/h) that don't match the
+    // API's (x_position/y_position/width/height). Everything that patches a
+    // tile's spatial fields — the initial mouse action AND undo/redo
+    // replaying it later — goes through this one translation + apply step
+    // so the two can never drift out of sync with each other.
+    var TILE_FIELD_API_NAMES = { x: 'x_position', y: 'y_position', w: 'width', h: 'height', orientation: 'orientation' };
+
+    /**
+     * PATCH a tile's x/y/w/h/orientation and, on success, update the local
+     * tile object + emit 'tile:update'/'render' to match. `fields` uses the
+     * short JS names (e.g. {x: 3, y: 4}). Returns the fetch promise.
+     */
+    function patchTileFields(state, events, tile, fields) {
+        var apiData = {};
+        for (var key in fields) {
+            if (fields.hasOwnProperty(key)) apiData[TILE_FIELD_API_NAMES[key]] = fields[key];
+        }
+        var api = new API(state);
+        return api.patch(state.apiUrl + tile.id + '/', apiData).then(function() {
+            for (var k in fields) {
+                if (fields.hasOwnProperty(k)) tile[k] = fields[k];
+            }
+            events.emit('tile:update', tile);
+            events.emit('render');
+        });
+    }
+
+    /**
+     * Push an undo/redo history entry that PATCHes a tile's fields both ways.
+     * Used by every mouse- and button-driven field edit (drag/resize/rotate)
+     * so the undo/redo wiring can't drift between call sites.
+     */
+    function pushFieldHistory(state, events, tile, newFields, origFields) {
+        state.history.push({
+            undo: function() { patchTileFields(state, events, tile, origFields); },
+            redo: function() { patchTileFields(state, events, tile, newFields); }
+        });
+    }
+
+    /**
+     * Push an undo/redo history entry for a tile that was just created via
+     * App.createTileFromPayload. `holder.id` tracks the tile's CURRENT row
+     * id across repeated undo/redo cycles — each redo re-creates the tile
+     * as a genuinely new row, so a plain captured id would go stale after
+     * one cycle.
+     */
+    function pushCreateHistory(state, holder, payload) {
+        // window.FloorplanApp, not a local "App" — this module builds that
+        // object and createTileFromPayload/deleteTileById are added to it
+        // later by floorplan_editor.js, but only ever called long after
+        // every module has finished loading.
+        state.history.push({
+            undo: function() { window.FloorplanApp.deleteTileById(holder.id); },
+            redo: function() {
+                window.FloorplanApp.createTileFromPayload(payload).then(function(t) { holder.id = t.id; });
+            }
+        });
+    }
+
+    /** Mirror of pushCreateHistory for a tile that was just deleted. */
+    function pushDeleteHistory(state, holder, payload) {
+        state.history.push({
+            undo: function() {
+                window.FloorplanApp.createTileFromPayload(payload).then(function(t) { holder.id = t.id; });
+            },
+            redo: function() { window.FloorplanApp.deleteTileById(holder.id); }
+        });
+    }
+
     /** Determine text color (white or dark) based on background luminance */
     function getTextColor(bgColor) {
         // Parse hex
@@ -301,6 +446,11 @@ window.FloorplanApp = (function() {
             gridWidth: parseInt(container.dataset.gridWidth, 10),
             gridHeight: parseInt(container.dataset.gridHeight, 10),
             tileSize: parseInt(container.dataset.tileSize, 10),
+            tileMaxSize: parseInt(container.dataset.tileMaxSize, 10) || 10,
+            structuralTileTypes: (function() {
+                try { return JSON.parse(container.dataset.structuralTileTypes || '[]'); }
+                catch (e) { return []; }
+            })(),
             editMode: container.dataset.editMode === 'true',
             apiUrl: container.dataset.apiUrl || '',
             floorplanId: container.dataset.floorplanId || '',
@@ -538,6 +688,7 @@ window.FloorplanApp = (function() {
     // ─── Public API ──────────────────────────────────────────────
     return {
         EventBus: EventBus,
+        History: History,
         State: State,
         API: API,
         parseConfig: parseConfig,
@@ -545,6 +696,11 @@ window.FloorplanApp = (function() {
         escapeHtml: escapeHtml,
         getUtilizationColor: getUtilizationColor,
         getTileColor: getTileColor,
+        isPositionOccupied: isPositionOccupied,
+        patchTileFields: patchTileFields,
+        pushFieldHistory: pushFieldHistory,
+        pushCreateHistory: pushCreateHistory,
+        pushDeleteHistory: pushDeleteHistory,
         getTextColor: getTextColor,
         autoFontSize: autoFontSize,
         truncateText: truncateText,

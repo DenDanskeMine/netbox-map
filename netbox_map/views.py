@@ -16,8 +16,9 @@ from netbox.views import generic
 from utilities.views import ViewTab, register_model_view
 
 from . import filtersets, forms, tables
-from .choices import get_all_type_configs
+from .choices import STRUCTURAL_TILE_TYPES, get_all_type_configs
 from .models import (
+    TILE_MAX_SIZE,
     Application,
     ApplicationDependency,
     ApplicationDeployment,
@@ -31,6 +32,7 @@ from .models import (
     MapMarker,
     MapSettings,
     TopologySavedView,
+    tile_assigned_object_prefetch,
 )
 
 #
@@ -1301,6 +1303,8 @@ class FloorPlanView(generic.ObjectView):
     def get_extra_context(self, request, instance):
         tiles = instance.tiles.select_related(
             'assigned_object_type', 'linked_floorplan'
+        ).prefetch_related(
+            tile_assigned_object_prefetch()
         ).annotate(_port_count=Count('port_assignments')).all()
         tile_data = [_serialize_tile(tile) for tile in tiles]
         return {
@@ -1357,6 +1361,8 @@ class FloorPlanVisualizationView(generic.ObjectView):
     def get_extra_context(self, request, instance):
         tiles = instance.tiles.select_related(
             'assigned_object_type', 'linked_floorplan'
+        ).prefetch_related(
+            tile_assigned_object_prefetch()
         ).annotate(_port_count=Count('port_assignments')).all()
         tile_data = [_serialize_tile(tile) for tile in tiles]
 
@@ -1389,6 +1395,8 @@ class FloorPlanVisualizationView(generic.ObjectView):
             'type_configs': type_configs,
             'type_configs_json': json.dumps(type_configs),
             'hidden_tile_type_count': len(hidden),
+            'tile_max_size': TILE_MAX_SIZE,
+            'structural_tile_types_json': json.dumps(sorted(STRUCTURAL_TILE_TYPES)),
         }
 
 

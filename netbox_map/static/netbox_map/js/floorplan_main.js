@@ -20,6 +20,10 @@
 
     var events = new App.EventBus();
     var state = new App.State(config, tiles, events);
+    // Shared undo/redo stack — attached to state so every module that
+    // already receives state (interaction, editor, hotkeys) can push/pop
+    // without a separate constructor param.
+    state.history = new App.History(events);
 
     // ─── Initialize Modules ───────────────────────────────────────
 

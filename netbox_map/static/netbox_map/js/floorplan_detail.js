@@ -89,8 +89,9 @@
 
     Detail.prototype._updateStatusBar = function(tile) {
         if (!this.statusBar) return;
+        var escapeHtml = App.escapeHtml;
         var html = '<span class="text-muted">Selected</span> &nbsp;&triangleright;&nbsp; ';
-        html += '<strong>' + (tile.label || tile.type) + '</strong>';
+        html += '<strong>' + escapeHtml(tile.label || tile.type) + '</strong>';
         html += ' &nbsp; <span class="text-muted">X,Y:</span> ' + tile.x + ', ' + tile.y;
         if (tile.w > 1 || tile.h > 1) {
             html += ' &nbsp; <span class="text-muted">Size:</span> ' + tile.w + '&times;' + tile.h;
@@ -99,14 +100,14 @@
             html += ' &nbsp; <span class="text-muted">Util:</span> ' + Math.round(tile.utilization) + '%';
         }
         if (tile.object_type) {
-            html += ' &nbsp; <span class="text-muted">' + tile.object_type + ':</span> ';
-            html += '<strong>' + (tile.object_name || '') + '</strong>';
+            html += ' &nbsp; <span class="text-muted">' + escapeHtml(tile.object_type) + ':</span> ';
+            html += '<strong>' + escapeHtml(tile.object_name || '') + '</strong>';
         }
         if (tile.primary_ip) {
-            html += ' &nbsp; <span class="text-muted">IP:</span> ' + tile.primary_ip;
+            html += ' &nbsp; <span class="text-muted">IP:</span> ' + escapeHtml(tile.primary_ip);
         }
         if (tile.object_url) {
-            html += ' &nbsp; <a href="' + tile.object_url + '" class="text-info">View &rarr;</a>';
+            html += ' &nbsp; <a href="' + escapeHtml(tile.object_url) + '" class="text-info">View &rarr;</a>';
         }
         this.statusBar.innerHTML = html;
     };
@@ -152,8 +153,8 @@
         var objectLinkEl = document.getElementById('tile-detail-object-link');
         if (objectLinkEl) {
             if (tile.object_url) {
-                objectLinkEl.innerHTML = '<a href="' + tile.object_url + '">' +
-                    (tile.object_name || tile.object_type || 'Object') + '</a>';
+                objectLinkEl.innerHTML = '<a href="' + App.escapeHtml(tile.object_url) + '">' +
+                    App.escapeHtml(tile.object_name || tile.object_type || 'Object') + '</a>';
             } else {
                 objectLinkEl.textContent = '-';
             }
@@ -165,8 +166,8 @@
         if (fpLinkRow && fpLinkEl) {
             if (tile.linked_floorplan_url && tile.linked_floorplan_name) {
                 fpLinkRow.style.display = '';
-                fpLinkEl.innerHTML = '<a href="' + tile.linked_floorplan_url + '">' +
-                    tile.linked_floorplan_name + '</a>';
+                fpLinkEl.innerHTML = '<a href="' + App.escapeHtml(tile.linked_floorplan_url) + '">' +
+                    App.escapeHtml(tile.linked_floorplan_name) + '</a>';
             } else {
                 fpLinkRow.style.display = 'none';
                 fpLinkEl.textContent = '-';

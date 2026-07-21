@@ -150,19 +150,102 @@
     // ─── Collision Detection ──────────────────────────────────────
 
     function isPositionOccupied(gridX, gridY, newWidth, newHeight, excludeId) {
-        for (var i = 0; i < state.tiles.length; i++) {
-            var t = state.tiles[i];
-            if (excludeId !== undefined && t.id === excludeId) continue;
-            if (gridX < t.x + t.w && gridX + newWidth > t.x &&
-                gridY < t.y + t.h && gridY + newHeight > t.y) {
-                if (!state.visibleTypes.has(t.type)) continue;
-                return true;
-            }
-        }
-        return false;
+        return App.isPositionOccupied(state, gridX, gridY, newWidth, newHeight, excludeId);
     }
 
-    // ─── Create Tile ──────────────────────────────────────────────
+    // ─── Create/Delete Primitives ───────────────────────────────────
+    // Shared by the toolbar's double-click-to-place flow, copy/paste, and
+    // undo/redo (a delete's undo re-creates the tile; a create's undo
+    // deletes it) — see floorplan_hotkeys.js. Keeping these as the one path
+    // that talks to the API means every caller's tiles look the same to
+    // history, no matter how they were created.
+
+    /** Snapshot a client-side tile into a payload createTileFromPayload() can replay. */
+    function tileToCreatePayload(tile) {
+        var payload = {
+            floorplan: state.floorplanId,
+            x_position: tile.x,
+            y_position: tile.y,
+            width: tile.w,
+            height: tile.h,
+            tile_type: tile.type,
+            label: tile.label || '',
+            status: tile.status || 'active',
+            orientation: tile.orientation || 0,
+        };
+        if (tile.type === 'camera') {
+            payload.fov_direction = tile.fov_direction || 0;
+            payload.fov_angle = tile.fov_angle || 90;
+            payload.fov_distance = tile.fov_distance || 5;
+        }
+        // object_type_model is the bare model name (e.g. "device") per
+        // _serialize_tile in views.py; every ASSIGNABLE_MODELS entry lives
+        // under dcim (see FloorPlanTileSerializer's assigned_object_type
+        // queryset), so this reconstruction is safe.
+        if (tile.object_type_model && tile.object_id) {
+            payload.assigned_object_type = 'dcim.' + tile.object_type_model;
+            payload.assigned_object_id = tile.object_id;
+        }
+        if (tile.linked_floorplan_id) {
+            payload.linked_floorplan = tile.linked_floorplan_id;
+        }
+        return payload;
+    }
+
+    /** Convert an API tile response into the shape state.tiles/the renderer expect. */
+    function apiTileToClientTile(newTile) {
+        return {
+            id: newTile.id,
+            x: newTile.x_position,
+            y: newTile.y_position,
+            w: newTile.width,
+            h: newTile.height,
+            label: newTile.label || '',
+            type: newTile.tile_type,
+            status: newTile.status,
+            orientation: newTile.orientation,
+            object_type: null,
+            object_type_model: null,
+            object_name: null,
+            object_id: null,
+            object_url: null,
+            utilization: null,
+            primary_ip: null,
+            linked_floorplan_id: null,
+            linked_floorplan_name: null,
+            linked_floorplan_url: null,
+            fov_direction: newTile.fov_direction || 0,
+            fov_angle: newTile.fov_angle || 90,
+            fov_distance: newTile.fov_distance || 5,
+            drop_port_count: 0
+        };
+    }
+
+    /** POST a tile payload, add it to state, and return the new client tile. Does NOT touch history. */
+    function createTileFromPayload(payload) {
+        var api = new App.API(state);
+        return api.post(state.apiUrl, payload).then(function(newTile) {
+            var clientTile = apiTileToClientTile(newTile);
+            state.addTile(clientTile);
+            events.emit('sidebar:rebuild');
+            return clientTile;
+        });
+    }
+
+    /** DELETE a tile by id and remove it from state. Does NOT touch history. */
+    function deleteTileById(tileId) {
+        var api = new App.API(state);
+        return api.del(state.apiUrl + tileId + '/').then(function() {
+            state.removeTile(tileId);
+            events.emit('sidebar:rebuild');
+        });
+    }
+
+    App.createTileFromPayload = createTileFromPayload;
+    App.deleteTileById = deleteTileById;
+    App.tileToCreatePayload = tileToCreatePayload;
+
+    // ─── Create Tile (toolbar double-click-to-place) ────────────────
 
     function createTile(gridX, gridY) {
         var tileType = getActiveType();
@@ -206,35 +289,9 @@
             data.fov_distance = parseInt(fovDistInput ? fovDistInput.value : 5, 10) || 5;
         }
 
-        var api = new App.API(state);
-        api.post(state.apiUrl, data)
-        .then(function(newTile) {
-            state.addTile({
-                id: newTile.id,
-                x: newTile.x_position,
-                y: newTile.y_position,
-                w: newTile.width,
-                h: newTile.height,
-                label: newTile.label || '',
-                type: newTile.tile_type,
-                status: newTile.status,
-                orientation: newTile.orientation,
-                object_type: null,
-                object_type_model: null,
-                object_name: null,
-                object_id: null,
-                object_url: null,
-                utilization: null,
-                primary_ip: null,
-                linked_floorplan_id: null,
-                linked_floorplan_name: null,
-                linked_floorplan_url: null,
-                fov_direction: newTile.fov_direction || 0,
-                fov_angle: newTile.fov_angle || 90,
-                fov_distance: newTile.fov_distance || 5,
-                drop_port_count: 0
-            });
-            events.emit('sidebar:rebuild');
+        createTileFromPayload(data)
+        .then(function(clientTile) {
+            App.pushCreateHistory(state, { id: clientTile.id }, data);
         })
         .catch(function(err) {
             alert('Error creating tile: ' + (err.detail ? JSON.stringify(err.detail) : err.message));
@@ -243,19 +300,26 @@
 
     // ─── Delete Tile ──────────────────────────────────────────────
 
-    function deleteTile(tileId) {
-        if (!confirm('Delete this tile?')) return;
+    /** options.confirm defaults to true (button flow); keyboard Delete passes false since undo covers it. */
+    function deleteTile(tileId, options) {
+        var confirmFirst = !options || options.confirm !== false;
+        if (confirmFirst && !confirm('Delete this tile?')) return;
 
-        var api = new App.API(state);
-        api.del(state.apiUrl + tileId + '/')
+        tileId = parseInt(tileId, 10);
+        var tile = state.findTileById(tileId);
+        if (!tile) return;
+        var payload = tileToCreatePayload(tile);
+        var holder = { id: tileId };
+
+        deleteTileById(holder.id)
         .then(function() {
-            state.removeTile(parseInt(tileId));
-            events.emit('sidebar:rebuild');
+            App.pushDeleteHistory(state, holder, payload);
         })
         .catch(function(err) {
             alert('Error deleting tile: ' + (err.detail ? JSON.stringify(err.detail) : err.message));
         });
     }
+    App.deleteTile = deleteTile;
 
     // ─── Resize Tile ──────────────────────────────────────────────
 
@@ -271,8 +335,8 @@
             var newW = parseInt(resizeWidthInput.value, 10);
             var newH = parseInt(resizeHeightInput.value, 10);
 
-            newW = Math.max(1, Math.min(10, newW || 1));
-            newH = Math.max(1, Math.min(10, newH || 1));
+            newW = Math.max(1, Math.min(state.tileMaxSize, newW || 1));
+            newH = Math.max(1, Math.min(state.tileMaxSize, newH || 1));
             resizeWidthInput.value = newW;
             resizeHeightInput.value = newH;
 
@@ -308,6 +372,7 @@
                 resizeBtn.classList.add('btn-success');
                 events.emit('tile:update', tile);
                 events.emit('sidebar:rebuild');
+                App.pushFieldHistory(state, events, tile, { w: newW, h: newH }, { w: origW, h: origH });
                 setTimeout(function() {
                     resizeBtn.innerHTML = '<i class="mdi mdi-resize"></i> Resize';
                     resizeBtn.classList.remove('btn-success');
@@ -353,6 +418,7 @@
                 orientBtn.classList.remove('btn-primary');
                 orientBtn.classList.add('btn-success');
                 events.emit('tile:update', tile);
+                App.pushFieldHistory(state, events, tile, { orientation: newOrient }, { orientation: origOrient });
                 setTimeout(function() {
                     orientBtn.innerHTML = '<i class="mdi mdi-rotate-right"></i> Set';
                     orientBtn.classList.remove('btn-success');
