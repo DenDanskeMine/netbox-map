@@ -57,8 +57,8 @@ class FloorPlanTable(NetBoxTable):
         orderable=False
     )
     floorplan_link = tables.TemplateColumn(
-        template_code='<a href="{% url \'plugins:netbox_map:floorplan_visualization\' pk=record.pk %}" '
-                       'class="btn btn-sm btn-primary"><i class="mdi mdi-floor-plan"></i> Floorplan</a>',
+        template_code='{% load i18n %}<a href="{% url \'plugins:netbox_map:floorplan_visualization\' pk=record.pk %}" '
+                       'class="btn btn-sm btn-primary"><i class="mdi mdi-floor-plan"></i> {% trans "Floorplan" %}</a>',
         verbose_name='',
         orderable=False,
     )
