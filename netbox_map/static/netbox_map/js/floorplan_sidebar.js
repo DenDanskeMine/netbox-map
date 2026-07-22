@@ -153,18 +153,19 @@
         }
         html += '<div class="sidebar-tile-dot" style="background:' + color + '"></div>';
         html += '<div class="sidebar-tile-names">';
-        html += '<span class="sidebar-tile-label" title="' + (t.label || t.type) + '">' + (t.label || '<em>' + t.type + '</em>') + '</span>';
+        html += '<span class="sidebar-tile-label" title="' + App.escapeHtml(t.label || t.type) + '">' +
+            (t.label ? App.escapeHtml(t.label) : '<em>' + App.escapeHtml(t.type) + '</em>') + '</span>';
         if (t.object_name && t.object_name !== t.label) {
-            html += '<span class="sidebar-tile-object" title="' + t.object_name + '">' + t.object_name + '</span>';
+            html += '<span class="sidebar-tile-object" title="' + App.escapeHtml(t.object_name) + '">' + App.escapeHtml(t.object_name) + '</span>';
         }
         html += '</div>';
         if (hasDevices) {
             html += '<span class="rack-device-count">' + rackDevices.length + 'd</span>';
         }
         if (t.primary_ip) {
-            html += '<span class="sidebar-tile-ip">' + t.primary_ip + '</span>';
+            html += '<span class="sidebar-tile-ip">' + App.escapeHtml(t.primary_ip) + '</span>';
         }
-        html += '<span class="sidebar-tile-type">' + t.type + '</span>';
+        html += '<span class="sidebar-tile-type">' + App.escapeHtml(t.type) + '</span>';
         html += '<span class="sidebar-tile-pos">' + t.x + ',' + t.y + '</span>';
         html += '</div>';
 
@@ -200,12 +201,12 @@
             }
             html += '<span class="rack-device-name">';
             if (dev.url) {
-                html += '<a href="' + dev.url + '" title="' + dev.name + '">' + dev.name + '</a>';
+                html += '<a href="' + App.escapeHtml(dev.url) + '" title="' + App.escapeHtml(dev.name) + '">' + App.escapeHtml(dev.name) + '</a>';
             } else {
-                html += dev.name;
+                html += App.escapeHtml(dev.name);
             }
             html += '</span>';
-            if (dev.ip) html += '<span class="rack-device-ip">' + dev.ip + '</span>';
+            if (dev.ip) html += '<span class="rack-device-ip">' + App.escapeHtml(dev.ip) + '</span>';
             if (dev.position) html += '<span class="rack-device-pos">U' + dev.position + '</span>';
             html += '</div>';
 

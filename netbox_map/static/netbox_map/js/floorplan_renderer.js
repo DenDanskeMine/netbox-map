@@ -354,6 +354,82 @@
         ctx.restore();
     };
 
+    // ─── Resize / Rotate Handles (edit mode, selected tile only) ──
+
+    // Fixed screen-pixel sizes, converted to world units by dividing by
+    // zoom, so handles stay a constant visual size at any zoom level —
+    // same approach as the selection border's lineWidth.
+    var RESIZE_HANDLE_SIZE = 10;
+    var ROTATE_HANDLE_RADIUS = 6;
+    var ROTATE_HANDLE_OFFSET = 26;
+
+    /**
+     * World-space geometry for a tile's resize/rotate handles. Shared by
+     * drawSelectionHandles() and floorplan_interaction.js's hit-testing so
+     * clicks always land where the handles are actually drawn.
+     */
+    Renderer.prototype.getTileHandles = function(tile) {
+        var s = this.state;
+        var ts = s.tileSize;
+        var x = tile.x * ts;
+        var y = tile.y * ts;
+        var w = tile.w * ts;
+        var h = tile.h * ts;
+        var hs = RESIZE_HANDLE_SIZE / s.zoom;
+        var rr = ROTATE_HANDLE_RADIUS / s.zoom;
+        var ro = ROTATE_HANDLE_OFFSET / s.zoom;
+
+        return {
+            resize: { x: x + w, y: y + h, halfSize: hs / 2 },
+            rotate: { x: x + w / 2, y: y - ro, radius: rr },
+            center: { x: x + w / 2, y: y + h / 2 }
+        };
+    };
+
+    /** Draw resize (corner square) and rotate (offset circle) handles for the selected tile. */
+    Renderer.prototype.drawSelectionHandles = function(tile) {
+        var ctx = this.ctx;
+        var s = this.state;
+        var c = this._colors();
+        var handles = this.getTileHandles(tile);
+
+        ctx.save();
+        ctx.fillStyle = c.selectStroke;
+        ctx.strokeStyle = this._isDark ? '#0d0f1a' : '#ffffff';
+        ctx.lineWidth = 1.5 / s.zoom;
+
+        // Rotate handle: line from tile top-center up to a circle
+        var rot = handles.rotate;
+        var topCenterX = handles.center.x;
+        var topCenterY = tile.y * s.tileSize;
+        ctx.beginPath();
+        ctx.moveTo(topCenterX, topCenterY);
+        ctx.lineTo(rot.x, rot.y);
+        ctx.strokeStyle = c.selectStroke;
+        ctx.lineWidth = 1.5 / s.zoom;
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.arc(rot.x, rot.y, rot.radius, 0, Math.PI * 2);
+        ctx.fillStyle = c.selectStroke;
+        ctx.fill();
+        ctx.strokeStyle = this._isDark ? '#0d0f1a' : '#ffffff';
+        ctx.lineWidth = 1.5 / s.zoom;
+        ctx.stroke();
+
+        // Resize handle: small square at the bottom-right corner
+        var rs = handles.resize;
+        ctx.beginPath();
+        ctx.rect(rs.x - rs.halfSize, rs.y - rs.halfSize, rs.halfSize * 2, rs.halfSize * 2);
+        ctx.fillStyle = c.selectStroke;
+        ctx.fill();
+        ctx.strokeStyle = this._isDark ? '#0d0f1a' : '#ffffff';
+        ctx.lineWidth = 1.5 / s.zoom;
+        ctx.stroke();
+
+        ctx.restore();
+    };
+
     // ─── FOV Cone ────────────────────────────────────────────────
 
     /** Draw camera FOV cone (semi-transparent wedge from tile center). */
@@ -469,6 +545,11 @@
             if (s.visibleTypes.has(s.tiles[i].type)) {
                 this.drawTile(s.tiles[i]);
             }
+        }
+
+        // Resize/rotate handles for the selected tile (edit mode only)
+        if (s.editMode && s.selectedTile && s.visibleTypes.has(s.selectedTile.type)) {
+            this.drawSelectionHandles(s.selectedTile);
         }
 
         // Reset transform for UI overlay

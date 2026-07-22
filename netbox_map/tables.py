@@ -1,5 +1,5 @@
 import django_tables2 as tables
-from django.utils.safestring import mark_safe
+from django.utils.html import format_html
 from django.utils.translation import gettext_lazy as _
 from netbox.tables import NetBoxTable, columns
 
@@ -295,17 +295,18 @@ class CustomMarkerTypeTable(NetBoxTable):
         )
 
     def render_color(self, value):
-        return mark_safe(
-            f'<span style="display:inline-block;width:16px;height:16px;'
-            f'border-radius:3px;background:{value};border:1px solid #ccc;"'
-            f' title="{value}"></span> {value}'
+        return format_html(
+            '<span style="display:inline-block;width:16px;height:16px;'
+            'border-radius:3px;background:{0};border:1px solid #ccc;"'
+            ' title="{0}"></span> {0}',
+            value,
         )
 
     def value_color(self, value):
         return value
 
     def render_icon(self, value):
-        return mark_safe(f'<i class="mdi {value}"></i> {value}')
+        return format_html('<i class="mdi {0}"></i> {0}', value)
 
     def value_icon(self, value):
         return value
@@ -347,10 +348,11 @@ class ApplicationGroupTable(NetBoxTable):
         )
 
     def render_color(self, value):
-        return mark_safe(
-            f'<span style="display:inline-block;width:16px;height:16px;'
-            f'border-radius:3px;background:{value};border:1px solid #ccc;"'
-            f' title="{value}"></span> {value}'
+        return format_html(
+            '<span style="display:inline-block;width:16px;height:16px;'
+            'border-radius:3px;background:{0};border:1px solid #ccc;"'
+            ' title="{0}"></span> {0}',
+            value,
         )
 
     def value_color(self, value):

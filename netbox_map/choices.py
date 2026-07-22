@@ -110,13 +110,21 @@ DEFAULT_HIDDEN_TILE_TYPES = [
     'fdt', 'fat', 'manhole', 'pole', 'handhole',
 ]
 
+# Purely architectural/space-marker types — never represent a piece of
+# equipment, so a FloorPlanTile of one of these types can't have an
+# assigned_object (see FloorPlanTile.clean()) and the visualization editor's
+# "Link Object" panel is hidden for them (see floorplan_panels.js). Also
+# reused below to keep them out of the Site Map's create-chip tray.
+# (A plain list, kept in this order, so anything seeding a stored default
+# from it — see hidden_tile_types_sitemap below — stays deterministic;
+# STRUCTURAL_TILE_TYPES is the set form for membership checks elsewhere.)
+_STRUCTURAL_TILE_TYPES_LIST = ['column', 'wall', 'aisle', 'empty', 'reserved']
+STRUCTURAL_TILE_TYPES = set(_STRUCTURAL_TILE_TYPES_LIST)
+
 # Default-hidden types in the SITE MAP create-chip tray. The Site Map deals
-# with geographic markers, so the structural floor-plan-only types (column,
-# wall, aisle, empty, reserved) are rarely useful there — hide by default
-# in addition to the fiber types above.
-DEFAULT_HIDDEN_TILE_TYPES_SITEMAP = DEFAULT_HIDDEN_TILE_TYPES + [
-    'column', 'wall', 'aisle', 'empty', 'reserved',
-]
+# with geographic markers, so the structural floor-plan-only types are
+# rarely useful there — hide by default in addition to the fiber types above.
+DEFAULT_HIDDEN_TILE_TYPES_SITEMAP = DEFAULT_HIDDEN_TILE_TYPES + _STRUCTURAL_TILE_TYPES_LIST
 
 
 def get_all_tile_type_choices():

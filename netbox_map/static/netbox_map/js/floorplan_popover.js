@@ -46,28 +46,28 @@
                 var cfName = fieldKey.substring(3);
                 if (tile.custom_fields && tile.custom_fields[cfName]) {
                     var cfLabel = cfName.replace(/_/g, ' ').replace(/\b\w/g, function(c) { return c.toUpperCase(); });
-                    lines.push('<span class="popover-dim">' + cfLabel + ':</span> ' + tile.custom_fields[cfName]);
+                    lines.push('<span class="popover-dim">' + App.escapeHtml(cfLabel) + ':</span> ' + App.escapeHtml(tile.custom_fields[cfName]));
                 }
                 continue;
             }
 
             switch (fieldKey) {
                 case 'label':
-                    lines.push('<strong>' + (tile.label || tile.type) + '</strong>');
+                    lines.push('<strong>' + App.escapeHtml(tile.label || tile.type) + '</strong>');
                     break;
                 case 'object_info':
                     if (tile.object_type && tile.object_name) {
-                        lines.push('<span class="popover-dim">' + tile.object_type + ':</span> ' + tile.object_name);
+                        lines.push('<span class="popover-dim">' + App.escapeHtml(tile.object_type) + ':</span> ' + App.escapeHtml(tile.object_name));
                     }
                     break;
                 case 'primary_ip':
                     if (tile.primary_ip) {
-                        lines.push('<span class="popover-dim">IP:</span> ' + tile.primary_ip);
+                        lines.push('<span class="popover-dim">IP:</span> ' + App.escapeHtml(tile.primary_ip));
                     }
                     break;
                 case 'mac':
                     if (tile.mac) {
-                        lines.push('<span class="popover-dim">MAC:</span> ' + tile.mac);
+                        lines.push('<span class="popover-dim">MAC:</span> ' + App.escapeHtml(tile.mac));
                     }
                     break;
                 case 'utilization':
@@ -83,12 +83,12 @@
                     break;
                 case 'status':
                     if (tile.status) {
-                        lines.push('<span class="popover-dim">Status:</span> ' + tile.status);
+                        lines.push('<span class="popover-dim">Status:</span> ' + App.escapeHtml(tile.status));
                     }
                     break;
                 case 'type':
                     if (tile.type) {
-                        lines.push('<span class="popover-dim">Type:</span> ' + tile.type);
+                        lines.push('<span class="popover-dim">Type:</span> ' + App.escapeHtml(tile.type));
                     }
                     break;
                 case 'orientation':
@@ -105,7 +105,7 @@
 
         // Fallback: always show at least the label
         if (lines.length === 0) {
-            lines.push('<strong>' + (tile.label || tile.type) + '</strong>');
+            lines.push('<strong>' + App.escapeHtml(tile.label || tile.type) + '</strong>');
         }
 
         // Check if full trace content is present

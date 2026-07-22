@@ -25,7 +25,7 @@
   {# Combined header bar: floor plan selector + edit controls #}
   <div class="floorplan-header mb-3">
     <label for="floorplan-selector">{% trans "Floor map" %}</label>
-    <select id="floorplan-selector" class="no-ts">
+    <select id="floorplan-selector" class="form-select form-select-sm no-ts">
       {% for fp in site_floorplans %}
         <option value="{{ fp.id }}"
           {% if fp.id == object.pk %}selected{% endif %}>
@@ -61,10 +61,10 @@
     <div class="toolbar-divider"></div>
     <div class="toolbar-group">
       <input type="number" id="tile-width-input" class="form-control form-control-sm toolbar-input-dim"
-             value="1" min="1" max="10" title="{% trans 'Width' %}">
+             value="1" min="1" max="{{ tile_max_size }}" title="{% trans 'Width' %}">
       <span class="text-muted">&times;</span>
       <input type="number" id="tile-height-input" class="form-control form-control-sm toolbar-input-dim"
-             value="1" min="1" max="10" title="{% trans 'Height' %}">
+             value="1" min="1" max="{{ tile_max_size }}" title="{% trans 'Height' %}">
       <select id="tile-orientation-select" class="form-select form-select-sm no-ts" style="width: auto;" title="{% trans 'Text Orientation' %}">
         <option value="0">0&deg;</option>
         <option value="90">90&deg;</option>
@@ -110,6 +110,8 @@
              data-grid-width="{{ grid_width }}"
              data-grid-height="{{ grid_height }}"
              data-tile-size="{{ tile_size }}"
+             data-tile-max-size="{{ tile_max_size }}"
+             data-structural-tile-types='{{ structural_tile_types_json }}'
              data-tiles='{{ tile_data_json }}'
              data-edit-mode="{% if edit_mode %}true{% else %}false{% endif %}"
              data-api-url="{% url 'plugins-api:netbox_map-api:floorplantile-list' %}"
@@ -217,9 +219,9 @@
                   <span class="detail-label">{% trans "Resize" %}</span>
                   <span class="detail-value">
                     <div class="d-flex gap-1 align-items-center">
-                      <input type="number" id="resize-width-input" class="form-control form-control-sm sidebar-input" style="width:50px;" min="1" max="10" title="{% trans 'Width' %}">
+                      <input type="number" id="resize-width-input" class="form-control form-control-sm sidebar-input" style="width:50px;" min="1" max="{{ tile_max_size }}" title="{% trans 'Width' %}">
                       <span class="text-muted">&times;</span>
-                      <input type="number" id="resize-height-input" class="form-control form-control-sm sidebar-input" style="width:50px;" min="1" max="10" title="{% trans 'Height' %}">
+                      <input type="number" id="resize-height-input" class="form-control form-control-sm sidebar-input" style="width:50px;" min="1" max="{{ tile_max_size }}" title="{% trans 'Height' %}">
                       <button id="resize-tile-btn" class="btn btn-sm btn-primary px-2">
                         <i class="mdi mdi-resize"></i> {% trans "Resize" %}
                       </button>
@@ -232,7 +234,7 @@
                   <span class="detail-label">{% trans "Orientation" %}</span>
                   <span class="detail-value">
                     <div class="d-flex gap-1 align-items-center">
-                      <select id="orientation-select" class="form-select form-select-sm sidebar-input" style="width:70px;">
+                      <select id="orientation-select" class="form-select form-select-sm sidebar-input no-ts" style="width:90px;">
                         <option value="0">0&deg;</option>
                         <option value="90">90&deg;</option>
                         <option value="180">180&deg;</option>
@@ -426,5 +428,6 @@
   <script src="{% static 'netbox_map/js/floorplan_main.js' %}"></script>
   {% if edit_mode %}
   <script src="{% static 'netbox_map/js/floorplan_editor.js' %}"></script>
+  <script src="{% static 'netbox_map/js/floorplan_hotkeys.js' %}"></script>
   {% endif %}
 {% endblock %}

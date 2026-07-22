@@ -97,6 +97,14 @@
             if (dropPanel) dropPanel.classList.add('d-none');
             if (fpLinkPanel) fpLinkPanel.classList.remove('d-none');
             this._updateFpLinkState(tile);
+        } else if (this.state.structuralTileTypes.has(tile.type)) {
+            // Wall/aisle/column/empty/reserved are architectural markers,
+            // not equipment — there's nothing sensible to link them to (and
+            // the API rejects it — see FloorPlanTile.clean()), so don't
+            // offer the control at all.
+            if (linkPanel) linkPanel.classList.add('d-none');
+            if (dropPanel) dropPanel.classList.add('d-none');
+            if (fpLinkPanel) fpLinkPanel.classList.add('d-none');
         } else {
             if (linkPanel) linkPanel.classList.remove('d-none');
             if (dropPanel) dropPanel.classList.add('d-none');
@@ -284,7 +292,7 @@
         if (!linkCurrent) return;
 
         if (tile.object_type) {
-            linkCurrent.innerHTML = 'Currently linked: <strong>' + tile.object_type + '</strong>';
+            linkCurrent.innerHTML = 'Currently linked: <strong>' + App.escapeHtml(tile.object_type) + '</strong>';
             if (unlinkBtn) unlinkBtn.disabled = false;
         } else {
             linkCurrent.textContent = 'No object linked to this tile.';
@@ -418,7 +426,7 @@
                     : '<span class="badge bg-info text-white me-1">RP</span>';
                 html += '<div class="d-flex align-items-center gap-1 mb-1">';
                 html += portTypeBadge;
-                html += '<span class="small flex-grow-1">' + portName + '</span>';
+                html += '<span class="small flex-grow-1">' + App.escapeHtml(portName) + '</span>';
                 html += '<button class="btn btn-sm btn-outline-danger px-1 remove-drop-port" data-id="' + a.id + '" title="Remove">';
                 html += '<i class="mdi mdi-close"></i></button></div>';
             }
@@ -494,7 +502,7 @@
 
                 fpUnlinkBtn.disabled = false;
                 var name = fpName || ('Floor Plan #' + fpId);
-                fpLinkCurrent.innerHTML = 'Linked to: <a href="/plugins/map/floorplans/' + fpId + '/visualization/"><strong>' + name + '</strong></a>';
+                fpLinkCurrent.innerHTML = 'Linked to: <a href="/plugins/map/floorplans/' + fpId + '/visualization/"><strong>' + App.escapeHtml(name) + '</strong></a>';
 
                 setTimeout(function() { fpLinkStatus.textContent = ''; fpLinkStatus.className = 'small text-muted ms-1'; }, 2000);
             }).catch(function(err) {
@@ -548,9 +556,9 @@
         if (tile.linked_floorplan_id) {
             var name = tile.linked_floorplan_name || ('Floor Plan #' + tile.linked_floorplan_id);
             if (tile.linked_floorplan_url) {
-                fpLinkCurrent.innerHTML = 'Linked to: <a href="' + tile.linked_floorplan_url + '"><strong>' + name + '</strong></a>';
+                fpLinkCurrent.innerHTML = 'Linked to: <a href="' + App.escapeHtml(tile.linked_floorplan_url) + '"><strong>' + App.escapeHtml(name) + '</strong></a>';
             } else {
-                fpLinkCurrent.innerHTML = 'Linked to: <strong>' + name + '</strong>';
+                fpLinkCurrent.innerHTML = 'Linked to: <strong>' + App.escapeHtml(name) + '</strong>';
             }
             if (fpUnlinkBtn) fpUnlinkBtn.disabled = false;
             if (fpLinkSelect) fpLinkSelect.value = String(tile.linked_floorplan_id);

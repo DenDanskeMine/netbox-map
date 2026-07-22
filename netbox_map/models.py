@@ -1,6 +1,8 @@
 from dcim.choices import CableTypeChoices
+from dcim.models import Device, FrontPort, PowerFeed, PowerPanel, Rack, RearPort
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
+from django.contrib.contenttypes.prefetch import GenericPrefetch
 from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator, RegexValidator
 from django.db import models
@@ -18,6 +20,7 @@ from taggit.managers import TaggableManager
 
 from .choices import (
     BUILTIN_TYPE_SLUGS,
+    STRUCTURAL_TILE_TYPES,
     ApplicationCriticalityChoices,
     ApplicationEnvironmentChoices,
     ApplicationStatusChoices,
@@ -30,6 +33,13 @@ from .choices import (
     get_tile_type_display,
 )
 
+# Largest a FloorPlanTile's width/height (in grid cells) is allowed to be.
+# Single source of truth — also surfaced to the frontend as
+# data-tile-max-size on the floorplan container (see FloorPlanVisualizationView
+# and floorplan_core.js's parseConfig()) so the create/resize forms and
+# mouse-driven resize all enforce the same limit as this validator.
+TILE_MAX_SIZE = 1000
+
 # Object types that can be linked to floor plan tiles
 ASSIGNABLE_MODELS = (
     'dcim.device',
@@ -39,6 +49,21 @@ ASSIGNABLE_MODELS = (
     'dcim.rearport',
     'dcim.frontport',
 )
+
+
+def tile_assigned_object_prefetch():
+    """GenericPrefetch for FloorPlanTile.assigned_object, covering every
+    model in ASSIGNABLE_MODELS. Without this, accessing .assigned_object
+    on a GenericForeignKey issues one query per tile (N+1) since
+    select_related() can't traverse a generic relation."""
+    return GenericPrefetch('assigned_object', [
+        Device.objects.select_related('primary_ip4', 'primary_ip6'),
+        Rack.objects.all(),
+        PowerPanel.objects.all(),
+        PowerFeed.objects.all(),
+        RearPort.objects.all(),
+        FrontPort.objects.all(),
+    ])
 
 
 class CustomMarkerType(NetBoxModel):
@@ -78,6 +103,12 @@ class CustomMarkerType(NetBoxModel):
         verbose_name=_('icon'),
         max_length=100,
         default='mdi-shape',
+        validators=[
+            RegexValidator(
+                regex=r'^mdi-[a-z0-9-]+$',
+                message=_('Enter a valid MDI icon class (e.g. mdi-server-network).'),
+            ),
+        ],
         help_text=_('MDI icon class (e.g. mdi-server-network)'),
     )
     # Light or dark icon foreground. `auto` picks based on background luma —
@@ -254,13 +285,13 @@ class FloorPlanTile(NetBoxModel):
     width = models.PositiveIntegerField(
         verbose_name=_('width'),
         default=1,
-        validators=[MinValueValidator(1), MaxValueValidator(10)],
+        validators=[MinValueValidator(1), MaxValueValidator(TILE_MAX_SIZE)],
         help_text=_('Width in grid cells')
     )
     height = models.PositiveIntegerField(
         verbose_name=_('height'),
         default=1,
-        validators=[MinValueValidator(1), MaxValueValidator(10)],
+        validators=[MinValueValidator(1), MaxValueValidator(TILE_MAX_SIZE)],
         help_text=_('Height in grid cells')
     )
 
@@ -372,6 +403,12 @@ class FloorPlanTile(NetBoxModel):
         if self.tile_type and self.tile_type not in BUILTIN_TYPE_SLUGS:
             if not CustomMarkerType.objects.filter(slug=self.tile_type).exists():
                 raise ValidationError({'tile_type': _(f'Unknown tile type: {self.tile_type}')})
+        if self.tile_type in STRUCTURAL_TILE_TYPES and self.assigned_object_type_id:
+            raise ValidationError({
+                'assigned_object_type': _(
+                    '%(type)s tiles are architectural markers and cannot have an assigned object.'
+                ) % {'type': self.get_tile_type_display()}
+            })
 
     @property
     def display_label(self):
