@@ -1253,7 +1253,7 @@ def _serialize_tile(tile):
         'y': tile.y_position,
         'w': tile.width,
         'h': tile.height,
-        'label': tile.display_label,
+        'label': tile.label,
         'type': tile.tile_type,
         'status': tile.status,
         'orientation': tile.orientation,

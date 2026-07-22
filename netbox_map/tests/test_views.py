@@ -9,8 +9,10 @@ from netbox_map.models import (
     ApplicationGroup,
     CustomMarkerType,
     FloorPlan,
+    FloorPlanTile,
     TopologySavedView,
 )
+from netbox_map.views import _serialize_tile
 
 
 class FloorPlanViewTest(
@@ -154,6 +156,21 @@ class TopologySavedViewViewTest(
 
     def _get_base_url(self):
         return 'plugins:netbox_map:topologysavedview_{}'
+
+
+class SerializeTileTest(TestCase):
+    """A blank label must round-trip as blank, not the display fallback (tile type/assigned object name)."""
+
+    @classmethod
+    def setUpTestData(cls):
+        site = Site.objects.create(name='Serialize Site', slug='serialize-site')
+        floorplan = FloorPlan.objects.create(site=site, name='Serialize Floor')
+        cls.tile = FloorPlanTile.objects.create(
+            floorplan=floorplan, x_position=0, y_position=0, tile_type='rack', label='',
+        )
+
+    def test_blank_label_stays_blank(self):
+        self.assertEqual(_serialize_tile(self.tile)['label'], '')
 
 
 class TopologyViewSmokeTest(TestCase):
