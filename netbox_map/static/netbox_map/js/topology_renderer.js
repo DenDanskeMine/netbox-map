@@ -802,7 +802,7 @@
                 .attr('href', '#cable-label-path-' + d.cable_id)
                 .attr('startOffset', '50%')
                 .attr('text-anchor', 'middle');
-            tp.append('tspan').attr('class', 'cable-label-id').text('#' + d.cable_id);
+            tp.append('tspan').attr('class', 'cable-label-id').text(d.cable_label || ('#' + d.cable_id));
             if (d.cable_type) {
                 tp.append('tspan').attr('dx', 5).text(d.cable_type);
             }
