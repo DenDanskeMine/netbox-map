@@ -335,7 +335,7 @@
             if (!sp || !tp) return;
 
             // Short label: just #ID + abbreviated type
-            var label = '#' + edge.cable_id;
+            var label = edge.cable_label || ('#' + edge.cable_id);
             if (edge.cable_type) {
                 var ct = edge.cable_type;
                 ct = ct.replace('Single-mode Fiber', 'SMF').replace('Multimode Fiber', 'MMF');
